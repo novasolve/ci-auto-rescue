@@ -479,3 +479,99 @@ We also recommend adding the following files under `docs/`:
 - `OPEN_SWE_KICKOFF.md`
 
 Placeholders have been created below. Replace with your org’s specifics.
+
+---
+
+## Agent System Architecture and Guidelines
+
+### Overview of the Planner–Programmer Architecture
+
+Our LLM agent system follows a Planner–Programmer (Executor) architecture. This separates task planning from task execution to improve efficiency, cost, and reliability.
+
+- **Planner Agent**: analyzes the user request and produces a structured multi‑step plan.
+- **Programmer (Executor) Agent**: executes plan steps using tools or procedural code.
+- **Tool Layer**: functional tools/APIs invoked by the Programmer.
+
+This enables coherent long‑term reasoning with fewer LLM calls and faster, cheaper runs than naive step‑by‑step agents.
+
+### Agent Roles and Responsibilities
+
+#### Planner Agent
+- Inputs: user goal, context, available tools, constraints.
+- Output: structured, atomic steps with tool suggestions and inputs.
+- Supports re‑planning when execution encounters blockers.
+
+Example plan output:
+
+```text
+Plan:
+1. Search for "teams in Super Bowl 2025" using the Search tool.
+2. For each team found, use the Wiki tool to find the name of the quarterback.
+3. Use the Stats API tool to get the season statistics for each quarterback.
+4. Compile a summary of the quarterbacks' stats and return to the user.
+```
+
+#### Programmer (Executor) Agent
+Executes each plan step deterministically:
+1) parse step, 2) prepare inputs, 3) invoke tool, 4) capture result, 5) validate, 6) log progress.
+- Retries transient failures with backoff; triggers re‑plan on hard failures.
+- Produces final answer (optionally via a Responder step) from intermediate results.
+
+Behavior notes:
+- Executes in order; safe‑guards for forbidden actions; optional micro‑LLM calls for small transforms.
+
+#### Tool Layer
+- Standard interface: name, description, input spec, output spec, execution, error handling.
+- Used by Planner in plans; invoked by Programmer with validation/sanitization.
+
+### Guidelines for Adding New Tools
+1. Define interface (clear function, typed inputs/outputs, docstring).
+2. Register in tool registry with name + description; load config via env.
+3. Validate I/O; wrap external calls with try/except and timeouts.
+4. Safety: avoid logging secrets; guard risky ops.
+5. Document in this file; update prompts if tools list isn’t auto‑generated.
+6. Tests: unit tests for normal/edge/error paths; integration test via fake plan.
+
+Example skeleton:
+```python
+def translate_text(text: str, target_lang: str) -> str:
+    """Translate text using provider X."""
+    # ...
+    return translated_text
+```
+
+### Logging and Tracing (LangSmith)
+- Trace Planner runs, tool calls, Programmer loop, and finalization.
+- Tagging: `planner`, `executor`, `tool:<Name>`, environment, session/user.
+- Separate projects per env if desired (e.g., AgentSystem‑Prod/Dev).
+- Mask sensitive data; consider sampling in prod.
+
+Example trace URL shape (for reference):
+```
+https://smith.langchain.com/o/<Org>/projects/<Project>/runs/<RUN_ID>
+```
+
+### Error Handling and Retry
+- Tool errors: retries with exponential backoff for transient issues; log and propagate on hard errors.
+- LLM errors: retry/timeouts; format‑validation with corrective prompts; fallback models if needed.
+- Re‑planning: single re‑plan pass on critical failure; cap loops.
+- Safe mode: partial results or graceful abort; never unsafe actions.
+- Timeouts on all external calls; errors are tagged in traces.
+
+### Modularity, Testing, and Best Practices
+- Keep Planner, Programmer, Tools modular with clear interfaces and typed data structures.
+- Unit tests: planner (stub LLM), tools (mock I/O), programmer (fake plan/tools).
+- Integration tests: end‑to‑end scenarios with cheaper models; tracing enabled.
+- Treat trace coverage as part of “done”.
+
+Best‑practice highlights:
+- Separate prompts from logic; document assumptions; consistent naming.
+- No hard‑coded one‑offs; mind latency/cost; add caching only after correctness.
+- Coordinate format changes between Planner and Programmer.
+
+### Appendix: Example Scenario
+User: “Average high temperature in Paris last week, answer in French.”
+- Plan: WeatherAPI → Calculator → Translate → Respond.
+- Execution: call each tool, store results, compose final answer.
+- Trace: top run + planner run + tool runs (`tool:WeatherAPI`, `tool:Calculator`, `tool:Translate`).
+

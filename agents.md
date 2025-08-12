@@ -595,3 +595,33 @@ DEFAULT_SUMMARIZER_MODEL=gpt-5
 ```
 
 Place these in your runtime config (e.g., `.env`) and ensure your agent reads them when resolving models for each node.
+
+---
+
+## How to use it (with /workspace volume)
+
+### A. Daytona UI (manual run)
+When creating a sandbox: Attach Volume → main → mount at /workspace.
+
+Open the sandbox terminal and run:
+
+```bash
+bash -lc 'open-swe/apps/open-swe/scripts/bootstrap-sandbox.sh /workspace'
+source /workspace/.nova_env
+python -V && git --version && rg --version
+```
+(You’ll re-source /workspace/.nova_env in any new shell.)
+
+### B. From code (always mounted & bootstrapped)
+If your app creates the sandbox programmatically, pass the volume and call bootstrap after connect:
+
+```ts
+await daytona.createSandbox({
+  project: "ci-auto-rescue",
+  image: process.env.SANDBOX_IMAGE ?? "ubuntu:22.04",
+  volumes: [{ name: "main", mountPath: "/workspace" }],
+});
+
+// after connect:
+await exec('bash -lc "open-swe/apps/open-swe/scripts/bootstrap-sandbox.sh /workspace"');
+```

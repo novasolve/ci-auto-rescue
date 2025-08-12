@@ -32,3 +32,4 @@ nova = "apps.cli.nova:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src", "apps"]
+

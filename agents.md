@@ -169,3 +169,313 @@ ci-auto-rescue/
 
 ## Credits
 Made with care for teams that ship fast and fix faster.
+
+---
+
+## Open SWE Playbook (Daytona sandbox < 60s)
+
+Goal: make a brand-new Daytona Ubuntu sandbox usable in <60s and keep runs stable.
+Assumptions: running as root in a fresh container (no sudo). Network may be locked down; CA store may need updating.
+Heuristics: prefer safety, idempotency, and short feedback loops. If a step fails, explain and fallback, don’t stall.
+
+### Quick rules
+- **Detect → Decide → Do**: detect package manager, languages, repo type before running tools.
+- **Idempotent always**: stamp completion and skip next time.
+- **Fail soft**: on primary path failure (e.g., GitHub TLS), provide a working fallback (local patch file).
+- **Least moving parts**: don’t install runtimes unless the repo needs them.
+- **Explain**: print a ≤1‑line reason per action.
+
+### 0) Environment bootstrap (required once)
+When to run: if any of `git`, `tree`, `rg`, or `curl` is missing, or `/opt/.open-swe/bootstrap.done` doesn’t exist.
+
+<!-- AGENT:BOOTSTRAP:BEGIN -->
+```bash
+set -e
+
+STAMP=/opt/.open-swe/bootstrap.done
+[ -f "$STAMP" ] && { echo "[bootstrap] already complete"; exit 0; }
+
+export DEBIAN_FRONTEND=noninteractive
+
+pm=""
+command -v apt-get >/dev/null 2>&1 && pm="apt"
+command -v dnf     >/dev/null 2>&1 && pm="dnf"
+command -v apk     >/dev/null 2>&1 && pm="apk"
+
+echo "[bootstrap] pkgmgr=${pm:-none}"
+
+case "$pm" in
+  apt)
+    apt-get update -y -o Acquire::Retries=3
+    apt-get install -y git tree ripgrep ca-certificates curl unzip tar nano less openssh-client xauth publicsuffix
+    update-ca-certificates || true
+    ;;
+  dnf)
+    dnf install -y git tree ripgrep ca-certificates curl unzip tar nano less openssh-clients xorg-x11-xauth libpsl
+    update-ca-trust || true
+    ;;
+  apk)
+    apk add --no-cache git tree ripgrep ca-certificates curl unzip tar nano less openssh-client xauth libpsl
+    update-ca-certificates || true
+    ;;
+  *)
+    echo "[bootstrap] no supported package manager found"; exit 0
+    ;;
+ esac
+
+# Git TLS sanity
+git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt || true
+git config --global init.defaultBranch main || true
+
+mkdir -p "$(dirname "$STAMP")" && touch "$STAMP"
+
+echo "[bootstrap] versions:"
+( git --version || true ) && ( tree --version || true ) && ( rg --version || true ) && ( curl --version | head -n1 || true )
+```
+<!-- AGENT:BOOTSTRAP:END -->
+
+### 1) Repo discovery & safe tree printing
+When to run: at start of every session.
+
+<!-- AGENT:DISCOVER:BEGIN -->
+```bash
+set -e
+
+# Workspace root
+ROOT="${WORKSPACE:-/home/daytona/os}"
+[ -d "$ROOT" ] || ROOT="$(pwd)"
+
+cd "$ROOT"
+
+# Tree printing that works with/without git
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git ls-files | (command -v tree >/dev/null 2>&1 && tree --fromfile -L 3 || xargs -I{} sh -lc 'printf "%s
+" "{}"') || true
+else
+  (command -v tree >/dev/null 2>&1 && tree -L 3) || find . -maxdepth 3 -type f | sed 's|^\./||' | head -n 500
+fi
+
+# Language probes (fast, no network)
+LANGS=""
+[ -f "package.json" ] && LANGS="${LANGS} node"
+( ls -1 **/*requirements*.txt **/pyproject.toml 2>/dev/null | head -n1 >/dev/null ) && LANGS="${LANGS} python"
+( ls -1 **/go.mod 2>/dev/null | head -n1 >/dev/null ) && LANGS="${LANGS} go"
+
+echo "[discover] langs:${LANGS:- none}"
+```
+<!-- AGENT:DISCOVER:END -->
+
+### 2) Language toolchain on‑demand (only if needed)
+
+Node (npm/yarn/pnpm)
+
+<!-- AGENT:LANG-NODE:BEGIN -->
+```bash
+set -e
+[ -f package.json ] || exit 0
+
+# Choose package manager
+PM="npm"
+[ -f pnpm-lock.yaml ] && PM="pnpm"
+[ -f yarn.lock ] && PM="yarn"
+
+# Install runtime only if node missing
+if ! command -v node >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs
+  elif command -v dnf >/dev/null 2>&1; then
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && dnf install -y nodejs
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache nodejs-current npm
+  fi
+fi
+
+# Ensure chosen PM exists
+[ "$PM" = "pnpm" ] && command -v pnpm >/dev/null 2>&1 || npm i -g pnpm@9 >/dev/null 2>&1 || true
+[ "$PM" = "yarn" ] && command -v yarn >/dev/null 2>&1 || npm i -g yarn@1 >/dev/null 2>&1 || true
+
+echo "[node] installing deps via $PM"
+case "$PM" in
+  pnpm) pnpm i --frozen-lockfile || pnpm i ;;
+  yarn) yarn install --frozen-lockfile || yarn install ;;
+  npm)  npm ci || npm i ;;
+ esac
+```
+<!-- AGENT:LANG-NODE:END -->
+
+Python
+
+<!-- AGENT:LANG-PY:BEGIN -->
+```bash
+set -e
+REQ=""
+REQ=$(ls -1 **/*requirements*.txt 2>/dev/null | head -n1 || true)
+PYPROJ=$(ls -1 **/pyproject.toml 2>/dev/null | head -n1 || true)
+[ -z "$REQ$PYPROJ" ] && exit 0
+
+# Install python if missing
+command -v python3 >/dev/null 2>&1 || {
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -y && apt-get install -y python3 python3-pip
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y python3 python3-pip
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache python3 py3-pip
+  fi
+}
+
+python3 -m pip install --upgrade pip setuptools wheel || true
+[ -n "$REQ" ] && python3 -m pip install -r "$REQ" || true
+[ -n "$PYPROJ" ] && ( python3 -m pip install . || python3 -m pip install -e . ) || true
+```
+<!-- AGENT:LANG-PY:END -->
+
+### 3) App-specific quick fixes (Hono static files, if present)
+Condition: TypeScript project with Hono and `src/routes/app.ts` exists; no static middleware is set up.
+
+<!-- AGENT:FIX-HONO-STATIC:BEGIN -->
+```bash
+set -e
+APP=src/routes/app.ts
+[ -f "$APP" ] || exit 0
+grep -q "from 'hono/serve-static'" "$APP" && exit 0
+
+# Add static middleware for /public
+tmp="$(mktemp)"
+cat > "$tmp" <<'TS'
+import { serveStatic } from 'hono/serve-static'
+
+/* __OPEN_SWE_STATIC_START__ */
+app.use('/public/*', serveStatic({ root: './' }))
+/* __OPEN_SWE_STATIC_END__ */
+TS
+
+# Insert after app creation line
+perl -0777 -pe '
+  BEGIN{undef $/;}
+  s/(const\s+app\s*=\s*new\s+Hono\(\s*\)\s*;)/$1
+import { serveStatic } from '''hono\/serve-static''';
+app.use('''\/public\/*''' , serveStatic({ root: '''\.\/''' }));/s;
+' -i "$APP" || {
+  # fallback: append at end
+  echo -e "
+$(cat "$tmp")" >> "$APP"
+}
+rm -f "$tmp"
+echo "[hono] static middleware enabled at /public/*"
+```
+<!-- AGENT:FIX-HONO-STATIC:END -->
+
+### 4) Dev server runner (detect cmd)
+<!-- AGENT:RUN-DEV:BEGIN -->
+```bash
+set -e
+CMD=""
+# Detect common scripts
+if [ -f package.json ]; then
+  if jq -e '.scripts.dev' package.json >/dev/null 2>&1; then
+    if command -v pnpm >/dev/null 2>&1; then CMD="pnpm dev"
+    elif command -v yarn >/dev/null 2>&1; then CMD="yarn dev"
+    else CMD="npm run dev"; fi
+  fi
+fi
+[ -z "$CMD" ] && exit 0
+echo "[dev] running: $CMD"
+$CMD
+```
+<!-- AGENT:RUN-DEV:END -->
+
+### 5) Tests / lint (quick feedback)
+<!-- AGENT:TEST-LINT:BEGIN -->
+```bash
+set -e
+RUN=""
+if [ -f package.json ] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+  if command -v pnpm >/dev/null 2>&1; then RUN="pnpm test --silent || true"
+  elif command -v yarn >/dev/null 2>&1; then RUN="yarn test || true"
+  else RUN="npm test || true"; fi
+elif [ -n "$(ls -1 **/pytest.ini **/pyproject.toml 2>/dev/null | head -n1)" ]; then
+  RUN="pytest -q || true"
+fi
+[ -z "$RUN" ] && exit 0
+echo "[ci] $RUN"
+sh -lc "$RUN"
+```
+<!-- AGENT:TEST-LINT:END -->
+
+### 6) Git hygiene, commits, and safe push fallback
+When to run: before the first commit in a fresh sandbox.
+
+<!-- AGENT:GIT-HYGIENE:BEGIN -->
+```bash
+set -e
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+
+# Identity (use placeholders if not set)
+git config user.name  >/dev/null 2>&1 || git config user.name  "open-swe-bot"
+git config user.email >/dev/null 2>&1 || git config user.email "open-swe-bot@example.com"
+
+# Branch naming (use thread id if present)
+BR="${OPEN_SWE_BRANCH:-open-swe/$(date +%s)}"
+git rev-parse --verify "$BR" >/dev/null 2>&1 || git checkout -b "$BR"
+
+# Commit if diff exists
+git add -A
+git diff --cached --quiet || git commit -m "Open SWE automated changes"
+
+# Try push; if TLS fails, write a patch for manual upload
+set +e
+git push -u origin "$BR"
+st=$?
+set -e
+if [ $st -ne 0 ]; then
+  echo "[git] push failed; exporting patch to ./open-swe-changes.patch"
+  git format-patch --stdout origin/main..HEAD > open-swe-changes.patch || git diff origin/main..HEAD > open-swe-changes.patch || true
+fi
+```
+<!-- AGENT:GIT-HYGIENE:END -->
+
+### 7) Diagnostics (run when things look weird)
+<!-- AGENT:DIAGNOSE:BEGIN -->
+```bash
+set -e
+echo "[diag] uname: $(uname -a)"
+echo "[diag] whoami: $(whoami)"
+echo "[diag] pm: $(command -v apt-get >/dev/null 2>&1 && echo apt || (command -v dnf >/dev/null 2>&1 && echo dnf) || (command -v apk >/dev/null 2>&1 && echo apk) || echo none)"
+echo "[diag] tools:"
+for t in git tree rg curl node npm pnpm yarn python3 pip; do
+  printf " - %-8s : " "$t"; (command -v "$t" >/dev/null 2>&1 && "$t" --version 2>/dev/null | head -n1) || echo "missing"
+ done
+echo "[diag] certs:"
+ls -l /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true
+```
+<!-- AGENT:DIAGNOSE:END -->
+
+### Minimal run order the agent should follow
+1. AGENT:BOOTSTRAP
+2. AGENT:DISCOVER
+3. AGENT:LANG-NODE and/or AGENT:LANG-PY (depending on discovery)
+4. (Optional) AGENT:FIX-HONO-STATIC if the app matches
+5. AGENT:RUN-DEV (or skip for non‑web repos)
+6. AGENT:TEST-LINT
+7. AGENT:GIT-HYGIENE
+8. If errors: AGENT:DIAGNOSE
+
+### Notes for the human
+- Volumes vs Snapshots: persistent Volume keeps tools between restarts; Snapshots define the base image. To avoid baking, attach a Volume.
+- GitHub TLS x509: if pushes fail from the Open SWE server (not the sandbox), use the patch written (`open-swe-changes.patch`) or configure CA on the host.
+- Full automation: you can add a tiny hook to parse and execute the `<!-- AGENT:…:BEGIN/END -->` blocks on first contact.
+
+---
+
+## Appendix — Additional Docs pack
+We also recommend adding the following files under `docs/`:
+
+- `ARCHITECTURE.md`
+- `ORGSPEC.reference.md`
+- `SANDBOX-BOOTSTRAP.md`
+- `EVIDENCE.md`
+- `OPERATIONS-RUNBOOK.md`
+- `OPEN_SWE_KICKOFF.md`
+
+Placeholders have been created below. Replace with your org’s specifics.

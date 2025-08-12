@@ -50,3 +50,4 @@ def build_agent(settings: NovaSettings, telemetry: TelemetryRun):
     sg.add_conditional_edges("reflect", should_continue)
 
     return sg.compile()
+

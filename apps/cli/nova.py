@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,12 @@ import typer
 import yaml
 from rich.console import Console
 from rich.table import Table
+
+# Allow running as `python -m apps.cli.nova` without installation
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from nova.settings import get_settings
 from nova.sdk import NovaAgent
@@ -115,4 +122,3 @@ def eval(
 
 if __name__ == "__main__":
     app()
-

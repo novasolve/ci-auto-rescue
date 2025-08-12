@@ -575,3 +575,23 @@ User: “Average high temperature in Paris last week, answer in French.”
 - Execution: call each tool, store results, compose final answer.
 - Trace: top run + planner run + tool runs (`tool:WeatherAPI`, `tool:Calculator`, `tool:Translate`).
 
+---
+
+## Model and Provider Pinning
+If your build supports model/provider selection via environment variables, pin them to ensure consistent behavior.
+
+```ini
+MODEL_PROVIDER_ORDER=openai
+```
+
+Pin Planner/Programmer and any hidden nodes to GPT‑5:
+
+```ini
+DEFAULT_PLANNER_MODEL=gpt-5
+DEFAULT_PROGRAMMER_MODEL=gpt-5
+DEFAULT_REVIEWER_MODEL=gpt-5
+DEFAULT_ROUTER_MODEL=gpt-5
+DEFAULT_SUMMARIZER_MODEL=gpt-5
+```
+
+Place these in your runtime config (e.g., `.env`) and ensure your agent reads them when resolving models for each node.

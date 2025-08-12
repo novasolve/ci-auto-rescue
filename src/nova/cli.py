@@ -41,8 +41,7 @@ def fix(
         try:
             settings = settings.model_copy(update=updates)  # pydantic v2
         except Exception:
-            # Fallback for pydantic v1
-            data = settings.dict()
+            data = getattr(settings, "dict", lambda: {})()
             data.update(updates)
             from pydantic import BaseModel
 
@@ -72,7 +71,7 @@ def fix(
     # Build and run agent
     run_agent = build_agent(settings=settings, logger=logger)
 
-    summary = None
+    summary: Optional[dict] = None
     try:
         summary = run_agent(repo_path)
         success = bool(summary.get("success"))
@@ -90,11 +89,17 @@ def fix(
             git_tool.reset_hard(repo_path, "HEAD")
         except Exception:
             pass
-        logger.end_run(success=False, summary={"interrupted": True, "branch": branch_name, **(summary or {}) if summary else {}})
+        summ = {"interrupted": True, "branch": branch_name}
+        if summary:
+            summ.update(summary)
+        logger.end_run(success=False, summary=summ)
         raise typer.Exit(130)
     except Exception as e:
         console.print(f"[red]Run failed:[/red] {e}")
-        logger.end_run(success=False, summary={"error": str(e), "branch": branch_name, **(summary or {}) if summary else {}})
+        summ = {"error": str(e), "branch": branch_name}
+        if summary:
+            summ.update(summary)
+        logger.end_run(success=False, summary=summ)
         raise typer.Exit(1)
 
 
@@ -130,8 +135,9 @@ def eval(
     out_path = out_dir / f"{ts}.json"
 
     for item in data:
-        name = item.get("name")
-        repo_path = Path(item.get("repo_path", ".")).resolve()
+        name = item.get("name") if isinstance(item, dict) else None
+        repo_entry = item.get("repo_path") if isinstance(item, dict) else None
+        repo_path = Path(repo_entry or ".").resolve()
         if not name or not repo_path.exists():
             console.print(f"[yellow]Skipping invalid item[/yellow]: {item}")
             continue

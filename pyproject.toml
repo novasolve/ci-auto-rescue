@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nova-ci-rescue"
+version = "0.1.0"
+description = "Nova CI-Rescue: Automated test-fixing agent (LangGraph + OpenSWE)"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "NovaSolve" }]
+keywords = ["CI", "agent", "LangGraph", "OpenSWE", "pytest", "automation"]
+dependencies = [
+  "langgraph>=0.2",
+  "langchain-core>=0.3",
+  "pydantic>=2",
+  "pydantic-settings>=2",
+  "typer[all]>=0.12",
+  "rich>=13",
+  "httpx>=0.27",
+  "tenacity>=8",
+  "PyYAML>=6",
+  "unidiff>=0.7",
+  "pytest>=7",
+  "junitparser>=2",
+  "python-dotenv>=1",
+  "jsonschema>=4",
+]
+
+[project.scripts]
+nova = "apps.cli.nova:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nova"]

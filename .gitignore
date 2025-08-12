@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Environments
+.venv/
+venv/
+.env
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Test caches
+.pytest_cache/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Nova artifacts
+.nova/

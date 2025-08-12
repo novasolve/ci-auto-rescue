@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Plumber Platformer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="frame" aria-label="Game window">
+      <canvas id="game" width="800" height="480" aria-label="Plumber Platformer canvas"></canvas>
+      <div class="overlay" role="note">
+        <p><strong>Controls</strong></p>
+        <ul>
+          <li>Move: WASD or Arrow Keys</li>
+          <li>Jump: Space or Z</li>
+          <li>Pause: P</li>
+          <li>Reset: R</li>
+        </ul>
+      </div>
+    </main>
+
+    <noscript>
+      <p class="noscript">This game requires JavaScript to run. Please enable JavaScript.</p>
+    </noscript>
+
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>

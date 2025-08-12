@@ -1,0 +1,38 @@
+/* Basic reset */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color: #e6e6e6; background: #0f1122; }
+
+/* Center the canvas */
+body { display: grid; place-items: center; }
+
+.frame { position: relative; }
+
+canvas#game {
+  display: block;
+  background: #111826; /* dark backing so blank canvas isn't white flash */
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  image-rendering: pixelated; /* crisp nearest-neighbor look */
+}
+
+.overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.overlay p { margin: 0 0 4px 0; font-weight: 600; }
+.overlay ul { margin: 0; padding-left: 16px; }
+
+.noscript {
+  margin-top: 12px;
+  color: #ffb4a2;
+  text-align: center;
+}

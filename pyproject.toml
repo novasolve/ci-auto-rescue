@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nova-ci-rescue"
+version = "0.1.0"
+description = "Nova CI‑Rescue: automated test fixing agent (MVP)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+authors = [{ name = "NovaSolve", email = "dev@novasolve.ai" }]
+keywords = ["LLM", "LangGraph", "CI", "pytest", "agent", "automation"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Intended Audience :: Developers",
+  "License :: Other/Proprietary License",
+]
+dependencies = [
+  "langgraph>=0.2.0",
+  "langchain>=0.2.0",
+  "typer>=0.9.0",
+  "pydantic>=2.5.0",
+  "unidiff>=0.7.5",
+  "httpx>=0.24.0",
+  "python-dotenv>=1.0.0",
+  "rich>=13.0.0",
+  "PyYAML>=6.0.0",
+  "pytest>=7.0.0",
+  "pytest-json-report>=1.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/novasolve/ci-auto-rescue"
+
+[project.scripts]
+nova = "nova.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

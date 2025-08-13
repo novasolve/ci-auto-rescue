@@ -1,0 +1,4 @@
+{"ts": "2025-08-12T13:30:50.921445+00:00", "event": "start", "repo_path": ".", "run_id": "20250812T133050Z-0b93fd99", "telemetry_dir": "telemetry/20250812T133050Z-0b93fd99", "pid": 833}
+{"ts": "2025-08-12T13:30:50.921565+00:00", "event": "test", "data": {"message": "hello", "api": "none"}}
+{"ts": "2025-08-12T13:30:50.921761+00:00", "event": "artifact", "name": "artifacts/example.txt", "path": "telemetry/20250812T133050Z-0b93fd99/artifacts/example.txt", "size": 12}
+{"ts": "2025-08-12T13:30:50.921812+00:00", "event": "end", "success": true, "summary": {"ok": true}}

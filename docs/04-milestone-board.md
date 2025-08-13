@@ -70,9 +70,27 @@
 - **OS-843** - C3 — Safety caps _(must-have, safety)_ - 2h
   - AC: Violations abort with friendly message explaining why
 
+### Milestone C-DR: Design Review Audit
+
+- **OS-854** - C-DR1 — Security & Permissions Review _(audit, must-have)_ - 2h
+  - AC: No credential leaks, proper secrets handling, secure API usage
+- **OS-855** - C-DR2 — GitHub Integration Best Practices _(audit, must-have)_ - 1h
+  - AC: Follows GitHub Actions conventions, efficient workflows, proper caching
+- **OS-856** - C-DR3 — Safety Mechanisms Validation _(audit, must-have)_ - 1h
+  - AC: All safety caps tested, graceful failures, rollback procedures
+
 ### Milestone D: Demo & Release (Nice-to-Have)
 
 - **OS-844** - D1 — nova eval polish _(eval, nice-to-have)_ - 0.5d
 - **OS-845** - D2 — Starter demo repo _(demo, growth, nice-to-have)_ - 0.5d
 - **OS-846** - D3 — Proof thread checklist _(growth, nice-to-have)_ - 1h
 - **OS-847** - Update Slite with Complete Happy Path Documentation _(docs)_ - High priority
+
+### Milestone D-DR: Final Design Review Audit
+
+- **OS-857** - D-DR1 — End-to-End System Review _(audit, must-have)_ - 3h
+  - AC: Full system validation, performance benchmarks, scalability assessment
+- **OS-858** - D-DR2 — Documentation Completeness _(audit, must-have)_ - 2h
+  - AC: All features documented, API reference complete, troubleshooting guide
+- **OS-859** - D-DR3 — Release Readiness Checklist _(audit, must-have)_ - 2h
+  - AC: Version tagged, CHANGELOG updated, deployment process verified

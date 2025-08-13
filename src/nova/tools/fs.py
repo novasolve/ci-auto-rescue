@@ -235,9 +235,49 @@ def _build_content_from_hunks(prev: Optional[bytes], pf: object) -> bytes:
     return "".join(out).encode("utf-8")
 
 
+def apply_and_commit_patch(
+    repo_root: Path, 
+    diff_text: str, 
+    step_number: int,
+    git_manager: Optional[object] = None,
+    verbose: bool = False
+) -> Tuple[bool, List[Path]]:
+    """Apply a patch and commit it with a step message.
+    
+    Args:
+        repo_root: Repository root path
+        diff_text: The unified diff text to apply
+        step_number: The step number for the commit message
+        git_manager: Optional GitBranchManager instance for committing
+        verbose: Enable verbose output
+        
+    Returns:
+        Tuple of (success, list of changed files)
+    """
+    try:
+        # Apply the patch
+        changed_files = apply_unified_diff(repo_root, diff_text)
+        
+        # If a git manager is provided, commit the changes
+        if git_manager and changed_files:
+            # Import here to avoid circular dependency
+            from nova.tools.git import GitBranchManager
+            if isinstance(git_manager, GitBranchManager):
+                commit_success = git_manager.commit_patch(step_number)
+                if not commit_success and verbose:
+                    print(f"Warning: Failed to commit step {step_number}")
+        
+        return True, changed_files
+    except Exception as e:
+        if verbose:
+            print(f"Error applying patch: {e}")
+        return False, []
+
+
 __all__ = [
     "read_text",
     "write_text_safe",
     "apply_unified_diff",
     "rollback_on_failure",
+    "apply_and_commit_patch",
 ]

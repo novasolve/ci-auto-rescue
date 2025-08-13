@@ -99,6 +99,47 @@ class GitBranchManager:
         
         return self.branch_name
     
+    def commit_patch(self, step_number: int, message: Optional[str] = None) -> bool:
+        """Commit current changes with a step message.
+        
+        Args:
+            step_number: The step number for the commit message
+            message: Optional custom message (defaults to 'nova: step <n>')
+            
+        Returns:
+            True if commit successful, False otherwise
+        """
+        # Default message format
+        if message is None:
+            message = f"nova: step {step_number}"
+        
+        # Stage all changes
+        success, output = self._run_git_command("add", "-A")
+        if not success:
+            if self.verbose:
+                console.print(f"[red]Failed to stage changes: {output}[/red]")
+            return False
+        
+        # Check if there are changes to commit
+        success, output = self._run_git_command("diff", "--cached", "--quiet")
+        if success:
+            # No changes to commit
+            if self.verbose:
+                console.print("[dim]No changes to commit[/dim]")
+            return True
+        
+        # Commit the changes
+        success, output = self._run_git_command("commit", "-m", message)
+        if not success:
+            if self.verbose:
+                console.print(f"[red]Failed to commit: {output}[/red]")
+            return False
+        
+        if self.verbose:
+            console.print(f"[green]✓ Committed: {message}[/green]")
+        
+        return True
+    
     def cleanup(self, success: bool = False):
         """Clean up the repository state."""
         if not self.original_head:

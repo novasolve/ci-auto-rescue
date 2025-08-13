@@ -26,6 +26,7 @@ class AgentState:
     max_iterations: int = 6
     timeout_seconds: int = 1200
     start_time: datetime = field(default_factory=datetime.now)
+    current_step: int = 0  # Track step number for commits
     
     # Results
     patches_applied: List[str] = field(default_factory=list)
@@ -55,6 +56,11 @@ class AgentState:
         """Increment iteration counter and check if we should continue."""
         self.current_iteration += 1
         return self.current_iteration <= self.max_iterations
+    
+    def increment_step(self) -> int:
+        """Increment and return the step counter for patch commits."""
+        self.current_step += 1
+        return self.current_step
     
     def check_timeout(self) -> bool:
         """Check if we've exceeded the timeout."""

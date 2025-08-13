@@ -22,6 +22,7 @@ class GitBranchManager:
         self.repo_path = repo_path
         self.verbose = verbose
         self.original_head: Optional[str] = None
+        self.original_branch: Optional[str] = None  # Store original branch name
         self.branch_name: Optional[str] = None
         self._original_sigint_handler = None
         
@@ -56,10 +57,33 @@ class GitBranchManager:
     
     def create_fix_branch(self) -> str:
         """Create a new nova-fix/<timestamp> branch and switch to it."""
-        # Store original HEAD
+        # Store original HEAD and branch name
         self.original_head = self._get_current_head()
         if not self.original_head:
             raise RuntimeError("Failed to get current HEAD commit")
+        
+        # Store original branch name (might be "HEAD" if detached)
+        self.original_branch = self._get_current_branch()
+        if self.original_branch == "HEAD":
+            # If we're in detached HEAD state, try to find the best branch to return to
+            success, output = self._run_git_command("branch", "--contains", self.original_head)
+            if success and output:
+                # Get the first branch that contains this commit (usually main or master)
+                branches = output.strip().split('\n')
+                for branch in branches:
+                    branch = branch.strip().lstrip('* ')
+                    if not branch.startswith('nova-fix/'):
+                        self.original_branch = branch
+                        break
+            if self.original_branch == "HEAD":
+                # Fallback to main or master if available
+                success, _ = self._run_git_command("rev-parse", "--verify", "main")
+                if success:
+                    self.original_branch = "main"
+                else:
+                    success, _ = self._run_git_command("rev-parse", "--verify", "master")
+                    if success:
+                        self.original_branch = "master"
         
         # Generate branch name with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -84,18 +108,27 @@ class GitBranchManager:
             # On success, stay on the branch and print the branch name
             console.print(f"\n[green]✅ Success! Changes saved to branch: {self.branch_name}[/green]")
         else:
-            # On failure or interrupt, hard reset to original HEAD
+            # On failure or interrupt, return to original branch
             console.print("\n[yellow]⚠️  Cleaning up... resetting to original state[/yellow]")
             
-            # First, try to checkout the original branch or HEAD
-            original_branch = self._get_current_branch()
-            if original_branch and original_branch.startswith("nova-fix/"):
-                # We're on a nova-fix branch, need to switch away
-                success, _ = self._run_git_command("checkout", "-f", self.original_head)
-                if not success:
-                    console.print("[red]Warning: Failed to checkout original HEAD[/red]")
+            # First, checkout the original branch (by name, not by commit hash)
+            current_branch = self._get_current_branch()
+            if current_branch and current_branch.startswith("nova-fix/"):
+                # We're on a nova-fix branch, need to switch back to original
+                if self.original_branch and self.original_branch != "HEAD":
+                    # Checkout the original branch by name
+                    success, output = self._run_git_command("checkout", "-f", self.original_branch)
+                    if not success:
+                        # If that fails, try checking out the commit
+                        console.print(f"[yellow]Warning: Failed to checkout {self.original_branch}, trying HEAD[/yellow]")
+                        success, _ = self._run_git_command("checkout", "-f", self.original_head)
+                        if not success:
+                            console.print("[red]Warning: Failed to checkout original state[/red]")
+                else:
+                    # Fallback to checking out the commit if no branch name
+                    success, _ = self._run_git_command("checkout", "-f", self.original_head)
             
-            # Hard reset to original HEAD
+            # Hard reset to original HEAD to ensure clean state
             success, output = self._run_git_command("reset", "--hard", self.original_head)
             if success:
                 console.print("[dim]Repository reset to original state[/dim]")

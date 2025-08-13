@@ -351,6 +351,10 @@ def fix(
             # Continue to next iteration
             console.print(f"[dim]Continuing to iteration {iteration + 1}...[/dim]")
         
+        # Print exit summary
+        if state and state.final_status:
+            print_exit_summary(state, state.final_status)
+        
         # Log final completion status
         telemetry.log_event("completion", {
             "status": state.final_status,
@@ -361,12 +365,19 @@ def fix(
         telemetry.end_run(success=success)
         
     except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted by user[/yellow]")
+        if state:
+            state.final_status = "interrupted"
+            print_exit_summary(state, "interrupted")
+        else:
+            console.print("\n[yellow]Interrupted by user[/yellow]")
         if telemetry:
             telemetry.log_event("interrupted", {"reason": "keyboard_interrupt"})
         success = False
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
+        if state:
+            state.final_status = "error"
+            print_exit_summary(state, "error")
         if telemetry:
             telemetry.log_event("error", {"error": str(e)})
         success = False

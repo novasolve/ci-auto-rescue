@@ -6,12 +6,16 @@
 
 ## Milestone Summary
 
-| Milestone                       | Key Deliverables                                       | Status      |
-| ------------------------------- | ------------------------------------------------------ | ----------- |
-| **A. Local E2E**                | CLI seeded failing tests → green on sample repo        | In Progress |
-| **B. Quiet CI & Telemetry**     | Quiet pytest logs, telemetry wiring, packaging cleanup | Not Started |
-| **C. GitHub Action & PR Proof** | Action simulate job, Scorecard PR comment, safety caps | Not Started |
-| **D. Demo & Release**           | Eval polish, starter demo repo, proof checklist        | Not Started |
+| Milestone                       | Key Deliverables                                       | Status      | DR Audit    |
+| ------------------------------- | ------------------------------------------------------ | ----------- | ----------- |
+| **A. Local E2E**                | CLI seeded failing tests → green on sample repo        | In Progress | Pending     |
+| **A-DR. Design Review**         | Technical review, code quality, test coverage audit    | Not Started | -           |
+| **B. Quiet CI & Telemetry**     | Quiet pytest logs, telemetry wiring, packaging cleanup | Not Started | Pending     |
+| **B-DR. Design Review**         | Telemetry audit, monitoring review, package validation | Not Started | -           |
+| **C. GitHub Action & PR Proof** | Action simulate job, Scorecard PR comment, safety caps | Not Started | Pending     |
+| **C-DR. Design Review**         | Security review, CI/CD best practices, safety audit    | Not Started | -           |
+| **D. Demo & Release**           | Eval polish, starter demo repo, proof checklist        | Not Started | Pending     |
+| **D-DR. Final Design Review**   | End-to-end review, release readiness, documentation    | Not Started | -           |
 
 ## Issue Breakdown - Happy Path (Must-Have)
 
@@ -28,6 +32,15 @@
 - **OS-836** - A5 — Smoke run on sample repo _(must-have, testing)_ - 0.5d
   - AC: Tests pass (green) in the end; `.nova/<run>/` contains trace, diffs, and JUnit report
 
+### Milestone A-DR: Design Review Audit
+
+- **OS-848** - A-DR1 — Technical Architecture Review _(audit, must-have)_ - 2h
+  - AC: Code follows patterns, no critical issues, documented decisions
+- **OS-849** - A-DR2 — Test Coverage Audit _(audit, must-have)_ - 1h
+  - AC: >80% code coverage, all critical paths tested, edge cases documented
+- **OS-850** - A-DR3 — Code Quality & Standards _(audit, must-have)_ - 1h
+  - AC: Linting passes, consistent style, meaningful comments/docstrings
+
 ### Milestone B: Quiet CI & Telemetry
 
 - **OS-837** - B1 — Quiet pytest defaults _(ci, must-have, testing)_ - 30m
@@ -38,6 +51,15 @@
   - AC: Fresh venv `pip install -e .` yields working `nova` CLI without errors
 - **OS-840** - B4 — README Quickstart _(docs, must-have)_ - 2h
   - AC: New user gets green run locally in ≤15 minutes
+
+### Milestone B-DR: Design Review Audit
+
+- **OS-851** - B-DR1 — Telemetry & Observability Review _(audit, must-have)_ - 2h
+  - AC: All critical paths logged, metrics captured, tracing complete
+- **OS-852** - B-DR2 — Package & Dependency Audit _(audit, must-have)_ - 1h
+  - AC: Clean dependencies, no conflicts, proper versioning
+- **OS-853** - B-DR3 — CI Integration Validation _(audit, must-have)_ - 1h
+  - AC: CI-friendly output, proper exit codes, artifact generation
 
 ### Milestone C: GitHub Action & PR Proof
 

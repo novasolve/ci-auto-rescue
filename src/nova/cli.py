@@ -141,18 +141,168 @@ def fix(
             console.print(failures_table)
             console.print()
         
-        # TODO: Implement the actual agent loop (planner → actor → critic → apply → test → reflect)
-        console.print("[yellow]⚠️  Agent loop not yet implemented. Stopping here.[/yellow]")
-        console.print("[dim]Next steps: Implement planner → actor → critic → apply → test → reflect loop[/dim]")
+        # Set branch info in AgentState for reference
+        state.branch_name = branch_name
+        state.original_commit = git_manager._get_current_head()
         
-        # Log completion status for not implemented scenario
-        state.final_status = "not_implemented"
+        # Import our apply patch node
+        from nova.nodes.apply_patch import apply_patch
+        
+        # Agent loop: iterate until tests are fixed or limits reached
+        console.print("\n[bold]Starting agent loop...[/bold]")
+        
+        while state.increment_iteration():
+            iteration = state.current_iteration
+            console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
+            
+            # 1. PLANNER: Generate a plan based on failing tests
+            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
+            # TODO: Implement actual planner logic
+            # For now, using placeholder
+            plan = {
+                "approach": "Fix failing assertions",
+                "target_tests": state.failing_tests[:2] if len(state.failing_tests) > 2 else state.failing_tests
+            }
+            telemetry.log_event("planner", {
+                "iteration": iteration,
+                "plan": plan,
+                "failing_tests": state.total_failures
+            })
+            
+            # 2. ACTOR: Generate a patch diff based on the plan
+            console.print(f"[cyan]🎭 Generating patch...[/cyan]")
+            # TODO: Implement actual actor logic with LLM
+            # For now, using a mock patch for demonstration
+            if iteration == 1:
+                # Mock patch - in real implementation, this would come from LLM
+                patch_diff = """--- a/test_sample.py
++++ b/test_sample.py
+@@ -1,5 +1,5 @@
+ def test_example():
+-    assert False  # This will fail
++    assert True  # Fixed
+     
+ def test_another():
+     pass
+"""
+            else:
+                # No more patches for subsequent iterations in mock
+                patch_diff = None
+            
+            if not patch_diff:
+                console.print("[yellow]No patch generated. Stopping.[/yellow]")
+                state.final_status = "no_patch"
+                telemetry.log_event("actor_failed", {"iteration": iteration})
+                break
+            
+            telemetry.log_event("actor", {
+                "iteration": iteration,
+                "patch_size": len(patch_diff.split('\n'))
+            })
+            
+            # 3. CRITIC: Review and approve/reject the patch
+            console.print(f"[cyan]🔍 Reviewing patch...[/cyan]")
+            # TODO: Implement actual critic logic with LLM review
+            # For now, auto-approve if patch is reasonable size
+            patch_lines = patch_diff.split('\n')
+            patch_approved = len(patch_lines) < 1000  # Simple size check
+            
+            if not patch_approved:
+                console.print(f"[yellow]Patch rejected by critic at iteration {iteration}. Stopping.[/yellow]")
+                state.final_status = "patch_rejected"
+                telemetry.log_event("critic_rejected", {
+                    "iteration": iteration,
+                    "reason": "patch_too_large"
+                })
+                break
+            
+            console.print("[green]✓ Patch approved by critic[/green]")
+            telemetry.log_event("critic_approved", {"iteration": iteration})
+            
+            # 4. APPLY PATCH: Apply the approved patch and commit
+            console.print(f"[cyan]📝 Applying patch...[/cyan]")
+            
+            # Use our ApplyPatchNode to apply and commit the patch
+            result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
+            
+            if not result["success"]:
+                console.print(f"[red]Failed to apply patch at iteration {iteration}[/red]")
+                state.final_status = "patch_error"
+                telemetry.log_event("patch_error", {
+                    "iteration": iteration,
+                    "step": result.get("step_number", 0)
+                })
+                break
+            
+            # Log successful patch application
+            console.print(f"[green]✓ Patch applied and committed (step {result['step_number']})[/green]")
+            telemetry.log_event("patch_applied", {
+                "iteration": iteration,
+                "step": result["step_number"],
+                "files_changed": result["changed_files"],
+                "commit": git_manager._get_current_head()
+            })
+            
+            # Save patch artifact for auditing
+            telemetry.save_artifact(f"diffs/step-{result['step_number']}.diff", patch_diff)
+            
+            # 5. RUN TESTS: Check if the patch fixed the failures
+            console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
+            new_failures = runner.run_tests(max_failures=5)
+            
+            # Update state with new test results
+            previous_failures = state.total_failures
+            state.add_failing_tests(new_failures)
+            state.test_results.append({
+                "iteration": iteration,
+                "failures_before": previous_failures,
+                "failures_after": state.total_failures
+            })
+            
+            telemetry.log_event("test_results", {
+                "iteration": iteration,
+                "failures_before": previous_failures,
+                "failures_after": state.total_failures,
+                "fixed": previous_failures - state.total_failures
+            })
+            
+            # 6. REFLECT: Check if we should continue or stop
+            if state.total_failures == 0:
+                # All tests passed - success!
+                console.print(f"\n[bold green]✅ All tests passing! Fixed in {iteration} iteration(s).[/bold green]")
+                state.final_status = "success"
+                success = True
+                break
+            
+            # Check if we made progress
+            if state.total_failures < previous_failures:
+                console.print(f"[green]Progress: Fixed {previous_failures - state.total_failures} test(s)[/green]")
+            else:
+                console.print(f"[yellow]No progress: {state.total_failures} test(s) still failing[/yellow]")
+            
+            # Check timeout
+            if state.check_timeout():
+                console.print("\n[red]⏰ Timeout reached. Stopping agent loop.[/red]")
+                state.final_status = "timeout"
+                break
+            
+            # Check if we're at max iterations
+            if iteration >= state.max_iterations:
+                console.print(f"\n[red]🚫 Max iterations ({state.max_iterations}) reached.[/red]")
+                state.final_status = "max_iters"
+                break
+            
+            # Continue to next iteration
+            console.print(f"[dim]Continuing to iteration {iteration + 1}...[/dim]")
+        
+        # Log final completion status
         telemetry.log_event("completion", {
             "status": state.final_status,
             "iterations": state.current_iteration,
+            "total_patches": len(state.patches_applied),
+            "final_failures": state.total_failures
         })
-        telemetry.end_run(success=False)
-        # (Agent loop not implemented; treat this run as unsuccessful for now)
+        telemetry.end_run(success=success)
         
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")

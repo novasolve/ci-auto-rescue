@@ -1,0 +1,4 @@
+{"ts": "2025-08-13T20:58:15.325072+00:00", "event": "start", "repo_path": "/Users/seb/GPT5/working/ci-auto-rescue", "run_id": "20250813T205815Z-4b434071", "telemetry_dir": "telemetry/20250813T205815Z-4b434071", "pid": 54055}
+{"ts": "2025-08-13T20:58:15.682082+00:00", "event": "test_discovery", "data": {"total_failures": 0, "failing_tests": []}}
+{"ts": "2025-08-13T20:58:15.682355+00:00", "event": "completion", "data": {"status": "no_failures"}}
+{"ts": "2025-08-13T20:58:15.682413+00:00", "event": "end", "success": true, "summary": {}}

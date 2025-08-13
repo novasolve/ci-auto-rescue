@@ -65,10 +65,12 @@ def fix(
     console.print(f"Timeout: {timeout}s")
     console.print()
     
-    # Initialize branch manager and create nova-fix branch
+    # Initialize branch manager for nova-fix branch
     git_manager = GitBranchManager(repo_path, verbose=verbose)
-    branch_name = None
+    branch_name: Optional[str] = None
     success = False
+    telemetry = None
+    state = None
     
     try:
         # Create the nova-fix branch
@@ -90,29 +92,29 @@ def fix(
             timeout_seconds=timeout,
         )
         
-        # Step 1: Run tests to identify failures (A1 - Seed failing tests into Planner)
+        # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
         runner = TestRunner(repo_path, verbose=verbose)
         failing_tests = runner.run_tests(max_failures=5)
         
         # Store failures in agent state
         state.add_failing_tests(failing_tests)
         
-        # Log the test discovery
+        # Log the test discovery event
         telemetry.log_event("test_discovery", {
             "total_failures": state.total_failures,
             "failing_tests": state.failing_tests,
         })
         
-        # Check if there are any failures (AC: If zero failures → exit 0 with "No failing tests")
+        # Check if there are any failures (AC: if zero failures → exit 0 with message)
         if not failing_tests:
             console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
             state.final_status = "success"
             telemetry.log_event("completion", {"status": "no_failures"})
             telemetry.end_run(success=True)
-            success = True  # Mark as successful
+            success = True
             return
         
-        # Display failing tests table
+        # Display failing tests in a table
         console.print(f"\n[bold red]Found {len(failing_tests)} failing test(s):[/bold red]")
         
         table = Table(title="Failing Tests", show_header=True, header_style="bold magenta")
@@ -130,7 +132,7 @@ def fix(
         console.print(table)
         console.print()
         
-        # Prepare planner context (AC: Planner prompt contains failing tests table)
+        # Prepare planner context (AC: planner prompt contains failing tests table)
         planner_context = state.get_planner_context()
         failures_table = runner.format_failures_table(failing_tests)
         
@@ -139,33 +141,38 @@ def fix(
             console.print(failures_table)
             console.print()
         
-        # TODO: Implement the actual agent loop (planner, actor, critic, apply, test, reflect)
+        # TODO: Implement the actual agent loop (planner → actor → critic → apply → test → reflect)
         console.print("[yellow]⚠️  Agent loop not yet implemented. Stopping here.[/yellow]")
         console.print("[dim]Next steps: Implement planner → actor → critic → apply → test → reflect loop[/dim]")
         
-        # Log completion
+        # Log completion status for not implemented scenario
         state.final_status = "not_implemented"
         telemetry.log_event("completion", {
             "status": state.final_status,
             "iterations": state.current_iteration,
         })
         telemetry.end_run(success=False)
-        
-        # For demo purposes, let's treat this as a success when agent is implemented
-        # success = True  # Uncomment when agent loop is implemented
+        # (Agent loop not implemented; treat this run as unsuccessful for now)
         
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
+        if telemetry:
+            telemetry.log_event("interrupted", {"reason": "keyboard_interrupt"})
         success = False
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
+        if telemetry:
+            telemetry.log_event("error", {"error": str(e)})
         success = False
     finally:
-        # Clean up - this will handle branch management
+        # Clean up branch and restore original state
         if git_manager and branch_name:
             git_manager.cleanup(success=success)
             git_manager.restore_signal_handler()
-        
+        # Ensure telemetry run is ended if not already done
+        if telemetry and not success and (state is None or state.final_status is None):
+            telemetry.end_run(success=False)
+        # Exit with error code 1 if the process did not succeed
         if not success:
             raise typer.Exit(1)
 

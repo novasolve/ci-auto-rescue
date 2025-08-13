@@ -23,6 +23,66 @@ app = typer.Typer(
 console = Console()
 
 
+def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None) -> None:
+    """
+    Print a comprehensive summary when exiting the agent loop.
+    
+    Args:
+        state: The current agent state
+        reason: The reason for exit (timeout, max_iters, success, etc.)
+        elapsed_seconds: Optional elapsed time in seconds
+    """
+    console.print("\n" + "=" * 60)
+    console.print("[bold]EXECUTION SUMMARY[/bold]")
+    console.print("=" * 60)
+    
+    # Exit reason with appropriate styling
+    if reason == "success":
+        console.print(f"[bold green]✅ Exit Reason: SUCCESS - All tests passing![/bold green]")
+    elif reason == "timeout":
+        console.print(f"[bold red]⏰ Exit Reason: TIMEOUT - Exceeded {state.timeout_seconds}s limit[/bold red]")
+    elif reason == "max_iters":
+        console.print(f"[bold red]🔄 Exit Reason: MAX ITERATIONS - Reached {state.max_iterations} iterations[/bold red]")
+    elif reason == "no_patch":
+        console.print(f"[bold yellow]⚠️ Exit Reason: NO PATCH - Could not generate fix[/bold yellow]")
+    elif reason == "patch_rejected":
+        console.print(f"[bold yellow]⚠️ Exit Reason: PATCH REJECTED - Critic rejected patch[/bold yellow]")
+    elif reason == "patch_error":
+        console.print(f"[bold red]❌ Exit Reason: PATCH ERROR - Failed to apply patch[/bold red]")
+    elif reason == "interrupted":
+        console.print(f"[bold yellow]🛑 Exit Reason: INTERRUPTED - User cancelled operation[/bold yellow]")
+    elif reason == "error":
+        console.print(f"[bold red]❌ Exit Reason: ERROR - Unexpected error occurred[/bold red]")
+    else:
+        console.print(f"[bold yellow]Exit Reason: {reason.upper()}[/bold yellow]")
+    
+    console.print()
+    
+    # Statistics
+    console.print("[bold]Statistics:[/bold]")
+    console.print(f"  • Iterations completed: {state.current_iteration}/{state.max_iterations}")
+    console.print(f"  • Patches applied: {len(state.patches_applied)}")
+    console.print(f"  • Initial failures: {len(state.failing_tests) if state.failing_tests else 0}")
+    console.print(f"  • Remaining failures: {state.total_failures}")
+    
+    if state.total_failures == 0:
+        console.print(f"  • [green]All tests fixed successfully![/green]")
+    elif state.failing_tests and state.total_failures < len(state.failing_tests):
+        fixed = len(state.failing_tests) - state.total_failures
+        console.print(f"  • Tests fixed: {fixed}/{len(state.failing_tests)}")
+    
+    if elapsed_seconds is not None:
+        minutes, seconds = divmod(int(elapsed_seconds), 60)
+        console.print(f"  • Time elapsed: {minutes}m {seconds}s")
+    else:
+        elapsed = (datetime.now() - state.start_time).total_seconds()
+        minutes, seconds = divmod(int(elapsed), 60)
+        console.print(f"  • Time elapsed: {minutes}m {seconds}s")
+    
+    console.print("=" * 60)
+    console.print()
+
+
 @app.command()
 def fix(
     repo_path: Path = typer.Argument(

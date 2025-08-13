@@ -34,12 +34,9 @@
 
 ### Milestone A-DR: Design Review Audit
 
-- **OS-848** - A-DR1 — Technical Architecture Review _(audit, must-have)_ - 2h
-  - AC: Code follows patterns, no critical issues, documented decisions
-- **OS-849** - A-DR2 — Test Coverage Audit _(audit, must-have)_ - 1h
-  - AC: >80% code coverage, all critical paths tested, edge cases documented
-- **OS-850** - A-DR3 — Code Quality & Standards _(audit, must-have)_ - 1h
-  - AC: Linting passes, consistent style, meaningful comments/docstrings
+- **OS-849** - A-DR — Design Review Audit for Milestone A _(audit, must-have)_ - 4h
+  - AC: Technical architecture review complete, >80% code coverage, code quality validated
+  - Includes: Architecture review, test coverage audit, code standards check
 
 ### Milestone B: Quiet CI & Telemetry
 
@@ -54,12 +51,9 @@
 
 ### Milestone B-DR: Design Review Audit
 
-- **OS-851** - B-DR1 — Telemetry & Observability Review _(audit, must-have)_ - 2h
-  - AC: All critical paths logged, metrics captured, tracing complete
-- **OS-852** - B-DR2 — Package & Dependency Audit _(audit, must-have)_ - 1h
-  - AC: Clean dependencies, no conflicts, proper versioning
-- **OS-853** - B-DR3 — CI Integration Validation _(audit, must-have)_ - 1h
-  - AC: CI-friendly output, proper exit codes, artifact generation
+- **OS-850** - B-DR — Design Review Audit for Milestone B _(audit, must-have)_ - 4h
+  - AC: Telemetry review complete, package audit passed, CI integration validated
+  - Includes: Observability review, dependency audit, CI validation
 
 ### Milestone C: GitHub Action & PR Proof
 
@@ -72,12 +66,9 @@
 
 ### Milestone C-DR: Design Review Audit
 
-- **OS-854** - C-DR1 — Security & Permissions Review _(audit, must-have)_ - 2h
-  - AC: No credential leaks, proper secrets handling, secure API usage
-- **OS-855** - C-DR2 — GitHub Integration Best Practices _(audit, must-have)_ - 1h
-  - AC: Follows GitHub Actions conventions, efficient workflows, proper caching
-- **OS-856** - C-DR3 — Safety Mechanisms Validation _(audit, must-have)_ - 1h
-  - AC: All safety caps tested, graceful failures, rollback procedures
+- **OS-851** - C-DR — Design Review Audit for Milestone C _(audit, must-have, security)_ - 4h
+  - AC: Security review passed, GitHub best practices followed, safety mechanisms validated
+  - Includes: Security audit, GitHub integration review, safety validation
 
 ### Milestone D: Demo & Release (Nice-to-Have)
 
@@ -88,9 +79,6 @@
 
 ### Milestone D-DR: Final Design Review Audit
 
-- **OS-857** - D-DR1 — End-to-End System Review _(audit, must-have)_ - 3h
-  - AC: Full system validation, performance benchmarks, scalability assessment
-- **OS-858** - D-DR2 — Documentation Completeness _(audit, must-have)_ - 2h
-  - AC: All features documented, API reference complete, troubleshooting guide
-- **OS-859** - D-DR3 — Release Readiness Checklist _(audit, must-have)_ - 2h
-  - AC: Version tagged, CHANGELOG updated, deployment process verified
+- **OS-852** - D-DR — Final Design Review Audit _(audit, must-have, release)_ - 7h
+  - AC: End-to-end validation complete, documentation finalized, release ready
+  - Includes: System review, documentation audit, release readiness checklist

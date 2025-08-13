@@ -13,6 +13,7 @@ from nova.runner import TestRunner
 from nova.agent import AgentState
 from nova.telemetry.logger import JSONLLogger
 from nova.config import NovaSettings
+from nova.tools.git import GitBranchManager
 
 app = typer.Typer(
     name="nova",
@@ -64,79 +65,109 @@ def fix(
     console.print(f"Timeout: {timeout}s")
     console.print()
     
-    # Initialize settings and telemetry
-    settings = NovaSettings()
-    telemetry = JSONLLogger(settings, enabled=True)
-    telemetry.start_run(repo_path)
+    # Initialize branch manager and create nova-fix branch
+    git_manager = GitBranchManager(repo_path, verbose=verbose)
+    branch_name = None
+    success = False
     
-    # Initialize agent state
-    state = AgentState(
-        repo_path=repo_path,
-        max_iterations=max_iters,
-        timeout_seconds=timeout,
-    )
-    
-    # Step 1: Run tests to identify failures (A1 - Seed failing tests into Planner)
-    runner = TestRunner(repo_path, verbose=verbose)
-    failing_tests = runner.run_tests(max_failures=5)
-    
-    # Store failures in agent state
-    state.add_failing_tests(failing_tests)
-    
-    # Log the test discovery
-    telemetry.log_event("test_discovery", {
-        "total_failures": state.total_failures,
-        "failing_tests": state.failing_tests,
-    })
-    
-    # Check if there are any failures (AC: If zero failures → exit 0 with "No failing tests")
-    if not failing_tests:
-        console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
-        state.final_status = "success"
-        telemetry.log_event("completion", {"status": "no_failures"})
-        telemetry.end_run(success=True)
-        raise typer.Exit(0)
-    
-    # Display failing tests table
-    console.print(f"\n[bold red]Found {len(failing_tests)} failing test(s):[/bold red]")
-    
-    table = Table(title="Failing Tests", show_header=True, header_style="bold magenta")
-    table.add_column("Test Name", style="cyan", no_wrap=False)
-    table.add_column("Location", style="yellow")
-    table.add_column("Error", style="red", no_wrap=False)
-    
-    for test in failing_tests:
-        location = f"{test.file}:{test.line}" if test.line > 0 else test.file
-        error_preview = test.short_traceback.split('\n')[0][:60]
-        if len(test.short_traceback.split('\n')[0]) > 60:
-            error_preview += "..."
-        table.add_row(test.name, location, error_preview)
-    
-    console.print(table)
-    console.print()
-    
-    # Prepare planner context (AC: Planner prompt contains failing tests table)
-    planner_context = state.get_planner_context()
-    failures_table = runner.format_failures_table(failing_tests)
-    
-    if verbose:
-        console.print("[dim]Planner context prepared with failing tests:[/dim]")
-        console.print(failures_table)
+    try:
+        # Create the nova-fix branch
+        branch_name = git_manager.create_fix_branch()
+        console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+        
+        # Set up signal handler for Ctrl+C
+        git_manager.setup_signal_handler()
+        
+        # Initialize settings and telemetry
+        settings = NovaSettings()
+        telemetry = JSONLLogger(settings, enabled=True)
+        telemetry.start_run(repo_path)
+        
+        # Initialize agent state
+        state = AgentState(
+            repo_path=repo_path,
+            max_iterations=max_iters,
+            timeout_seconds=timeout,
+        )
+        
+        # Step 1: Run tests to identify failures (A1 - Seed failing tests into Planner)
+        runner = TestRunner(repo_path, verbose=verbose)
+        failing_tests = runner.run_tests(max_failures=5)
+        
+        # Store failures in agent state
+        state.add_failing_tests(failing_tests)
+        
+        # Log the test discovery
+        telemetry.log_event("test_discovery", {
+            "total_failures": state.total_failures,
+            "failing_tests": state.failing_tests,
+        })
+        
+        # Check if there are any failures (AC: If zero failures → exit 0 with "No failing tests")
+        if not failing_tests:
+            console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
+            state.final_status = "success"
+            telemetry.log_event("completion", {"status": "no_failures"})
+            telemetry.end_run(success=True)
+            success = True  # Mark as successful
+            return
+        
+        # Display failing tests table
+        console.print(f"\n[bold red]Found {len(failing_tests)} failing test(s):[/bold red]")
+        
+        table = Table(title="Failing Tests", show_header=True, header_style="bold magenta")
+        table.add_column("Test Name", style="cyan", no_wrap=False)
+        table.add_column("Location", style="yellow")
+        table.add_column("Error", style="red", no_wrap=False)
+        
+        for test in failing_tests:
+            location = f"{test.file}:{test.line}" if test.line > 0 else test.file
+            error_preview = test.short_traceback.split('\n')[0][:60]
+            if len(test.short_traceback.split('\n')[0]) > 60:
+                error_preview += "..."
+            table.add_row(test.name, location, error_preview)
+        
+        console.print(table)
         console.print()
-    
-    # TODO: Implement the actual agent loop (planner, actor, critic, apply, test, reflect)
-    console.print("[yellow]⚠️  Agent loop not yet implemented. Stopping here.[/yellow]")
-    console.print("[dim]Next steps: Implement planner → actor → critic → apply → test → reflect loop[/dim]")
-    
-    # Log completion
-    state.final_status = "not_implemented"
-    telemetry.log_event("completion", {
-        "status": state.final_status,
-        "iterations": state.current_iteration,
-    })
-    telemetry.end_run(success=False)
-    
-    raise typer.Exit(1)
+        
+        # Prepare planner context (AC: Planner prompt contains failing tests table)
+        planner_context = state.get_planner_context()
+        failures_table = runner.format_failures_table(failing_tests)
+        
+        if verbose:
+            console.print("[dim]Planner context prepared with failing tests:[/dim]")
+            console.print(failures_table)
+            console.print()
+        
+        # TODO: Implement the actual agent loop (planner, actor, critic, apply, test, reflect)
+        console.print("[yellow]⚠️  Agent loop not yet implemented. Stopping here.[/yellow]")
+        console.print("[dim]Next steps: Implement planner → actor → critic → apply → test → reflect loop[/dim]")
+        
+        # Log completion
+        state.final_status = "not_implemented"
+        telemetry.log_event("completion", {
+            "status": state.final_status,
+            "iterations": state.current_iteration,
+        })
+        telemetry.end_run(success=False)
+        
+        # For demo purposes, let's treat this as a success when agent is implemented
+        # success = True  # Uncomment when agent loop is implemented
+        
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user[/yellow]")
+        success = False
+    except Exception as e:
+        console.print(f"\n[red]Error: {e}[/red]")
+        success = False
+    finally:
+        # Clean up - this will handle branch management
+        if git_manager and branch_name:
+            git_manager.cleanup(success=success)
+            git_manager.restore_signal_handler()
+        
+        if not success:
+            raise typer.Exit(1)
 
 
 @app.command()

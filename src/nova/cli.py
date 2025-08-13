@@ -6,6 +6,7 @@ Nova CI-Rescue CLI interface.
 import typer
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 from rich.console import Console
 from rich.table import Table
 
@@ -250,7 +251,6 @@ def fix(
                 patch_diff = None
             
             if not patch_diff:
-                console.print("[yellow]No patch generated. Stopping.[/yellow]")
                 state.final_status = "no_patch"
                 telemetry.log_event("actor_failed", {"iteration": iteration})
                 break
@@ -268,7 +268,6 @@ def fix(
             patch_approved = len(patch_lines) < 1000  # Simple size check
             
             if not patch_approved:
-                console.print(f"[yellow]Patch rejected by critic at iteration {iteration}. Stopping.[/yellow]")
                 state.final_status = "patch_rejected"
                 telemetry.log_event("critic_rejected", {
                     "iteration": iteration,
@@ -286,7 +285,6 @@ def fix(
             result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
             
             if not result["success"]:
-                console.print(f"[red]Failed to apply patch at iteration {iteration}[/red]")
                 state.final_status = "patch_error"
                 telemetry.log_event("patch_error", {
                     "iteration": iteration,
@@ -342,13 +340,11 @@ def fix(
             
             # Check timeout
             if state.check_timeout():
-                console.print("\n[red]⏰ Timeout reached. Stopping agent loop.[/red]")
                 state.final_status = "timeout"
                 break
             
             # Check if we're at max iterations
             if iteration >= state.max_iterations:
-                console.print(f"\n[red]🚫 Max iterations ({state.max_iterations}) reached.[/red]")
                 state.final_status = "max_iters"
                 break
             

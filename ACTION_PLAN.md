@@ -65,6 +65,29 @@ Work through tasks in this order:
 - [ ] NOV-699: Write documentation
 - [ ] NOV-701: GitHub Action workflow
 
+## 🔍 Design Review (DR) Audit Process
+
+**NEW**: After completing each milestone, conduct a mandatory Design Review audit:
+
+### DR Audit Checkpoints
+- **After Milestone A** (Local E2E): OS-849 - Technical architecture, test coverage, code quality
+- **After Milestone B** (CI & Telemetry): OS-850 - Telemetry review, package audit, CI validation  
+- **After Milestone C** (GitHub Action): OS-851 - Security review, GitHub best practices, safety validation
+- **After Milestone D** (Demo & Release): OS-852 - End-to-end review, documentation, release readiness
+
+### DR Audit Process
+1. Complete all tasks in milestone
+2. Run DR audit checklist (docs/11-dr-audit-checklist.md)
+3. Document findings and create follow-up issues
+4. Get sign-off before proceeding to next milestone
+5. Track metrics: issues found, resolution time, quality improvements
+
+### Why DR Audits Matter
+- **Quality Gates**: Ensure each milestone meets standards before moving forward
+- **Early Detection**: Catch issues before they compound in later stages
+- **Documentation**: Create audit trail for compliance and learning
+- **Team Alignment**: Ensure everyone agrees on completion criteria
+
 ## 🔑 Environment Setup
 
 Your `.env` file should look like this (you already have the keys configured!):
@@ -95,10 +118,16 @@ Based on the analysis, here's how long each phase should take:
 - **Today (Day 1)**: Get CLI and LLM clients working (7 hours)
 - **Tomorrow (Day 2)**: Build agent implementation (8 hours)
 - **Day 3**: Integration and testing (6 hours)
+  - **+ DR Audit A**: 4 hours (technical review, test coverage, code quality)
 - **Day 4-5**: Validation and eval suite (12 hours)
+  - **+ DR Audit B**: 4 hours (telemetry, packaging, CI validation)
 - **Week 2**: GitHub integration and polish
+  - **+ DR Audit C**: 4 hours (security, GitHub best practices, safety)
+  - **+ DR Audit D**: 7 hours (final review, documentation, release readiness)
 
 **Total MVP Time**: ~40 hours of focused work
+**Total DR Audit Time**: ~19 hours across all milestones
+**Grand Total**: ~59 hours including quality gates
 
 ## 🎯 Definition of Done
 

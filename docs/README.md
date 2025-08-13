@@ -14,6 +14,7 @@ This folder contains all documentation for the CI-Rescue v1.0 Happy Path project
 8. **[Demo Script](08-demo-script.md)** - Step-by-step demo instructions
 9. **[Links & Resources](09-links-and-resources.md)** - All external links and references
 10. **[Team Notes](10-team-notes.md)** - Updates, decisions, and meeting notes
+11. **[DR Audit Checklist](11-dr-audit-checklist.md)** - Design Review audit process and checklists
 
 ## 🚀 Quick Links
 

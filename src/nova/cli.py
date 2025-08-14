@@ -13,8 +13,9 @@ from rich.table import Table
 from nova.runner import TestRunner
 from nova.agent import AgentState
 from nova.telemetry.logger import JSONLLogger
-from nova.config import NovaSettings
+from nova.config import get_settings
 from nova.tools.git import GitBranchManager
+from nova.agent.llm_agent import LLMPlanner, LLMActor, LLMCritic
 
 app = typer.Typer(
     name="nova",
@@ -134,6 +135,14 @@ def fix(
     state = None
     
     try:
+        # Check for clean working tree
+        if not git_manager._check_clean_working_tree():
+            console.print("[yellow]⚠️  Warning: Working tree is not clean. Uncommitted changes may be lost.[/yellow]")
+            confirm = input("Continue anyway? (y/N): ")
+            if confirm.lower() != 'y':
+                console.print("[dim]Aborted.[/dim]")
+                raise typer.Exit(1)
+        
         # Create the nova-fix branch
         branch_name = git_manager.create_fix_branch()
         console.print(f"[dim]Working on branch: {branch_name}[/dim]")
@@ -142,7 +151,7 @@ def fix(
         git_manager.setup_signal_handler()
         
         # Initialize settings and telemetry
-        settings = NovaSettings()
+        settings = get_settings()  # Use cached settings
         telemetry = JSONLLogger(settings, enabled=True)
         telemetry.start_run(repo_path)
         
@@ -209,16 +218,10 @@ def fix(
         # Import our apply patch node
         from nova.nodes.apply_patch import apply_patch
         
-        # Try to use real LLM if available, otherwise fall back to mock
-        try:
-            from nova.agent.llm_agent import LLMAgent
-            llm_agent = LLMAgent(repo_path)
-            console.print("[dim]Using OpenAI GPT-5 for patch generation[/dim]")
-        except Exception as e:
-            console.print(f"[yellow]Warning: Could not initialize LLM agent: {e}[/yellow]")
-            console.print("[yellow]Falling back to mock agent[/yellow]")
-            from nova.agent.mock_llm import MockLLMAgent
-            llm_agent = MockLLMAgent(repo_path)
+        # Initialize LLM agent components
+        planner = LLMPlanner(settings)
+        actor = LLMActor(settings)
+        critic = LLMCritic(settings)
         
         # Agent loop: iterate until tests are fixed or limits reached
         console.print("\n[bold]Starting agent loop...[/bold]")
@@ -228,27 +231,17 @@ def fix(
             console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
             
             # 1. PLANNER: Generate a plan based on failing tests
-            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s) with GPT-5...[/cyan]")
-            
-            # Use LLM to create plan if available
-            if hasattr(llm_agent, 'create_plan'):
-                plan = llm_agent.create_plan(state.failing_tests, iteration)
-            else:
-                plan = {
-                    "approach": "Fix failing assertions",
-                    "target_tests": state.failing_tests[:2] if len(state.failing_tests) > 2 else state.failing_tests
-                }
+            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
+            plan = planner.generate_plan(state, failures_table)
             telemetry.log_event("planner", {
                 "iteration": iteration,
                 "plan": plan,
                 "failing_tests": state.total_failures
             })
             
-                        # 2. ACTOR: Generate a patch diff based on the plan
-            console.print(f"[cyan]🎭 Generating patch with GPT-5...[/cyan]")
-            
-            # Use LLM agent to generate patch
-            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration)
+            # 2. ACTOR: Generate a patch diff based on the plan
+            console.print(f"[cyan]🎭 Generating patch...[/cyan]")
+            patch_diff = actor.generate_patch(state, plan, failures_table)
             
             if not patch_diff:
                 state.final_status = "no_patch"
@@ -261,24 +254,14 @@ def fix(
             })
             
             # 3. CRITIC: Review and approve/reject the patch
-            console.print(f"[cyan]🔍 Reviewing patch with GPT-5 critic...[/cyan]")
+            console.print(f"[cyan]🔍 Reviewing patch...[/cyan]")
+            approved = critic.review_patch(state, patch_diff, failures_table)
             
-            # Use LLM to review patch if available
-            if hasattr(llm_agent, 'review_patch'):
-                patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
-                if verbose:
-                    console.print(f"[dim]Review: {review_reason}[/dim]")
-            else:
-                # Fallback to simple size check
-                patch_lines = patch_diff.split('\n')
-                patch_approved = len(patch_lines) < 1000
-                review_reason = "Size check passed" if patch_approved else "Patch too large"
-            
-            if not patch_approved:
+            if not approved:
                 state.final_status = "patch_rejected"
                 telemetry.log_event("critic_rejected", {
                     "iteration": iteration,
-                    "reason": review_reason if 'review_reason' in locals() else "patch_rejected"
+                    "reason": "patch_not_approved"
                 })
                 break
             

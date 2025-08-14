@@ -38,7 +38,7 @@ class NovaSettings(BaseModel):
     run_timeout_sec: int = 1200
     test_timeout_sec: int = 600
     telemetry_dir: str = "telemetry"
-    default_llm_model: str = "gpt-4o-mini"
+    default_llm_model: str = "gpt-5-chat-latest"
 
     @classmethod
     def from_env(cls) -> "NovaSettings":
@@ -72,7 +72,7 @@ class NovaSettings(BaseModel):
             run_timeout_sec=_get_int("NOVA_RUN_TIMEOUT_SEC", 1200),
             test_timeout_sec=_get_int("NOVA_TEST_TIMEOUT_SEC", 600),
             telemetry_dir=os.environ.get("NOVA_TELEMETRY_DIR", "telemetry"),
-            default_llm_model=os.environ.get("NOVA_DEFAULT_LLM_MODEL", "gpt-4o-mini"),
+            default_llm_model=os.environ.get("NOVA_DEFAULT_LLM_MODEL", "gpt-5-chat-latest"),
         )
 
 

@@ -209,6 +209,17 @@ def fix(
         # Import our apply patch node
         from nova.nodes.apply_patch import apply_patch
         
+        # Try to use real LLM if available, otherwise fall back to mock
+        try:
+            from nova.agent.llm_agent import LLMAgent
+            llm_agent = LLMAgent(repo_path)
+            console.print("[dim]Using OpenAI GPT-5 for patch generation[/dim]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not initialize LLM agent: {e}[/yellow]")
+            console.print("[yellow]Falling back to mock agent[/yellow]")
+            from nova.agent.mock_llm import MockLLMAgent
+            llm_agent = MockLLMAgent(repo_path)
+        
         # Agent loop: iterate until tests are fixed or limits reached
         console.print("\n[bold]Starting agent loop...[/bold]")
         
@@ -217,38 +228,27 @@ def fix(
             console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
             
             # 1. PLANNER: Generate a plan based on failing tests
-            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
-            # TODO: Implement actual planner logic
-            # For now, using placeholder
-            plan = {
-                "approach": "Fix failing assertions",
-                "target_tests": state.failing_tests[:2] if len(state.failing_tests) > 2 else state.failing_tests
-            }
+            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s) with GPT-5...[/cyan]")
+            
+            # Use LLM to create plan if available
+            if hasattr(llm_agent, 'create_plan'):
+                plan = llm_agent.create_plan(state.failing_tests, iteration)
+            else:
+                plan = {
+                    "approach": "Fix failing assertions",
+                    "target_tests": state.failing_tests[:2] if len(state.failing_tests) > 2 else state.failing_tests
+                }
             telemetry.log_event("planner", {
                 "iteration": iteration,
                 "plan": plan,
                 "failing_tests": state.total_failures
             })
             
-            # 2. ACTOR: Generate a patch diff based on the plan
-            console.print(f"[cyan]🎭 Generating patch...[/cyan]")
-            # TODO: Implement actual actor logic with LLM
-            # For now, using a mock patch for demonstration
-            if iteration == 1:
-                # Mock patch - in real implementation, this would come from LLM
-                patch_diff = """--- a/test_sample.py
-+++ b/test_sample.py
-@@ -1,5 +1,5 @@
- def test_example():
--    assert False  # This will fail
-+    assert True  # Fixed
-     
- def test_another():
-     pass
-"""
-            else:
-                # No more patches for subsequent iterations in mock
-                patch_diff = None
+                        # 2. ACTOR: Generate a patch diff based on the plan
+            console.print(f"[cyan]🎭 Generating patch with GPT-5...[/cyan]")
+            
+            # Use LLM agent to generate patch
+            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration)
             
             if not patch_diff:
                 state.final_status = "no_patch"
@@ -261,17 +261,24 @@ def fix(
             })
             
             # 3. CRITIC: Review and approve/reject the patch
-            console.print(f"[cyan]🔍 Reviewing patch...[/cyan]")
-            # TODO: Implement actual critic logic with LLM review
-            # For now, auto-approve if patch is reasonable size
-            patch_lines = patch_diff.split('\n')
-            patch_approved = len(patch_lines) < 1000  # Simple size check
+            console.print(f"[cyan]🔍 Reviewing patch with GPT-5 critic...[/cyan]")
+            
+            # Use LLM to review patch if available
+            if hasattr(llm_agent, 'review_patch'):
+                patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
+                if verbose:
+                    console.print(f"[dim]Review: {review_reason}[/dim]")
+            else:
+                # Fallback to simple size check
+                patch_lines = patch_diff.split('\n')
+                patch_approved = len(patch_lines) < 1000
+                review_reason = "Size check passed" if patch_approved else "Patch too large"
             
             if not patch_approved:
                 state.final_status = "patch_rejected"
                 telemetry.log_event("critic_rejected", {
                     "iteration": iteration,
-                    "reason": "patch_too_large"
+                    "reason": review_reason if 'review_reason' in locals() else "patch_rejected"
                 })
                 break
             

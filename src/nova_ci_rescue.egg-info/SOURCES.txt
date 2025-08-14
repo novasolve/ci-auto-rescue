@@ -4,11 +4,16 @@ src/nova/__init__.py
 src/nova/cli.py
 src/nova/config.py
 src/nova/agent/__init__.py
+src/nova/agent/llm_agent.py
+src/nova/agent/mock_llm.py
 src/nova/agent/state.py
+src/nova/nodes/__init__.py
+src/nova/nodes/apply_patch.py
 src/nova/runner/__init__.py
 src/nova/runner/test_runner.py
 src/nova/telemetry/logger.py
 src/nova/tools/fs.py
+src/nova/tools/git.py
 src/nova/tools/http.py
 src/nova/tools/sandbox.py
 src/nova_ci_rescue.egg-info/PKG-INFO
@@ -17,4 +22,5 @@ src/nova_ci_rescue.egg-info/dependency_links.txt
 src/nova_ci_rescue.egg-info/entry_points.txt
 src/nova_ci_rescue.egg-info/requires.txt
 src/nova_ci_rescue.egg-info/top_level.txt
+tests/test_passing.py
 tests/test_sample.py

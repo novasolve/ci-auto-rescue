@@ -1,0 +1,278 @@
+name: Nova CI-Rescue PR Safety Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to check (optional)"
+        required: false
+        type: string
+
+jobs:
+  safety-check:
+    name: Validate PR with Nova Safety Limits
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for proper diff analysis
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/pypoetry
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/poetry.lock', '**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Nova CI-Rescue
+        run: |
+          # Install Nova and its dependencies
+          pip install --upgrade pip
+
+          # Check if poetry.lock exists
+          if [ -f "poetry.lock" ]; then
+            pip install poetry
+            poetry install
+          elif [ -f "pyproject.toml" ]; then
+            pip install -e .
+          elif [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+
+          # Install additional dependencies for safety checks
+          pip install unidiff rich typer
+
+      - name: Get PR diff
+        id: get_diff
+        run: |
+          # Get the diff for this PR
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER=${{ github.event.pull_request.number }}
+            BASE_SHA=${{ github.event.pull_request.base.sha }}
+            HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          elif [ -n "${{ github.event.inputs.pr_number }}" ]; then
+            PR_NUMBER=${{ github.event.inputs.pr_number }}
+            # Fetch PR info using GitHub API
+            PR_INFO=$(gh pr view $PR_NUMBER --json baseRefOid,headRefOid)
+            BASE_SHA=$(echo $PR_INFO | jq -r '.baseRefOid')
+            HEAD_SHA=$(echo $PR_INFO | jq -r '.headRefOid')
+          else
+            echo "No PR number available"
+            exit 1
+          fi
+
+          # Generate the diff
+          git diff $BASE_SHA..$HEAD_SHA > pr.patch
+
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "diff_file=pr.patch" >> $GITHUB_OUTPUT
+
+      - name: Run Nova Safety Check
+        id: safety_check
+        run: |
+          # Create a Python script to run the safety check
+          cat > check_safety.py << 'EOF'
+          import sys
+          import json
+          from pathlib import Path
+          from nova.tools.safety_limits import SafetyLimits, SafetyConfig, PatchAnalysis
+
+          def main():
+              # Read the patch file
+              patch_file = sys.argv[1] if len(sys.argv) > 1 else "pr.patch"
+              patch_text = Path(patch_file).read_text()
+              
+              # Configure safety limits (can be customized per repo)
+              config = SafetyConfig(
+                  max_lines_changed=200,
+                  max_files_modified=10
+              )
+              
+              # Run safety check
+              safety_limits = SafetyLimits(config=config, verbose=True)
+              analysis = safety_limits.analyze_patch(patch_text)
+              is_safe, violations = safety_limits.validate_patch(patch_text)
+              
+              # Output results as JSON for GitHub Actions
+              result = {
+                  "is_safe": is_safe,
+                  "violations": violations,
+                  "stats": {
+                      "lines_added": analysis.total_lines_added,
+                      "lines_removed": analysis.total_lines_removed,
+                      "lines_changed": analysis.total_lines_changed,
+                      "files_modified": len(analysis.files_modified),
+                      "files_added": len(analysis.files_added),
+                      "files_deleted": len(analysis.files_deleted),
+                      "denied_files": list(analysis.denied_files)
+                  }
+              }
+              
+              # Write result to file for GitHub Actions
+              with open("safety_check_result.json", "w") as f:
+                  json.dump(result, f, indent=2)
+              
+              # Print human-readable output
+              print(f"Safety Check {'PASSED ✅' if is_safe else 'FAILED ❌'}")
+              print(f"\nStatistics:")
+              print(f"  • Lines added: {analysis.total_lines_added}")
+              print(f"  • Lines removed: {analysis.total_lines_removed}")
+              print(f"  • Total lines changed: {analysis.total_lines_changed}")
+              print(f"  • Files modified: {len(analysis.files_modified)}")
+              print(f"  • Files added: {len(analysis.files_added)}")
+              print(f"  • Files deleted: {len(analysis.files_deleted)}")
+              
+              if not is_safe:
+                  print(f"\n⚠️ Safety Violations:")
+                  for violation in violations:
+                      print(f"  • {violation}")
+                  
+                  if analysis.denied_files:
+                      print(f"\n🚫 Restricted Files:")
+                      for file in analysis.denied_files:
+                          print(f"  • {file}")
+              
+              # Exit with appropriate code
+              sys.exit(0 if is_safe else 1)
+
+          if __name__ == "__main__":
+              main()
+          EOF
+
+          # Run the safety check
+          python check_safety.py ${{ steps.get_diff.outputs.diff_file }} || echo "safety_failed=true" >> $GITHUB_OUTPUT
+
+          # Save the result
+          if [ -f safety_check_result.json ]; then
+            echo "result_json=$(cat safety_check_result.json | jq -c .)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          SAFETY_RESULT: ${{ steps.safety_check.outputs.result_json }}
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Parse the safety check result
+            let result;
+            try {
+              result = JSON.parse(process.env.SAFETY_RESULT || '{}');
+            } catch (e) {
+              console.error('Failed to parse safety result:', e);
+              result = { is_safe: false, violations: ['Failed to run safety check'] };
+            }
+
+            // Construct the comment
+            let comment = '## 🛡️ Nova CI-Rescue Safety Check\n\n';
+
+            if (result.is_safe) {
+              comment += '✅ **All safety checks passed!**\n\n';
+            } else {
+              comment += '❌ **Safety check failed**\n\n';
+              comment += 'This PR violates safety limits and cannot be automatically applied.\n\n';
+            }
+
+            // Add statistics
+            if (result.stats) {
+              comment += '### 📊 Statistics\n\n';
+              comment += '| Metric | Value |\n';
+              comment += '|--------|-------|\n';
+              comment += `| Lines Added | ${result.stats.lines_added || 0} |\n`;
+              comment += `| Lines Removed | ${result.stats.lines_removed || 0} |\n`;
+              comment += `| Total Lines Changed | ${result.stats.lines_changed || 0} |\n`;
+              comment += `| Files Modified | ${result.stats.files_modified || 0} |\n`;
+              comment += `| Files Added | ${result.stats.files_added || 0} |\n`;
+              comment += `| Files Deleted | ${result.stats.files_deleted || 0} |\n`;
+              comment += '\n';
+            }
+
+            // Add violations if any
+            if (result.violations && result.violations.length > 0) {
+              comment += '### ⚠️ Violations\n\n';
+              result.violations.forEach(violation => {
+                comment += `- ${violation}\n`;
+              });
+              comment += '\n';
+            }
+
+            // Add denied files if any
+            if (result.stats && result.stats.denied_files && result.stats.denied_files.length > 0) {
+              comment += '### 🚫 Restricted Files\n\n';
+              comment += 'The following files are restricted and cannot be auto-modified:\n\n';
+              result.stats.denied_files.forEach(file => {
+                comment += `- \`${file}\`\n`;
+              });
+              comment += '\n';
+            }
+
+            // Add safety limits info
+            comment += '### ℹ️ Safety Limits\n\n';
+            comment += 'Current safety limits:\n';
+            comment += '- Maximum lines changed: **200**\n';
+            comment += '- Maximum files modified: **10**\n';
+            comment += '- Restricted paths: CI/CD configs, deployment files, secrets, etc.\n\n';
+
+            // Add footer
+            comment += '---\n';
+            comment += '*Generated by [Nova CI-Rescue](https://github.com/nova-ci-rescue) Safety Check*';
+
+            // Post or update comment
+            const issue_number = context.issue.number;
+
+            // Check for existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue_number
+            });
+
+            const botComment = comments.data.find(comment => 
+              comment.body.includes('Nova CI-Rescue Safety Check')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue_number,
+                body: comment
+              });
+            }
+
+      - name: Set status check
+        if: always()
+        run: |
+          if [ "${{ steps.safety_check.outputs.safety_failed }}" = "true" ]; then
+            echo "::error::PR violates safety limits and cannot be automatically applied"
+            exit 1
+          else
+            echo "::notice::PR passed all safety checks"
+          fi

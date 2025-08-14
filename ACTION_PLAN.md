@@ -1,195 +1,200 @@
-# 🎯 Nova CI-Rescue - Your Action Plan
+# Action Plan: Making Nova CI-Rescue GitHub Integration Work
 
-## ✅ What I've Done For You
+## ✅ Quick Checklist (5-10 minutes total)
 
-### 1. **Linear Project Created**
-- **Project**: "🚀 CI Auto-Rescue MVP Completion" 
-- **URL**: https://linear.app/nova-solve/project/ci-auto-rescue-mvp-completion-ab21f118135a
-- **10 Issues Created** with clear priorities:
-  - 3 P0 (Critical blockers)
-  - 5 P1 (High priority)  
-  - 2 P2 (Medium priority)
+### 1. **Update `src/nova/cli.py`** (3 minutes)
 
-### 2. **Documentation Created**
-- **IMPLEMENTATION_GUIDE.md** - Complete technical roadmap
-- **env.example** - Environment configuration template
-- **ACTION_PLAN.md** - This file, your executive summary
+- [ ] Add import at top: `import os`
+- [ ] Add the GitHub posting code after line 483 (see `github_integration_snippet.py`)
+- [ ] Also add similar code for the "no failing tests" case around line 180
 
-### 3. **Analysis Completed**
-- Identified all missing components
-- Prioritized tasks by importance
-- Created 8-day implementation timeline
-- Defined success criteria
+### 2. **Update `src/nova/tools/safety_limits.py`** (2 minutes)
 
-## 🚨 Your Immediate Next Steps (Do These NOW)
+- [ ] Add the nova.yml exception to `_is_denied_path()` method (see `safety_limits_patch.py`)
 
-### Step 1: Create the CLI Module (30 minutes)
-The most critical missing piece. Without this, nothing works.
+### 3. **Update GitHub Actions Workflow** (1 minute)
+
+Already good! Just ensure these environment variables are passed:
+
+```yaml
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  PR_NUMBER: ${{ github.event.inputs.pr_number }} # Add this if missing
+```
+
+## 🔧 Detailed Steps
+
+### Step 1: Update CLI Integration
+
+**File:** `src/nova/cli.py`
+
+**Location 1:** After `telemetry.end_run(success=success)` (line ~483)
+
+```python
+# Copy the code from github_integration_snippet.py here
+```
+
+**Location 2:** In the "no failing tests" block (line ~180)
+
+```python
+if not failing_tests:
+    console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
+    state.final_status = "success"
+    telemetry.log_event("completion", {"status": "no_failures"})
+    telemetry.end_run(success=True)
+    success = True
+
+    # ADD THIS SECTION:
+    token = os.getenv("GITHUB_TOKEN")
+    repo = os.getenv("GITHUB_REPOSITORY")
+    pr_num = os.getenv("PR_NUMBER")
+
+    if token and repo:
+        try:
+            from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+            api = GitHubAPI(token)
+
+            # Simple metrics for no failures
+            metrics = RunMetrics(
+                runtime_seconds=1,
+                iterations=0,
+                files_changed=0,
+                status="success",
+                tests_fixed=0,
+                tests_remaining=0,
+                initial_failures=0,
+                final_failures=0
+            )
+
+            # Post success status
+            if git_manager:
+                head_sha = git_manager._get_current_head()
+                api.create_check_run(
+                    repo=repo,
+                    sha=head_sha,
+                    name="CI-Auto-Rescue",
+                    status="completed",
+                    conclusion="success",
+                    title="CI-Auto-Rescue: No failing tests",
+                    summary="✅ All tests are passing - nothing to fix!"
+                )
+
+            if pr_num:
+                api.create_pr_comment(
+                    repo=repo,
+                    pr_number=int(pr_num),
+                    body="## ✅ Nova CI-Rescue\n\nNo failing tests found - all tests are already passing! 🎉"
+                )
+        except Exception as e:
+            if verbose:
+                console.print(f"[yellow]GitHub posting failed: {e}[/yellow]")
+
+    return  # Keep existing return
+```
+
+### Step 2: Update Safety Limits
+
+**File:** `src/nova/tools/safety_limits.py`
+
+Replace the `_is_denied_path` method with the code from `safety_limits_patch.py`
+
+### Step 3: Test Locally
 
 ```bash
-# Create the file
-touch src/nova/cli.py
+# Test with mock environment variables
+export GITHUB_TOKEN="test-token"
+export GITHUB_REPOSITORY="owner/repo"
+export PR_NUMBER="1"
 
-# Copy the skeleton from IMPLEMENTATION_GUIDE.md
-# Test it works:
-nova --help
+# Run nova
+nova fix . --verbose
 ```
 
-### Step 2: Check Your Linear Tasks
-1. Go to: https://linear.app/nova-solve/project/ci-auto-rescue-mvp-completion-ab21f118135a
-2. Start with issue NOV-693 (Create CLI)
-3. Move it to "In Progress"
-4. Complete it before moving to next task
+## 🎯 What This Achieves
 
-### Step 3: Follow The Plan
-Work through tasks in this order:
-1. **P0 tasks first** (CLI, Agent, Test Context)
-2. **P1 tasks next** (Telemetry, Pytest, LLM)
-3. **P2 tasks last** (Docs, GitHub Action)
+1. **GitHub Check Runs** ✅
 
-## 📋 Your Task List (In Priority Order)
+   - Posts pass/fail status to commit SHA
+   - Shows in PR checks tab
+   - Includes detailed metrics
 
-### 🔴 Critical - Do Today
-- [ ] NOV-693: Create CLI entry point
-- [ ] NOV-694: Implement agent workflow  
-- [ ] NOV-695: Auto-inject failing tests
+2. **PR Comments** ✅
 
-### 🟡 High Priority - Do This Week
-- [ ] NOV-696: Complete telemetry
-- [ ] NOV-697: Add pytest integration
-- [ ] NOV-698: Implement LLM clients
-- [ ] NOV-700: Create test repository
-- [ ] NOV-702: Build evaluation suite
+   - Automatically comments on PRs
+   - Updates existing comments (no spam)
+   - Shows test fixes and stats
 
-### 🟢 Medium Priority - Do Next Week
-- [ ] NOV-699: Write documentation
-- [ ] NOV-701: GitHub Action workflow
+3. **Safety Exception** ✅
+   - Allows Nova to modify its own workflow
+   - Still blocks other CI/CD files
 
-## 🔍 Design Review (DR) Audit Process
+## 🚀 Optional Enhancements
 
-**NEW**: After completing each milestone, conduct a mandatory Design Review audit:
+### Add PR Number Detection (if not provided)
 
-### DR Audit Checkpoints
-- **After Milestone A** (Local E2E): OS-849 - Technical architecture, test coverage, code quality
-- **After Milestone B** (CI & Telemetry): OS-850 - Telemetry review, package audit, CI validation  
-- **After Milestone C** (GitHub Action): OS-851 - Security review, GitHub best practices, safety validation
-- **After Milestone D** (Demo & Release): OS-852 - End-to-end review, documentation, release readiness
-
-### DR Audit Process
-1. Complete all tasks in milestone
-2. Run DR audit checklist (docs/11-dr-audit-checklist.md)
-3. Document findings and create follow-up issues
-4. Get sign-off before proceeding to next milestone
-5. Track metrics: issues found, resolution time, quality improvements
-
-### Why DR Audits Matter
-- **Quality Gates**: Ensure each milestone meets standards before moving forward
-- **Early Detection**: Catch issues before they compound in later stages
-- **Documentation**: Create audit trail for compliance and learning
-- **Team Alignment**: Ensure everyone agrees on completion criteria
-
-## 🔑 Environment Setup
-
-Your `.env` file should look like this (you already have the keys configured!):
-
-```env
-# You already have these configured ✅
-OPENAI_API_KEY=your-actual-key-here
-ANTHROPIC_API_KEY=your-actual-key-here
-
-# Optional tweaks
-NOVA_MAX_ITERS=6
-NOVA_DEFAULT_LLM_MODEL=gpt-4o-mini
+```python
+# Try to detect PR from git branch or CI environment
+if not pr_num:
+    # GitHub Actions provides this
+    pr_num = os.getenv("GITHUB_EVENT_NUMBER")
+    # Or try to parse from branch name (e.g., "pr-123")
+    if not pr_num and branch_name and "pr-" in branch_name:
+        pr_num = branch_name.split("pr-")[-1].split("-")[0]
 ```
 
-## 📊 Success Metrics
+### Add Retry Logic
 
-You'll know you're done when:
-1. ✅ `nova fix /path/to/repo` runs without errors
-2. ✅ Tests go from red to green automatically
-3. ✅ Success rate ≥70% on 4 test repos
-4. ✅ Telemetry logs show complete execution
-5. ✅ Can handle Ctrl+C gracefully
-
-## ⏱ Time Estimates
-
-Based on the analysis, here's how long each phase should take:
-
-- **Today (Day 1)**: Get CLI and LLM clients working (7 hours)
-- **Tomorrow (Day 2)**: Build agent implementation (8 hours)
-- **Day 3**: Integration and testing (6 hours)
-  - **+ DR Audit A**: 4 hours (technical review, test coverage, code quality)
-- **Day 4-5**: Validation and eval suite (12 hours)
-  - **+ DR Audit B**: 4 hours (telemetry, packaging, CI validation)
-- **Week 2**: GitHub integration and polish
-  - **+ DR Audit C**: 4 hours (security, GitHub best practices, safety)
-  - **+ DR Audit D**: 7 hours (final review, documentation, release readiness)
-
-**Total MVP Time**: ~40 hours of focused work
-**Total DR Audit Time**: ~19 hours across all milestones
-**Grand Total**: ~59 hours including quality gates
-
-## 🎯 Definition of Done
-
-The MVP is complete when you can:
-
-1. Install Nova with `pip install -e .`
-2. Run `nova fix sample-repo/` 
-3. Watch it automatically:
-   - Detect failing tests
-   - Generate fixes
-   - Apply patches
-   - Verify tests pass
-4. See detailed logs in `telemetry/`
-5. Achieve ≥70% success rate
-
-## 💡 Pro Tips
-
-1. **Start Small**: Get one test fixing before trying complex scenarios
-2. **Use Cheap Models**: Start with gpt-4o-mini for development
-3. **Check Telemetry**: Your answers are in the logs
-4. **Commit Often**: Make small commits as you progress
-5. **Test Locally**: Don't push to GitHub until local works
-
-## 🚀 Quick Commands
-
-```bash
-# Install in development mode
-pip install -e .
-
-# Run on a test repo
-nova fix ./test-repo --verbose
-
-# Check telemetry
-ls -la telemetry/*/trace.jsonl
-
-# Run evaluation suite
-nova eval --repos eval-config.yaml
-
-# Clean up after testing
-git checkout main && git branch -D nova-fix-*
+```python
+# Wrap GitHub API calls with retry
+import time
+for attempt in range(3):
+    try:
+        # API call here
+        break
+    except Exception as e:
+        if attempt < 2:
+            time.sleep(2 ** attempt)  # Exponential backoff
+        else:
+            raise
 ```
 
-## 📞 When You're Stuck
+## 📊 Expected Results
 
-1. Check `IMPLEMENTATION_GUIDE.md` for technical details
-2. Review the Linear issues for acceptance criteria
-3. Look at telemetry logs for error details
-4. Reference existing code in `src/nova/tools/` for patterns
+After these changes:
 
-## 🏁 Let's Go!
+1. **In GitHub Actions:**
 
-You have everything you need:
-- ✅ Clear task list in Linear
-- ✅ Technical implementation guide
-- ✅ Environment already configured
-- ✅ Prioritized action items
+   - ✅ Check run appears on commit
+   - ✅ PR comment with results
+   - ✅ Status badge shows pass/fail
 
-**Your mission**: Get that first test from red to green automatically.
+2. **Locally:**
 
-Start with NOV-693. The clock is ticking! 🕐
+   - ✅ Works without GitHub env vars (graceful skip)
+   - ✅ With env vars, posts to GitHub
 
----
+3. **Safety:**
+   - ✅ Can modify nova.yml
+   - ✅ Still blocks other CI files
+   - ✅ Comprehensive path protection
 
-*Remember: You already have OpenAI and Anthropic keys configured. The foundation (config, telemetry, tools) is solid. You just need to build the agent on top!*
+## 🐛 Troubleshooting
 
+| Issue                     | Solution                                                                    |
+| ------------------------- | --------------------------------------------------------------------------- |
+| "GitHub reporting failed" | Check GITHUB_TOKEN has `checks:write` and `pull-requests:write` permissions |
+| No PR comment appears     | Ensure PR_NUMBER is set correctly                                           |
+| Check run not showing     | Verify commit SHA is correct and token has permissions                      |
+| Safety blocks nova.yml    | Ensure the exception code is added correctly                                |
+
+## ✨ That's It!
+
+With these 2-3 small changes, your superior architecture will be fully connected and working. The beauty is that you're just connecting existing, well-tested modules - not rewriting anything.
+
+Your implementation will be:
+
+- **More robust** than the example
+- **More maintainable** with modular design
+- **More feature-rich** with comment updates and detailed reports
+- **Production-ready** with proper error handling

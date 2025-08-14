@@ -1,0 +1,77 @@
+name: CI-Auto-Rescue (Simple)
+
+# This is a simplified version for quick setup
+# For full features, see ci-auto-rescue.yml
+
+on:
+  # Trigger when tests fail on PRs
+  pull_request:
+    types: [opened, synchronize]
+
+  # Manual trigger for testing
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    name: Fix Failing Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          pip install -e .
+          pip install pytest pytest-json-report
+
+      - name: Check for Test Failures
+        id: test_check
+        continue-on-error: true
+        run: |
+          if pytest; then
+            echo "✅ All tests passing - nothing to fix"
+            echo "needs_fix=false" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Tests failing - running auto-rescue"
+            echo "needs_fix=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Nova CI-Rescue
+        if: steps.test_check.outputs.needs_fix == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Run Nova with basic settings
+          nova fix . --max-iters 3 --timeout 300 --verbose
+
+          # Check if tests pass after fix
+          if pytest; then
+            echo "✅ Nova successfully fixed all tests!"
+          else
+            echo "⚠️ Some tests still failing after Nova fix"
+            exit 1
+          fi
+
+      - name: Upload Artifacts
+        if: always() && steps.test_check.outputs.needs_fix == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: nova-artifacts
+          path: |
+            .nova/
+            *.log
+          retention-days: 7

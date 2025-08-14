@@ -11,6 +11,7 @@ import subprocess
 from nova.agent.state import AgentState
 from nova.tools.fs import apply_and_commit_patch
 from nova.tools.git import GitBranchManager
+from nova.tools.safety_limits import check_patch_safety, SafetyConfig
 
 console = Console()
 
@@ -18,14 +19,16 @@ console = Console()
 class ApplyPatchNode:
     """Node responsible for applying approved patches and committing them."""
     
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: bool = False, safety_config: Optional[SafetyConfig] = None):
         self.verbose = verbose
+        self.safety_config = safety_config or SafetyConfig()
     
     def execute(
         self, 
         state: AgentState, 
         patch_text: str,
-        git_manager: Optional[GitBranchManager] = None
+        git_manager: Optional[GitBranchManager] = None,
+        skip_safety_check: bool = False
     ) -> Dict[str, Any]:
         """
         Apply an approved patch to the repository and commit it.
@@ -34,6 +37,7 @@ class ApplyPatchNode:
             state: Current agent state
             patch_text: The unified diff text to apply
             git_manager: Optional GitBranchManager for committing
+            skip_safety_check: Skip safety validation (use with caution)
             
         Returns:
             Dictionary with results including success status and changed files
@@ -43,6 +47,36 @@ class ApplyPatchNode:
         
         if self.verbose:
             console.print(f"[cyan]Applying patch (step {step_number})...[/cyan]")
+        
+        # Perform safety check unless explicitly skipped
+        if not skip_safety_check:
+            if self.verbose:
+                console.print("[dim]Running safety checks...[/dim]")
+            
+            is_safe, safety_message = check_patch_safety(
+                patch_text, 
+                config=self.safety_config,
+                verbose=self.verbose
+            )
+            
+            if not is_safe:
+                console.print("[red]✗ Patch rejected by safety limits[/red]")
+                console.print(safety_message)
+                
+                result = {
+                    "success": False,
+                    "step_number": step_number,
+                    "changed_files": [],
+                    "patch_text": patch_text,
+                    "safety_violation": True,
+                    "safety_message": safety_message
+                }
+                return result
+            
+            if self.verbose:
+                console.print("[green]✓ Patch passed safety checks[/green]")
+        
+        if self.verbose:
             # Show first few lines of patch for debugging
             patch_lines = patch_text.split('\n')[:10]
             console.print("[dim]Patch preview:[/dim]")
@@ -153,7 +187,9 @@ def apply_patch(
     state: AgentState,
     patch_text: str,
     git_manager: Optional[GitBranchManager] = None,
-    verbose: bool = False
+    verbose: bool = False,
+    safety_config: Optional[SafetyConfig] = None,
+    skip_safety_check: bool = False
 ) -> Dict[str, Any]:
     """
     Convenience function to apply a patch using the ApplyPatchNode.
@@ -163,9 +199,11 @@ def apply_patch(
         patch_text: The unified diff text to apply
         git_manager: Optional GitBranchManager for committing
         verbose: Enable verbose output
+        safety_config: Optional safety configuration
+        skip_safety_check: Skip safety validation (use with caution)
         
     Returns:
         Dictionary with results including success status and changed files
     """
-    node = ApplyPatchNode(verbose=verbose)
-    return node.execute(state, patch_text, git_manager)
+    node = ApplyPatchNode(verbose=verbose, safety_config=safety_config)
+    return node.execute(state, patch_text, git_manager, skip_safety_check=skip_safety_check)

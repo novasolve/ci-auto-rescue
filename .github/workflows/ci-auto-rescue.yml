@@ -1,0 +1,185 @@
+name: CI-Auto-Rescue
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_run:
+    workflows: ["CI", "Tests", "Build"]
+    types: [completed]
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
+    inputs:
+      repo_path:
+        description: "Repository path to fix"
+        required: false
+        default: "."
+      max_iterations:
+        description: "Maximum fix iterations"
+        required: false
+        default: "3"
+      timeout:
+        description: "Timeout in seconds"
+        required: false
+        default: "300"
+
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+  issues: write
+  statuses: write
+
+jobs:
+  auto-rescue:
+    name: Auto-Fix Failing Tests
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure') ||
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Nova CI-Rescue
+        run: |
+          pip install -e .
+          pip install pytest pytest-json-report
+
+      - name: Check for Test Failures
+        id: check_tests
+        continue-on-error: true
+        run: |
+          echo "Running initial test check..."
+          pytest --co -q 2>/dev/null | head -n 1 | grep -oE '[0-9]+' > test_count.txt || echo "0" > test_count.txt
+          TEST_COUNT=$(cat test_count.txt)
+          echo "test_count=$TEST_COUNT" >> $GITHUB_OUTPUT
+
+          # Run tests to check for failures
+          if pytest --json-report --json-report-file=initial_test_results.json; then
+            echo "tests_failed=false" >> $GITHUB_OUTPUT
+            echo "All tests passed - nothing to fix"
+          else
+            echo "tests_failed=true" >> $GITHUB_OUTPUT
+            echo "Tests failed - initiating auto-rescue"
+          fi
+
+      - name: Run Nova CI-Rescue
+        id: nova_rescue
+        if: steps.check_tests.outputs.tests_failed == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "Starting Nova CI-Rescue..."
+          START_TIME=$(date +%s)
+
+          # Run Nova with output capture
+          nova fix . \
+            --max-iters ${{ github.event.inputs.max_iterations || '3' }} \
+            --timeout ${{ github.event.inputs.timeout || '300' }} \
+            --verbose 2>&1 | tee nova_output.log
+
+          NOVA_EXIT_CODE=${PIPESTATUS[0]}
+          END_TIME=$(date +%s)
+          RUNTIME=$((END_TIME - START_TIME))
+
+          echo "nova_exit_code=$NOVA_EXIT_CODE" >> $GITHUB_OUTPUT
+          echo "runtime=$RUNTIME" >> $GITHUB_OUTPUT
+
+          # Extract branch name from Nova output
+          BRANCH_NAME=$(grep -oP 'Changes saved to branch: \K[\S]+' nova_output.log || echo "")
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+          # Extract iteration count
+          ITERATIONS=$(grep -c "Iteration" nova_output.log || echo "0")
+          echo "iterations=$ITERATIONS" >> $GITHUB_OUTPUT
+
+          # Count files changed
+          FILES_CHANGED=$(git diff --name-only HEAD | wc -l)
+          echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Run Tests After Fix
+        id: final_tests
+        if: steps.check_tests.outputs.tests_failed == 'true'
+        continue-on-error: true
+        run: |
+          echo "Running tests after fix attempt..."
+          if pytest --json-report --json-report-file=final_test_results.json; then
+            echo "final_tests_passed=true" >> $GITHUB_OUTPUT
+            echo "final_status=success" >> $GITHUB_OUTPUT
+          else
+            echo "final_tests_passed=false" >> $GITHUB_OUTPUT
+            echo "final_status=failure" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Summary Report
+        id: generate_report
+        if: steps.check_tests.outputs.tests_failed == 'true'
+        run: |
+          python -m nova.github_integration generate_report \
+            --runtime "${{ steps.nova_rescue.outputs.runtime }}" \
+            --iterations "${{ steps.nova_rescue.outputs.iterations }}" \
+            --files-changed "${{ steps.nova_rescue.outputs.files_changed }}" \
+            --status "${{ steps.final_tests.outputs.final_status }}" \
+            --initial-results initial_test_results.json \
+            --final-results final_test_results.json \
+            --nova-log nova_output.log \
+            --output report.json
+
+      - name: Create Check Run
+        if: steps.check_tests.outputs.tests_failed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -m nova.github_integration create_check \
+            --repo "${{ github.repository }}" \
+            --sha "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --report report.json
+
+      - name: Post PR Comment
+        if: github.event_name == 'pull_request' && steps.check_tests.outputs.tests_failed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -m nova.github_integration post_comment \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --report report.json
+
+      - name: Upload Artifacts
+        if: steps.check_tests.outputs.tests_failed == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: nova-ci-rescue-artifacts
+          path: |
+            nova_output.log
+            initial_test_results.json
+            final_test_results.json
+            report.json
+            .nova/
+          retention-days: 7
+
+      - name: Set Final Status
+        if: steps.check_tests.outputs.tests_failed == 'true'
+        run: |
+          if [ "${{ steps.final_tests.outputs.final_tests_passed }}" == "true" ]; then
+            echo "✅ CI-Auto-Rescue successfully fixed all failing tests!"
+            exit 0
+          else
+            echo "❌ CI-Auto-Rescue was unable to fix all tests. Check artifacts for details."
+            exit 1
+          fi

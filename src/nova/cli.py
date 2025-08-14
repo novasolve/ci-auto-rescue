@@ -3,6 +3,7 @@
 Nova CI-Rescue CLI interface.
 """
 
+import os
 import typer
 from pathlib import Path
 from typing import Optional
@@ -178,6 +179,57 @@ def fix(
             telemetry.log_event("completion", {"status": "no_failures"})
             telemetry.end_run(success=True)
             success = True
+            
+            # Post to GitHub even when no tests to fix
+            token = os.getenv("GITHUB_TOKEN")
+            repo = os.getenv("GITHUB_REPOSITORY")
+            pr_num = os.getenv("PR_NUMBER")
+            
+            if token and repo:
+                try:
+                    from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                    
+                    api = GitHubAPI(token)
+                    metrics = RunMetrics(
+                        runtime_seconds=0,
+                        iterations=0,
+                        files_changed=0,
+                        status="success",
+                        tests_fixed=0,
+                        tests_remaining=0,
+                        initial_failures=0,
+                        final_failures=0
+                    )
+                    
+                    # Get SHA for check run
+                    head_sha = git_manager._get_current_head() if git_manager else None
+                    
+                    if head_sha:
+                        api.create_check_run(
+                            repo=repo,
+                            sha=head_sha,
+                            name="CI-Auto-Rescue",
+                            status="completed",
+                            conclusion="success",
+                            title="CI-Auto-Rescue: No failing tests",
+                            summary="✅ No failing tests found - repository is already green!"
+                        )
+                        if verbose:
+                            console.print("[dim]✅ Posted check run to GitHub[/dim]")
+                    
+                    if pr_num:
+                        api.create_pr_comment(
+                            repo=repo,
+                            pr_number=int(pr_num),
+                            body="## ✅ Nova CI-Rescue: No failing tests to fix! 🎉\n\nAll tests are passing."
+                        )
+                        if verbose:
+                            console.print("[dim]✅ Posted PR comment to GitHub[/dim]")
+                        
+                except Exception as e:
+                    if verbose:
+                        console.print(f"[yellow]⚠️ GitHub reporting failed: {e}[/yellow]")
+            
             return
         
         # Display failing tests in a table
@@ -360,12 +412,21 @@ def fix(
             result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
             
             if not result["success"]:
-                console.print(f"[red]❌ Failed to apply patch[/red]")
-                state.final_status = "patch_error"
-                telemetry.log_event("patch_error", {
-                    "iteration": iteration,
-                    "step": result.get("step_number", 0)
-                })
+                if result.get("safety_violation"):
+                    console.print(f"[red]🛡️ Patch rejected due to safety limits[/red]")
+                    state.final_status = "safety_violation"
+                    telemetry.log_event("safety_violation", {
+                        "iteration": iteration,
+                        "step": result.get("step_number", 0),
+                        "message": result.get("safety_message", "")
+                    })
+                else:
+                    console.print(f"[red]❌ Failed to apply patch[/red]")
+                    state.final_status = "patch_error"
+                    telemetry.log_event("patch_error", {
+                        "iteration": iteration,
+                        "step": result.get("step_number", 0)
+                    })
                 break
             else:
                 # Log successful patch application (only if not already done by fallback)
@@ -472,6 +533,79 @@ def fix(
             "final_failures": state.total_failures
         })
         telemetry.end_run(success=success)
+        
+        # Post to GitHub if environment variables are set
+        token = os.getenv("GITHUB_TOKEN")
+        repo = os.getenv("GITHUB_REPOSITORY")  # e.g. "owner/repo"
+        pr_num = os.getenv("PR_NUMBER")
+        
+        if token and repo:
+            try:
+                from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                
+                # Calculate metrics
+                elapsed = (datetime.now() - state.start_time).total_seconds()
+                
+                # Count unique files changed across all patches
+                files_changed = set()
+                if state.patches_applied:
+                    from nova.tools.safety_limits import SafetyLimits
+                    safety = SafetyLimits()
+                    for patch in state.patches_applied:
+                        analysis = safety.analyze_patch(patch)
+                        files_changed.update(analysis.files_modified | analysis.files_added)
+                
+                # Create metrics
+                metrics = RunMetrics(
+                    runtime_seconds=int(elapsed),
+                    iterations=state.current_iteration,
+                    files_changed=len(files_changed),
+                    status="success" if success else (state.final_status or "failure"),
+                    tests_fixed=len(state.failing_tests) - state.total_failures if state.failing_tests else 0,
+                    tests_remaining=state.total_failures,
+                    initial_failures=len(state.failing_tests) if state.failing_tests else 0,
+                    final_failures=state.total_failures,
+                    branch_name=branch_name
+                )
+                
+                # Post to GitHub
+                api = GitHubAPI(token)
+                generator = ReportGenerator()
+                
+                # Get commit SHA
+                head_sha = git_manager._get_current_head() if git_manager else None
+                
+                # Create check run
+                if head_sha:
+                    api.create_check_run(
+                        repo=repo,
+                        sha=head_sha,
+                        name="CI-Auto-Rescue",
+                        status="completed",
+                        conclusion="success" if success else "failure",
+                        title=f"CI-Auto-Rescue: {metrics.status.upper()}",
+                        summary=generator.generate_check_summary(metrics)
+                    )
+                    if verbose:
+                        console.print("[dim]✅ Posted check run to GitHub[/dim]")
+                
+                # Create/update PR comment
+                if pr_num:
+                    existing_id = api.find_pr_comment(repo, int(pr_num), "<!-- ci-auto-rescue-report -->")
+                    if existing_id:
+                        api.update_pr_comment(repo, existing_id, generator.generate_pr_comment(metrics))
+                        if verbose:
+                            console.print(f"[dim]✅ Updated existing PR comment[/dim]")
+                    else:
+                        api.create_pr_comment(repo, int(pr_num), generator.generate_pr_comment(metrics))
+                        if verbose:
+                            console.print(f"[dim]✅ Created new PR comment[/dim]")
+                        
+            except Exception as e:
+                console.print(f"[yellow]⚠️ GitHub reporting failed: {e}[/yellow]")
+                if verbose:
+                    import traceback
+                    console.print(f"[dim]{traceback.format_exc()}[/dim]")
         
     except KeyboardInterrupt:
         if state:

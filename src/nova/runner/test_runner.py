@@ -128,6 +128,12 @@ class TestRunner:
                     file_part = nodeid
                     test_name = Path(nodeid).stem
                 
+                # Normalize the file path to be relative to repo root
+                # Remove repo directory prefix if it's included in the path
+                repo_name = self.repo_path.name
+                if file_part.startswith(f"{repo_name}/"):
+                    file_part = file_part[len(repo_name)+1:]
+                
                 # Get the traceback
                 call_info = test.get('call', {})
                 longrepr = call_info.get('longrepr', '')

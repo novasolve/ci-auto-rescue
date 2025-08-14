@@ -101,7 +101,7 @@ class EnhancedLLMAgent:
                 system=system_prompt,
                 user=prompt,
                 temperature=0.2,
-                max_tokens=2000
+                max_tokens=4000
             )
             
             # Extract diff from markdown if needed
@@ -109,6 +109,8 @@ class EnhancedLLMAgent:
                 start = patch_diff.find("```diff") + 7
                 end = patch_diff.find("```", start)
                 if end == -1:
+                    # The closing ``` is missing, patch might be truncated
+                    print(f"Warning: Patch might be truncated (no closing ```)")
                     end = len(patch_diff)
                 patch_diff = patch_diff[start:end].strip()
             elif "```" in patch_diff:
@@ -117,8 +119,17 @@ class EnhancedLLMAgent:
                     start += 1
                 end = patch_diff.find("```", start)
                 if end == -1:
+                    # The closing ``` is missing, patch might be truncated
+                    print(f"Warning: Patch might be truncated (no closing ```)")
                     end = len(patch_diff)
                 patch_diff = patch_diff[start:end].strip()
+            
+            # Check if patch looks complete
+            lines = patch_diff.split('\n')
+            if lines and not lines[-1].startswith(('+', '-', ' ', '@', '\\')):
+                # Last line doesn't look like a valid diff line
+                if len(lines) > 15:
+                    print(f"Warning: Patch might be truncated at line {len(lines)}")
             
             # Ensure proper patch format
             return self._fix_patch_format(patch_diff)

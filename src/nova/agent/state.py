@@ -21,6 +21,9 @@ class AgentState:
     failing_tests: List[Dict[str, Any]] = field(default_factory=list)
     total_failures: int = 0
     
+    # Planning information
+    plan: Optional[Dict[str, Any]] = None
+    
     # Execution state
     current_iteration: int = 0
     max_iterations: int = 6

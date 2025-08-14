@@ -24,7 +24,7 @@ class LLMAgent:
         self.client = OpenAI(api_key=self.settings.openai_api_key)
         self.model = self.settings.default_llm_model
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None) -> Optional[str]:
         """
         Generate a patch to fix failing tests using LLM.
         

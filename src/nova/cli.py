@@ -209,14 +209,34 @@ def fix(
         # Import our apply patch node
         from nova.nodes.apply_patch import apply_patch
         
-        # Try to use real LLM if available, otherwise fall back to mock
+        # Initialize the LLM agent (enhanced version with full Planner/Actor/Critic)
         try:
-            from nova.agent.llm_agent import LLMAgent
-            llm_agent = LLMAgent(repo_path)
-            console.print("[dim]Using OpenAI GPT-5 for patch generation[/dim]")
+            from nova.agent.llm_agent_enhanced import EnhancedLLMAgent
+            llm_agent = EnhancedLLMAgent(repo_path)
+            
+            # Determine which model we're using
+            model_name = settings.default_llm_model
+            if "gpt" in model_name.lower():
+                console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing[/dim]")
+            elif "claude" in model_name.lower():
+                console.print(f"[dim]Using Anthropic {model_name} for autonomous test fixing[/dim]")
+            else:
+                console.print(f"[dim]Using {model_name} for autonomous test fixing[/dim]")
+                
+        except ImportError as e:
+            console.print(f"[yellow]Warning: Could not import enhanced LLM agent: {e}[/yellow]")
+            console.print("[yellow]Falling back to basic LLM agent[/yellow]")
+            try:
+                from nova.agent.llm_agent import LLMAgent
+                llm_agent = LLMAgent(repo_path)
+            except Exception as e2:
+                console.print(f"[yellow]Warning: Could not initialize LLM agent: {e2}[/yellow]")
+                console.print("[yellow]Falling back to mock agent for demo[/yellow]")
+                from nova.agent.mock_llm import MockLLMAgent
+                llm_agent = MockLLMAgent(repo_path)
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not initialize LLM agent: {e}[/yellow]")
-            console.print("[yellow]Falling back to mock agent[/yellow]")
+            console.print(f"[yellow]Warning: Could not initialize enhanced LLM agent: {e}[/yellow]")
+            console.print("[yellow]Falling back to mock agent for demo[/yellow]")
             from nova.agent.mock_llm import MockLLMAgent
             llm_agent = MockLLMAgent(repo_path)
         
@@ -228,62 +248,90 @@ def fix(
             console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
             
             # 1. PLANNER: Generate a plan based on failing tests
-            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s) with GPT-5...[/cyan]")
+            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
             
-            # Use LLM to create plan if available
-            if hasattr(llm_agent, 'create_plan'):
-                plan = llm_agent.create_plan(state.failing_tests, iteration)
-            else:
-                plan = {
-                    "approach": "Fix failing assertions",
-                    "target_tests": state.failing_tests[:2] if len(state.failing_tests) > 2 else state.failing_tests
-                }
-            telemetry.log_event("planner", {
+            # Log planner start
+            telemetry.log_event("planner_start", {
+                "iteration": iteration,
+                "failing_tests": state.total_failures
+            })
+            
+            # Use LLM to create plan
+            plan = llm_agent.create_plan(state.failing_tests, iteration)
+            
+            # Store plan in state for reference
+            state.plan = plan
+            
+            # Display plan summary
+            if verbose:
+                console.print("[dim]Plan created:[/dim]")
+                console.print(f"  Approach: {plan.get('approach', 'Unknown')}")
+                if plan.get('steps'):
+                    console.print("  Steps:")
+                    for i, step in enumerate(plan['steps'][:3], 1):
+                        console.print(f"    {i}. {step}")
+            
+            # Log planner completion
+            telemetry.log_event("planner_complete", {
                 "iteration": iteration,
                 "plan": plan,
                 "failing_tests": state.total_failures
             })
             
-                        # 2. ACTOR: Generate a patch diff based on the plan
-            console.print(f"[cyan]🎭 Generating patch with GPT-5...[/cyan]")
+            # 2. ACTOR: Generate a patch diff based on the plan
+            console.print(f"[cyan]🎭 Generating patch based on plan...[/cyan]")
             
-            # Use LLM agent to generate patch
-            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration)
+            # Log actor start
+            telemetry.log_event("actor_start", {"iteration": iteration})
+            
+            # Generate patch with plan context
+            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan)
             
             if not patch_diff:
+                console.print("[red]❌ Could not generate a patch[/red]")
                 state.final_status = "no_patch"
                 telemetry.log_event("actor_failed", {"iteration": iteration})
                 break
             
-            telemetry.log_event("actor", {
+            # Display patch info
+            patch_lines = patch_diff.split('\n')
+            if verbose:
+                console.print(f"[dim]Generated patch: {len(patch_lines)} lines[/dim]")
+            
+            # Log actor completion
+            telemetry.log_event("actor_complete", {
                 "iteration": iteration,
-                "patch_size": len(patch_diff.split('\n'))
+                "patch_size": len(patch_lines)
             })
             
             # 3. CRITIC: Review and approve/reject the patch
-            console.print(f"[cyan]🔍 Reviewing patch with GPT-5 critic...[/cyan]")
+            console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
             
-            # Use LLM to review patch if available
-            if hasattr(llm_agent, 'review_patch'):
-                patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
-                if verbose:
-                    console.print(f"[dim]Review: {review_reason}[/dim]")
-            else:
-                # Fallback to simple size check
-                patch_lines = patch_diff.split('\n')
-                patch_approved = len(patch_lines) < 1000
-                review_reason = "Size check passed" if patch_approved else "Patch too large"
+            # Log critic start
+            telemetry.log_event("critic_start", {"iteration": iteration})
+            
+            # Use LLM to review patch
+            patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
+            
+            if verbose:
+                console.print(f"[dim]Review result: {review_reason}[/dim]")
             
             if not patch_approved:
+                console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
                 state.final_status = "patch_rejected"
                 telemetry.log_event("critic_rejected", {
                     "iteration": iteration,
-                    "reason": review_reason if 'review_reason' in locals() else "patch_rejected"
+                    "reason": review_reason
                 })
                 break
             
             console.print("[green]✓ Patch approved by critic[/green]")
-            telemetry.log_event("critic_approved", {"iteration": iteration})
+            
+            # Log critic approval
+            telemetry.log_event("critic_approved", {
+                "iteration": iteration,
+                "reason": review_reason
+            })
             
             # 4. APPLY PATCH: Apply the approved patch and commit
             console.print(f"[cyan]📝 Applying patch...[/cyan]")
@@ -332,31 +380,60 @@ def fix(
             })
             
             # 6. REFLECT: Check if we should continue or stop
+            telemetry.log_event("reflect_start", {
+                "iteration": iteration,
+                "failures_before": previous_failures,
+                "failures_after": state.total_failures
+            })
+            
             if state.total_failures == 0:
                 # All tests passed - success!
                 console.print(f"\n[bold green]✅ All tests passing! Fixed in {iteration} iteration(s).[/bold green]")
                 state.final_status = "success"
                 success = True
+                telemetry.log_event("reflect_complete", {
+                    "iteration": iteration,
+                    "decision": "success",
+                    "reason": "all_tests_passing"
+                })
                 break
             
             # Check if we made progress
             if state.total_failures < previous_failures:
-                console.print(f"[green]Progress: Fixed {previous_failures - state.total_failures} test(s)[/green]")
+                fixed_count = previous_failures - state.total_failures
+                console.print(f"[green]✓ Progress: Fixed {fixed_count} test(s), {state.total_failures} remaining[/green]")
             else:
-                console.print(f"[yellow]No progress: {state.total_failures} test(s) still failing[/yellow]")
+                console.print(f"[yellow]⚠ No progress: {state.total_failures} test(s) still failing[/yellow]")
             
             # Check timeout
             if state.check_timeout():
+                console.print(f"[red]⏰ Timeout reached ({state.timeout_seconds}s)[/red]")
                 state.final_status = "timeout"
+                telemetry.log_event("reflect_complete", {
+                    "iteration": iteration,
+                    "decision": "stop",
+                    "reason": "timeout"
+                })
                 break
             
             # Check if we're at max iterations
             if iteration >= state.max_iterations:
+                console.print(f"[red]🔄 Maximum iterations reached ({state.max_iterations})[/red]")
                 state.final_status = "max_iters"
+                telemetry.log_event("reflect_complete", {
+                    "iteration": iteration,
+                    "decision": "stop",
+                    "reason": "max_iterations"
+                })
                 break
             
             # Continue to next iteration
             console.print(f"[dim]Continuing to iteration {iteration + 1}...[/dim]")
+            telemetry.log_event("reflect_complete", {
+                "iteration": iteration,
+                "decision": "continue",
+                "reason": "more_failures_to_fix"
+            })
         
         # Print exit summary
         if state and state.final_status:

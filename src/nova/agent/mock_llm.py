@@ -15,7 +15,7 @@ class MockLLMAgent:
     def __init__(self, repo_path: Path):
         self.repo_path = repo_path
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None) -> Optional[str]:
         """
         Generate a patch to fix failing tests.
         
@@ -172,28 +172,71 @@ class MockLLMAgent:
         
         return diff
     
-    def review_patch(self, patch: str) -> bool:
+    def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]] = None) -> tuple[bool, str]:
         """
         Review a patch (mock critic).
         
         Args:
             patch: The patch diff to review
+            failing_tests: Optional list of failing tests
             
         Returns:
-            True if patch is approved, False otherwise
+            Tuple of (approved: bool, reason: str)
         """
         # Simple validation: check patch is not empty and not too large
         if not patch:
-            return False
+            return False, "Empty patch"
         
         lines = patch.split('\n')
         if len(lines) > 1000:  # Too large
-            return False
+            return False, f"Patch too large ({len(lines)} lines)"
         
         # Check that it's a valid diff format
         if not any(line.startswith('---') for line in lines):
-            return False
+            return False, "Invalid diff format: missing --- header"
         if not any(line.startswith('+++') for line in lines):
-            return False
+            return False, "Invalid diff format: missing +++ header"
         
-        return True
+        return True, "Patch approved (mock review)"
+    
+    def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int) -> Dict[str, Any]:
+        """
+        Create a plan for fixing the failing tests (mock planner).
+        
+        Args:
+            failing_tests: List of failing test details
+            iteration: Current iteration number
+            
+        Returns:
+            Plan dictionary with approach and steps
+        """
+        if not failing_tests:
+            return {"approach": "No failures to fix", "target_tests": [], "steps": []}
+        
+        # Create a simple mock plan based on the test failures
+        steps = []
+        
+        if any("assertion" in str(test.get("short_traceback", "")).lower() for test in failing_tests):
+            steps.append("Fix assertion failures")
+        
+        if any("ZeroDivisionError" in str(test.get("short_traceback", "")) for test in failing_tests):
+            steps.append("Fix division by zero errors")
+        
+        if any("NameError" in str(test.get("short_traceback", "")) for test in failing_tests):
+            steps.append("Define undefined variables")
+        
+        if any("IndexError" in str(test.get("short_traceback", "")) for test in failing_tests):
+            steps.append("Fix list index errors")
+        
+        if any("TypeError" in str(test.get("short_traceback", "")) for test in failing_tests):
+            steps.append("Fix type errors")
+        
+        if not steps:
+            steps = ["Analyze test failures", "Fix identified issues", "Verify fixes"]
+        
+        return {
+            "approach": f"Fix {len(failing_tests)} failing test(s) systematically",
+            "steps": steps,
+            "target_tests": failing_tests[:3] if len(failing_tests) > 3 else failing_tests,
+            "iteration": iteration
+        }

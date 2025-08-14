@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import os
+import tempfile
+import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -194,8 +196,46 @@ def _build_content_from_hunks(prev: Optional[bytes], pf: object) -> bytes:
         if idx < start_idx and lines_prev:
             out.extend(lines_prev[idx:start_idx])
             idx = start_idx
+        
+        # Track if we successfully matched context
+        context_matched = True
+        hunk_lines = list(hunk)  # Convert to list for easier processing
+        
+        # First pass: check if context lines match
+        temp_idx = idx
+        for line in hunk_lines:
+            if getattr(line, "is_context", False) or getattr(line, "is_removed", False):
+                val = getattr(line, "value", str(line)[1:] if str(line) else "")
+                if temp_idx < len(lines_prev):
+                    # Check if the context/removed line matches what we expect
+                    if lines_prev[temp_idx].rstrip() != val.rstrip():
+                        context_matched = False
+                        break
+                    temp_idx += 1
+                    
+        # If context doesn't match, try to find where the hunk should apply
+        if not context_matched and lines_prev:
+            # Try to find matching context in the file
+            for search_idx in range(max(0, idx - 10), min(len(lines_prev), idx + 10)):
+                temp_idx = search_idx
+                match = True
+                for line in hunk_lines:
+                    if getattr(line, "is_context", False) or getattr(line, "is_removed", False):
+                        val = getattr(line, "value", str(line)[1:] if str(line) else "")
+                        if temp_idx >= len(lines_prev) or lines_prev[temp_idx].rstrip() != val.rstrip():
+                            match = False
+                            break
+                        temp_idx += 1
+                if match:
+                    # Found matching context, adjust index
+                    if search_idx > idx:
+                        out.extend(lines_prev[idx:search_idx])
+                    idx = search_idx
+                    context_matched = True
+                    break
+        
         # Apply hunk lines
-        for line in hunk:  # Lines in hunk
+        for line in hunk_lines:
             # Skip special no-newline indicator
             if getattr(line, "is_no_newline", False):
                 continue
@@ -210,14 +250,22 @@ def _build_content_from_hunks(prev: Optional[bytes], pf: object) -> bytes:
                     val = s
             if getattr(line, "is_context", False):
                 if idx < len(lines_prev):
-                    out.append(lines_prev[idx])
+                    if context_matched:
+                        out.append(lines_prev[idx])
+                    else:
+                        # Context doesn't match, use the line from patch
+                        out.append(val)
                 else:
                     # If context beyond current, trust patch line
                     out.append(val)
                 idx += 1
             elif getattr(line, "is_removed", False):
-                # Consume a line from previous without adding
-                idx += 1
+                # Only consume if we have matching context
+                if context_matched and idx < len(lines_prev):
+                    idx += 1
+                elif not context_matched:
+                    # If context doesn't match, skip this removal
+                    pass
             elif getattr(line, "is_added", False):
                 out.append(val)
             else:
@@ -255,8 +303,46 @@ def apply_and_commit_patch(
         Tuple of (success, list of changed files)
     """
     try:
-        # Apply the patch
-        changed_files = apply_unified_diff(repo_root, diff_text)
+        # Validate the diff is not empty
+        if not diff_text or not diff_text.strip():
+            if verbose:
+                print("Error: Empty patch provided")
+            return False, []
+        
+        # Try to fix common patch format issues
+        try:
+            from nova.tools.patch_fixer import fix_patch_format, validate_patch
+            
+            # Validate the patch
+            is_valid, error_msg = validate_patch(diff_text)
+            if not is_valid:
+                if verbose:
+                    print(f"Patch validation failed: {error_msg}")
+                    print("Attempting to fix patch format...")
+                
+                # Try to fix the patch
+                diff_text = fix_patch_format(diff_text, verbose=verbose)
+                
+                # Validate again
+                is_valid, error_msg = validate_patch(diff_text)
+                if not is_valid:
+                    if verbose:
+                        print(f"Could not fix patch: {error_msg}")
+                    return False, []
+                elif verbose:
+                    print("Patch format fixed successfully")
+        except ImportError:
+            # patch_fixer not available, proceed without fixing
+            pass
+        
+        # Use git apply instead of custom patch application
+        changed_files = apply_patch_with_git(repo_root, diff_text, git_manager, verbose, telemetry=None)
+        
+        # If no files were changed, it might mean the patch was already applied
+        if not changed_files:
+            if verbose:
+                print("Warning: No files were changed by the patch (may already be applied)")
+            return False, []
         
         # If a git manager is provided, commit the changes
         if git_manager and changed_files:
@@ -268,16 +354,207 @@ def apply_and_commit_patch(
                     print(f"Warning: Failed to commit step {step_number}")
         
         return True, changed_files
+    except ValueError as e:
+        if verbose:
+            print(f"Error: Invalid patch format - {e}")
+        return False, []
+    except PermissionError as e:
+        if verbose:
+            print(f"Error: Permission denied - {e}")
+        return False, []
+    except RuntimeError as e:
+        if verbose:
+            print(f"Error: Runtime error - {e}")
+        return False, []
     except Exception as e:
         if verbose:
+            import traceback
             print(f"Error applying patch: {e}")
+            print(f"Patch content (first 500 chars):\n{diff_text[:500]}")
+            if verbose:
+                traceback.print_exc()
         return False, []
+
+
+def apply_patch_with_git(
+    repo_root: Path,
+    diff_text: str,
+    git_manager: Optional[object] = None,
+    verbose: bool = False,
+    telemetry: Optional[object] = None
+) -> List[Path]:
+    """Apply a patch using git apply.
+    
+    Args:
+        repo_root: Repository root path
+        diff_text: The unified diff text to apply
+        git_manager: Optional GitBranchManager instance for git operations
+        verbose: Enable verbose output
+        telemetry: Optional telemetry logger instance
+        
+    Returns:
+        List of changed files
+    """
+    from nova.tools.git import GitBranchManager
+    
+    # Write patch to a temporary file (use system temp dir, not repo dir)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
+        patch_file = Path(f.name)
+        f.write(diff_text)
+    
+    try:
+        # First, do a dry run with --check to validate the patch
+        if git_manager and isinstance(git_manager, GitBranchManager):
+            success, output = git_manager._run_git_command("apply", "--check", "--whitespace=nowarn", str(patch_file))
+        else:
+            # Fallback to direct subprocess call
+            result = subprocess.run(
+                ["git", "apply", "--check", "--whitespace=nowarn", str(patch_file)],
+                cwd=repo_root,
+                capture_output=True,
+                text=True
+            )
+            success = result.returncode == 0
+            output = result.stderr or result.stdout
+        
+        if not success:
+            # Patch cannot be applied
+            error_msg = f"Patch validation failed: {output}"
+            if verbose:
+                from rich.console import Console
+                console = Console()
+                console.print(f"[red]✗ {error_msg}[/red]")
+                
+                # Try to provide more specific error information
+                if "hunk" in output.lower():
+                    console.print("[yellow]Hint: The patch context doesn't match the current file content.[/yellow]")
+                elif "does not exist" in output.lower() or "not found" in output.lower():
+                    console.print("[yellow]Hint: The file specified in the patch doesn't exist.[/yellow]")
+                elif "already exists" in output.lower():
+                    console.print("[yellow]Hint: Trying to create a file that already exists.[/yellow]")
+            
+            # Log to telemetry if available
+            if telemetry and hasattr(telemetry, 'log_event'):
+                telemetry.log_event("patch_error", {
+                    "error": output,
+                    "type": "validation_failed"
+                })
+            
+            # Also try to fall back to the old method as a last resort
+            if verbose:
+                print("Attempting fallback to Python-based patch application...")
+            try:
+                changed_files = apply_unified_diff(repo_root, diff_text)
+                if changed_files:
+                    if verbose:
+                        print("Fallback successful!")
+                    return changed_files
+            except Exception as fallback_error:
+                if verbose:
+                    print(f"Fallback also failed: {fallback_error}")
+            
+            return []
+        
+        # Apply the patch for real
+        if git_manager and isinstance(git_manager, GitBranchManager):
+            success, output = git_manager._run_git_command("apply", "--whitespace=nowarn", str(patch_file))
+        else:
+            result = subprocess.run(
+                ["git", "apply", "--whitespace=nowarn", str(patch_file)],
+                cwd=repo_root,
+                capture_output=True,
+                text=True
+            )
+            success = result.returncode == 0
+            output = result.stderr or result.stdout
+        
+        if not success:
+            # This shouldn't happen if --check passed, but handle it anyway
+            error_msg = f"Patch application failed: {output}"
+            if verbose:
+                from rich.console import Console
+                console = Console()
+                console.print(f"[red]✗ {error_msg}[/red]")
+            
+            if telemetry and hasattr(telemetry, 'log_event'):
+                telemetry.log_event("patch_error", {
+                    "error": output,
+                    "type": "application_failed"
+                })
+            return []
+        
+        # Get list of changed files (both staged and unstaged)
+        if git_manager and isinstance(git_manager, GitBranchManager):
+            # Get unstaged changes
+            success1, unstaged = git_manager._run_git_command("diff", "--name-only")
+            # Get staged changes
+            success2, staged = git_manager._run_git_command("diff", "--name-only", "--cached")
+            # Get untracked files
+            success3, untracked = git_manager._run_git_command("ls-files", "--others", "--exclude-standard")
+            success = success1 and success2 and success3
+            output = "\n".join([unstaged, staged, untracked]).strip()
+        else:
+            # Get all changes (unstaged, staged, and untracked)
+            result1 = subprocess.run(
+                ["git", "diff", "--name-only"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True
+            )
+            result2 = subprocess.run(
+                ["git", "diff", "--name-only", "--cached"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True
+            )
+            result3 = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True
+            )
+            success = result1.returncode == 0 and result2.returncode == 0 and result3.returncode == 0
+            output = "\n".join([result1.stdout, result2.stdout, result3.stdout]).strip()
+        
+        if success and output:
+            # Filter out the temporary patch file and only include actual source files
+            changed_files = [
+                repo_root / line.strip() 
+                for line in output.strip().split('\n') 
+                if line.strip() and not line.endswith('.patch')
+            ]
+            
+            if verbose:
+                from rich.console import Console
+                console = Console()
+                console.print(f"[green]✓ Patch applied successfully[/green]")
+                if changed_files:
+                    console.print(f"[dim]Changed files: {', '.join([f.name for f in changed_files])}[/dim]")
+            
+            # Save the patch as an artifact for debugging
+            if telemetry and hasattr(telemetry, 'save_artifact'):
+                telemetry.save_artifact(f"patches/step-{len(changed_files)}.diff", diff_text)
+            
+            return changed_files
+        else:
+            # No changes detected after applying patch
+            if verbose:
+                print("Warning: Patch applied but no changes detected")
+            return []
+    
+    finally:
+        # Clean up temporary patch file
+        try:
+            patch_file.unlink()
+        except:
+            pass
 
 
 __all__ = [
     "read_text",
     "write_text_safe",
     "apply_unified_diff",
+    "apply_patch_with_git",
     "rollback_on_failure",
     "apply_and_commit_patch",
 ]

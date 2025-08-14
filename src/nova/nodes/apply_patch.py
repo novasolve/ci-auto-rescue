@@ -5,6 +5,8 @@ Apply patch node for Nova CI-Rescue agent workflow.
 from pathlib import Path
 from typing import Dict, Any, Optional
 from rich.console import Console
+import tempfile
+import subprocess
 
 from nova.agent.state import AgentState
 from nova.tools.fs import apply_and_commit_patch
@@ -41,6 +43,18 @@ class ApplyPatchNode:
         
         if self.verbose:
             console.print(f"[cyan]Applying patch (step {step_number})...[/cyan]")
+            # Show first few lines of patch for debugging
+            patch_lines = patch_text.split('\n')[:10]
+            console.print("[dim]Patch preview:[/dim]")
+            for line in patch_lines:
+                if line.startswith('+++') or line.startswith('---'):
+                    console.print(f"[dim]  {line}[/dim]")
+                elif line.startswith('+'):
+                    console.print(f"[green]  {line}[/green]")
+                elif line.startswith('-'):
+                    console.print(f"[red]  {line}[/red]")
+                else:
+                    console.print(f"[dim]  {line}[/dim]")
         
         # Apply the patch and commit it
         success, changed_files = apply_and_commit_patch(
@@ -50,6 +64,34 @@ class ApplyPatchNode:
             git_manager=git_manager,
             verbose=self.verbose
         )
+        
+        # If it failed, try to get more specific error information
+        error_details = None
+        if not success and self.verbose:
+            # Try a git apply --check to get specific error
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
+                    f.write(patch_text)
+                    patch_file = f.name
+                
+                result = subprocess.run(
+                    ["git", "apply", "--check", patch_file],
+                    cwd=state.repo_path,
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode != 0:
+                    error_details = result.stderr or result.stdout
+                    
+                # Clean up temp file
+                try:
+                    import os
+                    os.unlink(patch_file)
+                except:
+                    pass
+            except Exception as e:
+                error_details = str(e)
         
         result = {
             "success": success,
@@ -69,6 +111,37 @@ class ApplyPatchNode:
         else:
             if self.verbose:
                 console.print(f"[red]✗ Failed to apply patch (step {step_number})[/red]")
+                
+                if error_details:
+                    console.print("[red]Git apply error:[/red]")
+                    # Parse and format git error messages
+                    for line in error_details.split('\n'):
+                        if line.strip():
+                            if 'error:' in line:
+                                console.print(f"  [red]• {line.strip()}[/red]")
+                            elif 'warning:' in line:
+                                console.print(f"  [yellow]• {line.strip()}[/yellow]")
+                            else:
+                                console.print(f"  [dim]• {line.strip()}[/dim]")
+                    
+                    # Provide specific hints based on error type
+                    if "hunk" in error_details.lower():
+                        console.print("\n[yellow]💡 Hint:[/yellow] The patch context doesn't match the current file content.")
+                        console.print("   This often means the file has changed since the patch was created.")
+                    elif "does not exist" in error_details.lower() or "not found" in error_details.lower():
+                        console.print("\n[yellow]💡 Hint:[/yellow] The file specified in the patch doesn't exist.")
+                        console.print("   Check if the file path is correct or if the file was deleted.")
+                    elif "already exists" in error_details.lower():
+                        console.print("\n[yellow]💡 Hint:[/yellow] Trying to create a file that already exists.")
+                else:
+                    console.print("[yellow]Possible reasons:[/yellow]")
+                    console.print("  • File content doesn't match patch expectations")
+                    console.print("  • Tests may already be fixed")
+                    console.print("  • Invalid patch format")
+                    console.print("  • File paths may be incorrect")
+            else:
+                console.print(f"[red]✗ Failed to apply patch (step {step_number})[/red]")
+                console.print("[dim]Run with --verbose for detailed error information[/dim]")
         
         return result
 

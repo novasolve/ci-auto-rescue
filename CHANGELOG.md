@@ -5,6 +5,14 @@ All notable changes to Nova CI-Rescue will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.1.1-alpha] - 2025-01-14
+
+### Fixed
+
+- **Bug Fix**: Fixed missing f-string in test_runner.py that caused JUnit report path to be incorrectly formatted
+  - This could cause Nova to read stale test reports and incorrectly detect failures
+  - Tests are now correctly executed and reported
+
 ## [v0.1.0-alpha] - 2025-01-13
 
 ### 🎉 Milestone A Complete - Local E2E Happy Path
@@ -118,10 +126,12 @@ src/nova/
 
 ## Version History
 
+- **v0.1.1-alpha** (2025-01-14) - Bug fix release for test runner
 - **v0.1.0-alpha** (2025-01-13) - First alpha release, Milestone A complete
 - **v0.0.1** (2025-01-01) - Initial project setup
 
 ---
 
+[v0.1.1-alpha]: https://github.com/nova-solve/ci-auto-rescue/releases/tag/v0.1.1-alpha
 [v0.1.0-alpha]: https://github.com/nova-solve/ci-auto-rescue/releases/tag/v0.1.0-alpha
-[Unreleased]: https://github.com/nova-solve/ci-auto-rescue/compare/v0.1.0-alpha...HEAD
+[Unreleased]: https://github.com/nova-solve/ci-auto-rescue/compare/v0.1.1-alpha...HEAD

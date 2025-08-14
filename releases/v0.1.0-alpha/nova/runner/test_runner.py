@@ -65,7 +65,7 @@ class TestRunner:
                 str(self.repo_path),
                 "--json-report",
                 f"--json-report-file={json_report_path}",
-                "--junit-xml={junit_report_path}",
+                f"--junit-xml={junit_report_path}",
                 "--tb=short",
                 f"--maxfail={max_failures}",
                 "-q",  # Quiet mode

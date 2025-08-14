@@ -12,21 +12,25 @@ The following distribution files have been built and are ready for upload to Clo
 Once you have the correct Cloudsmith credentials configured, use these commands:
 
 ### 1. Set API Key
+
 ```bash
 export CLOUDSMITH_API_KEY="your-valid-api-key"
 ```
 
 ### 2. Verify Authentication
+
 ```bash
 cloudsmith whoami
 ```
 
 ### 3. Upload Python Wheel
+
 ```bash
 cloudsmith push python YOUR-ORG/YOUR-REPO dist/nova_ci_rescue-0.1.0-py3-none-any.whl --republish
 ```
 
 ### 4. Upload Source Distribution
+
 ```bash
 cloudsmith push python YOUR-ORG/YOUR-REPO dist/nova_ci_rescue-0.1.0.tar.gz --republish
 ```
@@ -68,6 +72,7 @@ A complete archive of this release has been created at:
 `releases/nova-ci-rescue-v0.1.0-alpha-complete.tar.gz`
 
 This archive contains:
+
 - Built distribution packages
 - Complete source code
 - All documentation

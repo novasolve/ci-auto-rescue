@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Calculator Demo (Minimal Test)",
+    "repo": "/Users/seb/GPT5/working/ci-auto-rescue/examples/sample_repos/demo-repo",
+    "success": false,
+    "iterations": 0,
+    "duration_seconds": 0.21,
+    "stdout_snippet": "====================================================\nEXECUTION SUMMARY\n============================================================\n\u274c Exit Reason: ERROR - Unexpected error occurred\n\nStatistics:\n  \u2022 Iterations completed: 0/6\n  \u2022 Patches applied: 0\n  \u2022 Initial failures: 0\n  \u2022 Remaining failures: 0\n  \u2022 All tests fixed successfully!\n  \u2022 Time elapsed: 0m 0s\n============================================================\n\n\n\u26a0\ufe0f  Cleaning up... resetting to original state\nRepository reset to original state\n"
+  }
+]

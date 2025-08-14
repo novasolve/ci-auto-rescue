@@ -21,6 +21,8 @@ class FailingTest:
     line: int
     short_traceback: str
     full_traceback: Optional[str] = None
+    suspect_file: Optional[str] = None
+    suspect_line: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -38,7 +40,7 @@ class TestRunner:
         self.repo_path = repo_path
         self.verbose = verbose
         
-    def run_tests(self, max_failures: int = 5) -> Tuple[List[FailingTest], Optional[str]]:
+    def run_tests(self, max_failures: int = 5, use_docker: bool = False) -> Tuple[List[FailingTest], Optional[str]]:
         """
         Run pytest and capture failing tests.
         
@@ -192,3 +194,125 @@ class TestRunner:
             table += f"| {test.name} | {location} | {error} |\n"
         
         return table
+    
+    def check_flakiness(self, failing_tests: List[FailingTest], reruns: int = 3) -> List[FailingTest]:
+        """
+        Check if tests are flaky by re-running them multiple times.
+        
+        Args:
+            failing_tests: List of tests that failed
+            reruns: Number of times to re-run each test (default: 3)
+            
+        Returns:
+            List of tests that are flaky (pass on re-run)
+        """
+        flaky_tests = []
+        
+        for test in failing_tests:
+            # Run the specific test multiple times
+            passes = 0
+            for _ in range(reruns):
+                cmd = [
+                    "python", "-m", "pytest",
+                    f"{test.file}::{test.name}",
+                    "-q", "--no-header", "--no-summary", "-rN"
+                ]
+                
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(self.repo_path),
+                )
+                
+                if result.returncode == 0:
+                    passes += 1
+            
+            # If test passes at least once, it's flaky
+            if passes > 0:
+                flaky_tests.append(test)
+        
+        return flaky_tests
+    
+    def run_tests_with_coverage(self) -> Optional[Dict[str, Any]]:
+        """
+        Run tests with coverage collection.
+        
+        Returns:
+            Coverage data as a dictionary, or None if coverage collection fails
+        """
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+            coverage_file = tmp.name
+        
+        try:
+            # Run pytest with coverage
+            cmd = [
+                "python", "-m", "pytest",
+                str(self.repo_path),
+                "--cov=" + str(self.repo_path),
+                "--cov-report=json:" + coverage_file,
+                "-q", "--no-header", "--no-summary"
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_path),
+            )
+            
+            # Load and return coverage data
+            coverage_path = Path(coverage_file)
+            if coverage_path.exists():
+                with open(coverage_path, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            if self.verbose:
+                console.print(f"[yellow]Warning: Failed to collect coverage: {e}[/yellow]")
+        finally:
+            # Clean up
+            Path(coverage_file).unlink(missing_ok=True)
+        
+        return None
+
+
+class FaultLocalizer:
+    """Simple fault localization based on test failures and coverage."""
+    
+    @staticmethod
+    def localize_failures(failing_tests: List[FailingTest], coverage_data: Optional[Dict[str, Any]]) -> None:
+        """
+        Analyze failing tests to identify suspect lines of code.
+        
+        Args:
+            failing_tests: List of failing tests
+            coverage_data: Optional coverage data from test run
+        """
+        for test in failing_tests:
+            # Simple heuristic: parse the traceback to find the most likely error location
+            if test.full_traceback:
+                lines = test.full_traceback.split('\n')
+                for i, line in enumerate(lines):
+                    # Look for file references in traceback
+                    if 'File "' in line and ', line ' in line:
+                        # Extract file and line number
+                        parts = line.split('"')
+                        if len(parts) >= 2:
+                            file_path = parts[1]
+                            line_parts = line.split(', line ')
+                            if len(line_parts) >= 2:
+                                try:
+                                    line_num = int(line_parts[1].split(',')[0])
+                                    # Skip test files themselves
+                                    if not file_path.startswith('test_') and not '/test_' in file_path:
+                                        test.suspect_file = file_path
+                                        test.suspect_line = line_num
+                                        break
+                                except ValueError:
+                                    pass
+            
+            # If we have coverage data, use it to refine the localization
+            if coverage_data and test.suspect_file:
+                # This is a placeholder for more sophisticated fault localization
+                # using coverage information
+                pass

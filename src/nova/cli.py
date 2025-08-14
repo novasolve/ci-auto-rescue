@@ -4,6 +4,7 @@ Nova CI-Rescue CLI interface.
 """
 
 import os
+import re
 import typer
 from pathlib import Path
 from typing import Optional
@@ -14,7 +15,7 @@ from rich.table import Table
 from nova.runner import TestRunner
 from nova.agent import AgentState
 from nova.telemetry.logger import JSONLLogger
-from nova.config import NovaSettings
+from nova.config import NovaSettings, load_yaml_config
 from nova.tools.git import GitBranchManager
 
 app = typer.Typer(
@@ -95,19 +96,19 @@ def fix(
         dir_okay=True,
         resolve_path=True,
     ),
-    max_iters: int = typer.Option(
-        6,
+    max_iters: Optional[int] = typer.Option(
+        None,
         "--max-iters",
         "-i",
-        help="Maximum number of fix iterations",
+        help="Maximum number of fix iterations (default: 6)",
         min=1,
         max=20,
     ),
-    timeout: int = typer.Option(
-        1200,
+    timeout: Optional[int] = typer.Option(
+        None,
         "--timeout",
         "-t",
-        help="Overall timeout in seconds",
+        help="Overall timeout in seconds (default: 1200)",
         min=60,
         max=7200,
     ),
@@ -117,14 +118,44 @@ def fix(
         "-v",
         help="Enable verbose output",
     ),
+    config_file: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to YAML configuration file (options in file are used unless overridden by CLI flags)",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
 ):
     """
     Fix failing tests in a repository.
     """
+    # Load configuration file if provided
+    config_data = None
+    if config_file is not None:
+        try:
+            config_data = load_yaml_config(config_file)
+        except Exception as e:
+            console.print(f"[red]Failed to load config: {e}[/red]")
+            raise typer.Exit(1)
+    
+    # Override CLI defaults with config values if present
+    if config_data and config_data.repo_path:
+        default_repo = Path(".").resolve()
+        if repo_path.resolve() == default_repo:
+            repo_path = Path(config_data.repo_path)
+    
+    final_max_iters = max_iters if max_iters is not None else (config_data.max_iters if config_data and config_data.max_iters is not None else 6)
+    final_timeout = timeout if timeout is not None else (config_data.timeout if config_data and config_data.timeout is not None else 1200)
+    
     console.print(f"[green]Nova CI-Rescue[/green] 🚀")
+    if config_file:
+        console.print(f"[dim]Loaded configuration from {config_file}[/dim]")
     console.print(f"Repository: {repo_path}")
-    console.print(f"Max iterations: {max_iters}")
-    console.print(f"Timeout: {timeout}s")
+    console.print(f"Max iterations: {final_max_iters}")
+    console.print(f"Timeout: {final_timeout}s")
     console.print()
     
     # Initialize branch manager for nova-fix branch
@@ -144,14 +175,19 @@ def fix(
         
         # Initialize settings and telemetry
         settings = NovaSettings()
+        
+        # Override model from config if provided
+        if config_data and config_data.model:
+            settings.default_llm_model = config_data.model
+        
         telemetry = JSONLLogger(settings, enabled=True)
         telemetry.start_run(repo_path)
         
         # Initialize agent state
         state = AgentState(
             repo_path=repo_path,
-            max_iterations=max_iters,
-            timeout_seconds=timeout,
+            max_iterations=final_max_iters,
+            timeout_seconds=final_timeout,
         )
         
         # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
@@ -265,6 +301,30 @@ def fix(
         
         # Import our apply patch node
         from nova.nodes.apply_patch import apply_patch
+        from nova.tools.safety_limits import SafetyConfig
+        
+        # Prepare safety limits configuration from YAML config if provided
+        safety_conf = None
+        if config_data:
+            custom_limits = False
+            safety_conf_obj = SafetyConfig()
+            
+            if config_data.max_changed_lines is not None:
+                safety_conf_obj.max_lines_changed = config_data.max_changed_lines
+                custom_limits = True
+            
+            if config_data.max_changed_files is not None:
+                safety_conf_obj.max_files_modified = config_data.max_changed_files
+                custom_limits = True
+            
+            if config_data.blocked_paths:
+                for pattern in config_data.blocked_paths:
+                    if pattern not in safety_conf_obj.denied_paths:
+                        safety_conf_obj.denied_paths.append(pattern)
+                custom_limits = True
+            
+            if custom_limits:
+                safety_conf = safety_conf_obj
         
         # Initialize the LLM agent (enhanced version with full Planner/Actor/Critic)
         try:
@@ -409,7 +469,7 @@ def fix(
             console.print(f"[cyan]📝 Applying patch...[/cyan]")
             
             # Use our ApplyPatchNode to apply and commit the patch
-            result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
+            result = apply_patch(state, patch_diff, git_manager, verbose=verbose, safety_config=safety_conf)
             
             if not result["success"]:
                 if result.get("safety_violation"):
@@ -658,17 +718,226 @@ def eval(
         "-v",
         help="Enable verbose output",
     ),
+    config_file: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to YAML config file (applied to each fix run; CLI flags override file settings)",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
 ):
     """
     Evaluate Nova on multiple repositories.
     """
+    import yaml
+    import json
+    from datetime import datetime, timezone
+    from rich.table import Table
+    
+    # Load configuration file if provided
+    config_data = None
+    if config_file is not None:
+        try:
+            config_data = load_yaml_config(config_file)
+        except Exception as e:
+            console.print(f"[red]Failed to load config: {e}[/red]")
+            raise typer.Exit(1)
+    
     console.print(f"[green]Nova CI-Rescue Evaluation[/green] 📊")
+    if config_file:
+        console.print(f"[dim]Loaded configuration from {config_file}[/dim]")
     console.print(f"Repos file: {repos_file}")
     console.print(f"Output directory: {output_dir}")
+    console.print()
     
-    # TODO: Implement the actual eval logic
-    console.print("[yellow]Eval command not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    # Load repository list from YAML
+    try:
+        with open(repos_file, "r") as f:
+            repos_data = yaml.safe_load(f)
+    except Exception as e:
+        console.print(f"[red]Failed to read YAML file: {e}[/red]")
+        raise typer.Exit(1)
+    
+    # Handle both 'runs' key and direct list format
+    if isinstance(repos_data, dict) and 'runs' in repos_data:
+        repos_list = repos_data['runs']
+    elif isinstance(repos_data, list):
+        repos_list = repos_data
+    else:
+        console.print("[red]Invalid YAML format: expected a list of repository entries or dict with 'runs' key[/red]")
+        raise typer.Exit(1)
+    
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    results = []
+    total_success = 0
+    total_failed = 0
+    
+    # Create summary table
+    summary_table = Table(title="Evaluation Results", show_header=True, header_style="bold magenta")
+    summary_table.add_column("Repository", style="cyan", no_wrap=False)
+    summary_table.add_column("Status", style="green")
+    summary_table.add_column("Duration", style="yellow")
+    summary_table.add_column("Iterations", style="blue")
+    summary_table.add_column("Tests Fixed", style="magenta")
+    
+    for entry in repos_list:
+        # Determine repository path and optional config overrides
+        repo_path = Path(entry.get("path") or entry.get("repo") or entry.get("repo_path", "."))
+        if not repo_path.is_absolute():
+            # Resolve relative paths relative to the YAML file location
+            repo_path = (repos_file.parent / repo_path).resolve()
+        
+        name = entry.get("name") or repo_path.name
+        max_iters = entry.get("max_iters") or entry.get("max_iterations", 6)
+        timeout = entry.get("timeout", 1200)
+        
+        # Skip non-existent directories
+        if not repo_path.exists():
+            console.print(f"[yellow]⚠️ Skipping {name}: path does not exist ({repo_path})[/yellow]")
+            results.append({
+                "name": name,
+                "repo": str(repo_path),
+                "success": False,
+                "duration": 0,
+                "iterations": 0,
+                "tests_fixed": 0,
+                "initial_failures": 0,
+                "error": "path_not_found"
+            })
+            total_failed += 1
+            continue
+        
+        # Announce which repo is being processed
+        console.print(f"\n[bold]Running Nova on [cyan]{name}[/cyan]...[/bold]")
+        console.print(f"  Path: {repo_path}")
+        console.print(f"  Max iterations: {max_iters}")
+        console.print(f"  Timeout: {timeout}s")
+        
+        # Run the fix command and time its execution
+        start_time = datetime.now(timezone.utc)
+        
+        # Run nova fix on this repository
+        import subprocess
+        cmd = [
+            "python", "-m", "nova", "fix",
+            str(repo_path),
+            "--max-iters", str(max_iters),
+            "--timeout", str(timeout)
+        ]
+        if config_file:
+            cmd.extend(["--config", str(config_file)])
+        if verbose:
+            cmd.append("--verbose")
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=str(Path.cwd())
+        )
+        
+        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+        success_flag = (result.exit_code == 0)
+        
+        # Extract iteration count and tests fixed from output
+        iter_count = 0
+        tests_fixed = 0
+        initial_failures = 0
+        
+        for line in result.stdout.splitlines():
+            # Look for iteration count
+            if "Iterations completed:" in line:
+                try:
+                    match = re.search(r"Iterations completed: (\d+)/(\d+)", line)
+                    if match:
+                        iter_count = int(match.group(1))
+                except Exception:
+                    pass
+            # Look for initial failures
+            if "Initial failures:" in line:
+                try:
+                    match = re.search(r"Initial failures: (\d+)", line)
+                    if match:
+                        initial_failures = int(match.group(1))
+                except Exception:
+                    pass
+            # Look for tests fixed
+            if "Tests fixed:" in line:
+                try:
+                    match = re.search(r"Tests fixed: (\d+)/(\d+)", line)
+                    if match:
+                        tests_fixed = int(match.group(1))
+                except Exception:
+                    pass
+        
+        # If we didn't find explicit tests fixed, calculate from initial failures if success
+        if success_flag and initial_failures > 0 and tests_fixed == 0:
+            tests_fixed = initial_failures
+        
+        # Print status for this repo
+        status_text = "✅ SUCCESS" if success_flag else "❌ FAILED"
+        console.print(f"• [yellow]{name}[/yellow]: {status_text} after {int(elapsed)}s, {iter_count} iteration(s)")
+        
+        # Add to summary table
+        summary_table.add_row(
+            name,
+            "SUCCESS" if success_flag else "FAILED",
+            f"{int(elapsed)}s",
+            str(iter_count),
+            str(tests_fixed)
+        )
+        
+        # Update counters
+        if success_flag:
+            total_success += 1
+        else:
+            total_failed += 1
+        
+        # Append result metrics
+        results.append({
+            "name": name,
+            "repo": str(repo_path),
+            "success": success_flag,
+            "duration": elapsed,
+            "iterations": iter_count,
+            "tests_fixed": tests_fixed,
+            "initial_failures": initial_failures,
+            "max_iterations": max_iters,
+            "timeout": timeout
+        })
+    
+    # Save all results to a JSON file with UTC timestamp
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    results_path = output_dir / f"{timestamp}.json"
+    with open(results_path, "w") as f:
+        json.dump({
+            "timestamp": timestamp,
+            "config_file": str(repos_file),
+            "total_repos": len(results),
+            "successful": total_success,
+            "failed": total_failed,
+            "results": results
+        }, f, indent=2)
+    
+    # Print summary
+    console.print("\n" + "="*60)
+    console.print(summary_table)
+    console.print("="*60)
+    console.print(f"\n[bold]Evaluation Complete[/bold]")
+    console.print(f"  Total repositories: {len(results)}")
+    console.print(f"  [green]Successful: {total_success}[/green]")
+    console.print(f"  [red]Failed: {total_failed}[/red]")
+    console.print(f"  Success rate: {100*total_success/len(results):.1f}%" if results else "N/A")
+    console.print(f"\nResults saved to: [cyan]{results_path}[/cyan]")
+    
+    # Exit with non-zero code if any repo failed
+    if total_failed > 0:
+        raise typer.Exit(1)
 
 
 @app.command()

@@ -1,0 +1,32 @@
+# Nova CI-Rescue Configuration Example
+# This file can be used with the --config flag for nova fix and nova eval commands
+
+# Repository path (relative to this config file or absolute)
+# repo_path: ./demo-repo
+
+# LLM model to use
+model: gpt-4
+
+# Overall timeout in seconds (60-7200)
+timeout: 1800
+
+# Maximum number of fix iterations (1-20)
+max_iters: 8
+
+# Safety limits for patches
+max_changed_lines: 500 # Maximum lines that can be changed in a single patch
+max_changed_files: 10 # Maximum files that can be modified in a single patch
+
+# Paths that should not be modified (patterns)
+blocked_paths:
+  - "*.env"
+  - "*.secret"
+  - ".git/*"
+  - "node_modules/*"
+  - "venv/*"
+  - "__pycache__/*"
+  - "*.pyc"
+  - "*.pyo"
+  - "dist/*"
+  - "build/*"
+  - ".github/workflows/*"

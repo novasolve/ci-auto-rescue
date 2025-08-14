@@ -87,4 +87,55 @@ def get_settings() -> NovaSettings:
     return _CACHED_SETTINGS
 
 
-__all__ = ["NovaSettings", "get_settings"]
+# Configuration model for CLI YAML files
+class CLIConfig(BaseModel):
+    """Configuration options for Nova CLI loaded from a YAML file."""
+    repo_path: Optional[str] = None
+    model: Optional[str] = None
+    timeout: Optional[int] = Field(None, ge=60, le=7200)
+    max_iters: Optional[int] = Field(None, ge=1, le=20)
+    blocked_paths: Optional[List[str]] = None
+    max_changed_lines: Optional[int] = Field(None, ge=1)
+    max_changed_files: Optional[int] = Field(None, ge=1)
+
+    class Config:
+        extra = "forbid"
+
+def load_yaml_config(config_path: os.PathLike) -> CLIConfig:
+    """Load configuration from a YAML file into a CLIConfig object."""
+    try:
+        import yaml
+    except ImportError:
+        raise RuntimeError("PyYAML is required for loading config files. Please install PyYAML.")
+    
+    # Read YAML content
+    try:
+        with open(config_path, "r") as f:
+            data = yaml.safe_load(f)
+    except Exception as e:
+        raise RuntimeError(f"Failed to load YAML config file: {e}")
+    
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValueError("Configuration file must contain a key-value mapping (YAML dictionary).")
+    
+    # Resolve and validate repo_path if provided
+    if "repo_path" in data and data["repo_path"] is not None:
+        raw_path = str(data["repo_path"])
+        expanded = os.path.expanduser(raw_path)
+        from pathlib import Path
+        path_obj = Path(expanded)
+        if not path_obj.is_absolute():
+            # Make relative paths relative to the config file location
+            path_obj = (Path(config_path).parent / path_obj).resolve()
+        else:
+            path_obj = path_obj.resolve()
+        if not path_obj.exists() or not path_obj.is_dir():
+            raise ValueError(f"Repository path '{path_obj}' in config does not exist or is not a directory.")
+        data["repo_path"] = str(path_obj)
+    
+    # Create and validate the config object
+    return CLIConfig(**data)
+
+__all__ = ["NovaSettings", "get_settings", "CLIConfig", "load_yaml_config"]

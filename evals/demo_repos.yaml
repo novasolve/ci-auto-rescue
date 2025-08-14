@@ -5,38 +5,38 @@ runs:
   # Demo repositories with various testing scenarios
   - name: "Math Operations Demo"
     path: "./examples/demos/demo_math_ops"
-    
+
   - name: "String Operations Demo"
     path: "./examples/demos/demo_string_ops"
-    
+
   - name: "Type Hints Demo"
     path: "./examples/demos/demo_type_hints"
-    
+
   - name: "Data Structures Demo"
     path: "./examples/demos/demo_data_structures"
-    
+
   - name: "Exception Handling Demo"
     path: "./examples/demos/demo_exceptions"
-    
+
   - name: "File I/O Demo"
     path: "./examples/demos/demo_file_io"
-    
+
   - name: "Imports Demo"
     path: "./examples/demos/demo_imports"
-    
+
   - name: "OOP Inheritance Demo"
     path: "./examples/demos/demo_oop"
-    
+
   # Standalone test repositories
   - name: "Nova Test Repository"
     path: "./examples/demos/demo_nova_test"
-    
+
   - name: "Test Repository"
     path: "./examples/demos/demo_test_repo"
-    
+
   - name: "LLM Test Repository"
     path: "./examples/demos/demo_llm_repo"
-    
+
   # Sample repository with calculator tests
   - name: "Sample Calculator Project"
     path: "./examples/sample_repos/demo-repo"

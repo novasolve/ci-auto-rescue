@@ -5,16 +5,19 @@ This directory contains the evaluation framework for testing Nova CI-Rescue on m
 ## Quick Start
 
 ### Run a quick test (30 seconds)
+
 ```bash
 python verify_milestone_d.py evals/minimal_test.yaml
 ```
 
 ### Run standard test (3 minutes)
+
 ```bash
 python verify_milestone_d.py evals/quick_test.yaml
 ```
 
 ### Run full suite (5-10 minutes)
+
 ```bash
 python verify_milestone_d.py evals/demo_repos.yaml
 ```
@@ -28,14 +31,18 @@ python verify_milestone_d.py evals/demo_repos.yaml
 ## Output
 
 ### Console Output
+
 Progress logs and a summary table showing:
+
 - Repository name
 - Success/Failure status
 - Runtime in seconds
 - Number of iterations
 
 ### JSON Results
+
 Saved to `evals/results/<timestamp>.json` with detailed metrics:
+
 ```json
 {
   "name": "Math Operations Demo",
@@ -56,6 +63,7 @@ Perfect for CI/CD integration!
 ## Custom Configuration
 
 Create your own YAML config:
+
 ```yaml
 runs:
   - name: "My Project"
@@ -65,6 +73,7 @@ runs:
 ## Available Demo Repositories
 
 The system includes demos testing:
+
 - Math operations, string processing
 - Type hints, data structures
 - Exception handling, file I/O

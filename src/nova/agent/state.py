@@ -20,6 +20,7 @@ class AgentState:
     # Test failure information
     failing_tests: List[Dict[str, Any]] = field(default_factory=list)
     total_failures: int = 0
+    flaky_tests: List[str] = field(default_factory=list)  # List of flaky test names
     
     # Planning information
     plan: Optional[Dict[str, Any]] = None

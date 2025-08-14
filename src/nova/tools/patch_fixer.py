@@ -25,6 +25,12 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
     current_file = None
     i = 0
     
+    # Check if patch appears truncated
+    if verbose and lines:
+        last_line = lines[-1].strip()
+        if last_line and not last_line.startswith(('\\', ' ', '+', '-')):
+            print(f"Warning: Patch may be truncated. Last line: '{last_line}'")
+    
     while i < len(lines):
         line = lines[i]
         
@@ -59,20 +65,36 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
                 # Collect hunk lines
                 hunk_lines = []
                 j = i + 1
-                while j < len(lines) and not lines[j].startswith(('@@', '---', '+++')):
-                    if lines[j] or lines[j].startswith(('+', '-', ' ', '\\')):
-                        hunk_lines.append(lines[j])
+                # Be more lenient with hunk boundaries for truncated patches
+                while j < len(lines):
+                    next_line = lines[j]
+                    # Stop if we hit another hunk or file header
+                    if next_line.startswith(('@@', '---', '+++')):
+                        break
+                    # Include lines that look like diff content
+                    if next_line.startswith(('+', '-', ' ', '\\')) or next_line.strip() == '':
+                        hunk_lines.append(next_line)
+                    elif j == i + 1:
+                        # If the very next line after @@ doesn't look like diff content,
+                        # the patch might be corrupted - stop here
+                        if verbose:
+                            print(f"Warning: Unexpected line after hunk header: '{next_line}'")
+                        break
                     j += 1
                 
                 # Count actual lines
                 actual_old = 0
                 actual_new = 0
                 for hunk_line in hunk_lines:
-                    if hunk_line.startswith('-'):
+                    if hunk_line.startswith('-') and not hunk_line.startswith('---'):
                         actual_old += 1
-                    elif hunk_line.startswith('+'):
+                    elif hunk_line.startswith('+') and not hunk_line.startswith('+++'):
                         actual_new += 1
-                    elif hunk_line.startswith(' ') or (hunk_line and not hunk_line.startswith('\\')):
+                    elif hunk_line.startswith(' ') or hunk_line.strip() == '':
+                        actual_old += 1
+                        actual_new += 1
+                    elif not hunk_line.startswith('\\'):
+                        # Context line without proper prefix
                         actual_old += 1
                         actual_new += 1
                 
@@ -99,10 +121,18 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
                 i = j
             else:
                 # Invalid hunk header, keep as is
+                if verbose:
+                    print(f"Warning: Invalid hunk header: '{line}'")
                 fixed_lines.append(line)
                 i += 1
         else:
-            # Other lines (comments, etc.)
+            # Other lines
+            # Skip lines that look like they might be part of a truncated explanation
+            if i == len(lines) - 1 and line.strip() and not line.startswith(('+', '-', ' ', '\\')):
+                if verbose:
+                    print(f"Skipping potential truncation artifact: '{line}'")
+                i += 1
+                continue
             fixed_lines.append(line)
             i += 1
     
@@ -246,3 +276,81 @@ def extract_simple_changes(patch_text: str) -> List[Tuple[str, str, str]]:
         i += 1
     
     return changes
+
+
+def attempt_patch_reconstruction(patch_text: str, repo_root: str, verbose: bool = False) -> str:
+    """
+    Attempt to reconstruct a truncated patch by analyzing what was changed.
+    
+    Args:
+        patch_text: The truncated patch text
+        repo_root: Repository root path
+        verbose: Enable verbose output
+        
+    Returns:
+        Reconstructed patch text (may still be incomplete)
+    """
+    import os
+    from pathlib import Path
+    
+    # Extract what we can from the truncated patch
+    changes = extract_simple_changes(patch_text)
+    
+    if not changes and verbose:
+        print("Could not extract any changes from truncated patch")
+        return patch_text
+    
+    # Group changes by file
+    file_changes = {}
+    for filename, old_line, new_line in changes:
+        if filename not in file_changes:
+            file_changes[filename] = []
+        file_changes[filename].append((old_line, new_line))
+    
+    # Try to reconstruct a complete patch
+    reconstructed_lines = []
+    
+    for filename, changes_list in file_changes.items():
+        file_path = Path(repo_root) / filename
+        
+        if not file_path.exists():
+            if verbose:
+                print(f"Warning: File {filename} not found, skipping reconstruction")
+            continue
+        
+        # Read the file content
+        try:
+            with open(file_path, 'r') as f:
+                file_lines = f.readlines()
+        except Exception as e:
+            if verbose:
+                print(f"Error reading {filename}: {e}")
+            continue
+        
+        # Create a simple patch for this file
+        reconstructed_lines.append(f"--- a/{filename}")
+        reconstructed_lines.append(f"+++ b/{filename}")
+        
+        # Find and replace each change
+        for old_line, new_line in changes_list:
+            # Find the line number
+            for i, file_line in enumerate(file_lines):
+                if file_line.rstrip() == old_line.rstrip():
+                    # Found the line to change
+                    line_num = i + 1
+                    
+                    # Create a simple hunk
+                    reconstructed_lines.append(f"@@ -{line_num},1 +{line_num},1 @@")
+                    reconstructed_lines.append(f"-{old_line}")
+                    reconstructed_lines.append(f"+{new_line}")
+                    break
+        else:
+            if verbose:
+                print(f"Warning: Could not find line '{old_line}' in {filename}")
+    
+    if reconstructed_lines:
+        if verbose:
+            print(f"Reconstructed patch with {len(file_changes)} file(s)")
+        return '\n'.join(reconstructed_lines)
+    
+    return patch_text

@@ -113,7 +113,7 @@ class ApplyPatchNode:
                 console.print(f"[red]✗ Failed to apply patch (step {step_number})[/red]")
                 
                 if error_details:
-                    console.print("[red]Git apply error:[/red]")
+                    console.print("[red]Git apply error details:[/red]")
                     # Parse and format git error messages
                     for line in error_details.split('\n'):
                         if line.strip():
@@ -127,18 +127,21 @@ class ApplyPatchNode:
                     # Provide specific hints based on error type
                     if "hunk" in error_details.lower():
                         console.print("\n[yellow]💡 Hint:[/yellow] The patch context doesn't match the current file content.")
-                        console.print("   This often means the file has changed since the patch was created.")
+                        console.print("   This often means the file has changed since the patch was created or the patch is out of date.")
                     elif "does not exist" in error_details.lower() or "not found" in error_details.lower():
-                        console.print("\n[yellow]💡 Hint:[/yellow] The file specified in the patch doesn't exist.")
-                        console.print("   Check if the file path is correct or if the file was deleted.")
+                        console.print("\n[yellow]💡 Hint:[/yellow] A file in the patch could not be found.")
+                        console.print("   Check if the file path is correct or if the file was moved or deleted.")
                     elif "already exists" in error_details.lower():
-                        console.print("\n[yellow]💡 Hint:[/yellow] Trying to create a file that already exists.")
+                        console.print("\n[yellow]💡 Hint:[/yellow] The patch is trying to create a file that already exists.")
+                    elif "corrupt patch" in error_details.lower():
+                        console.print("\n[yellow]💡 Hint:[/yellow] The patch format is corrupted or truncated.")
+                        console.print("   The LLM may have generated an incomplete patch.")
                 else:
                     console.print("[yellow]Possible reasons:[/yellow]")
-                    console.print("  • File content doesn't match patch expectations")
-                    console.print("  • Tests may already be fixed")
-                    console.print("  • Invalid patch format")
-                    console.print("  • File paths may be incorrect")
+                    console.print("  • File content doesn't match the patch context (patch is outdated)")
+                    console.print("  • The failing tests might have already been fixed by a prior step")
+                    console.print("  • The patch format might be invalid or corrupted")
+                    console.print("  • File paths in the patch could be incorrect")
             else:
                 console.print(f"[red]✗ Failed to apply patch (step {step_number})[/red]")
                 console.print("[dim]Run with --verbose for detailed error information[/dim]")

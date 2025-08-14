@@ -1,0 +1,6 @@
+# Minimal test configuration for verifying the evaluation script
+# Single repository for quick testing (~30 seconds)
+
+runs:
+  - name: "Calculator Demo (Minimal Test)"
+    path: "./examples/sample_repos/demo-repo"

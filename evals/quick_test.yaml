@@ -1,0 +1,12 @@
+# Quick test configuration for Milestone D verification
+# A smaller subset of repos for faster testing (~3 minutes)
+
+runs:
+  - name: "Math Operations (Quick Test)"
+    path: "./examples/demos/demo_math_ops"
+    
+  - name: "String Operations (Quick Test)"
+    path: "./examples/demos/demo_string_ops"
+    
+  - name: "Calculator Sample"
+    path: "./examples/sample_repos/demo-repo"

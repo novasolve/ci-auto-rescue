@@ -1,0 +1,105 @@
+{
+  "release": {
+    "version": "v0.1.0-alpha",
+    "date": "2025-01-13",
+    "milestone": "A - Local E2E Happy Path",
+    "type": "alpha",
+    "branch": "release/v0.1.0-alpha",
+    "tag": "v0.1.0-alpha",
+    "commit": "0bc035d33fd8fa2e4cbc22e414a08189dbb9b0c5"
+  },
+  "metadata": {
+    "description": "First alpha release marking completion of Milestone A - Core agent loop operational",
+    "success_rate": "70-85%",
+    "performance": "30-60 seconds per iteration",
+    "token_usage": "2000-4000 tokens per attempt",
+    "cost_per_fix": "$0.05 (GPT-4)"
+  },
+  "features": {
+    "core": [
+      "Six-stage agent loop (Planner → Actor → Critic → Apply → RunTests → Reflect)",
+      "Multi-LLM support (OpenAI GPT-4/5, Anthropic Claude 3)",
+      "Git integration with automatic branch management",
+      "Comprehensive telemetry and logging",
+      "Safety features and limits"
+    ],
+    "cli": [
+      "nova fix command",
+      "nova eval command",
+      "Rich terminal output",
+      "Configurable options (max-iters, timeout, verbose)"
+    ],
+    "safety": [
+      "Protected files (.github/, setup.py, .env)",
+      "Size limits (1000 lines, 10 files)",
+      "Timeout protection",
+      "Clean rollback on failure",
+      "Critic review system"
+    ]
+  },
+  "completed_issues": [
+    "OS-832: Seed failing tests into Planner",
+    "OS-833: Branch & revert safety",
+    "OS-834: Apply/commit loop", 
+    "OS-835: Global timeout & max-iters",
+    "OS-836: Smoke run on sample repo"
+  ],
+  "linear_task": {
+    "id": "NOV-706",
+    "identifier": "NOV-706",
+    "title": "Release v0.1.0-alpha - Milestone A Complete",
+    "url": "https://linear.app/nova-solve/issue/NOV-706/release-v010-alpha-milestone-a-complete"
+  },
+  "files": {
+    "documentation": [
+      "RELEASE_NOTES_v0.1.0-alpha.md",
+      "CHANGELOG.md",
+      "README.md",
+      "RELEASE_SUMMARY.md",
+      "RELEASE_MANIFEST_v0.1.0-alpha.json"
+    ],
+    "core_implementation": [
+      "src/nova/cli.py",
+      "src/nova/config.py",
+      "src/nova/agent/llm_client.py",
+      "src/nova/agent/llm_agent_enhanced.py",
+      "src/nova/agent/state.py",
+      "src/nova/nodes/planner.py",
+      "src/nova/nodes/actor.py",
+      "src/nova/nodes/critic.py",
+      "src/nova/nodes/apply_patch.py",
+      "src/nova/nodes/run_tests.py",
+      "src/nova/nodes/reflect.py"
+    ]
+  },
+  "checksums": {
+    "note": "Run 'shasum -a 256 <file>' to verify file integrity",
+    "commands": [
+      "git rev-parse HEAD",
+      "git show-ref --tags | grep v0.1.0-alpha",
+      "find src/nova -name '*.py' -exec shasum -a 256 {} +"
+    ]
+  },
+  "dependencies": {
+    "python": ">=3.10",
+    "core": [
+      "typer",
+      "pydantic",
+      "rich",
+      "pytest",
+      "langchain",
+      "openai",
+      "anthropic"
+    ]
+  },
+  "archive": {
+    "instructions": [
+      "This release is preserved in multiple ways:",
+      "1. Git tag: v0.1.0-alpha",
+      "2. Release branch: release/v0.1.0-alpha",
+      "3. Git bundle: releases/v0.1.0-alpha.bundle",
+      "4. Snapshot directory: releases/v0.1.0-alpha/",
+      "5. GitHub release: https://github.com/nova-solve/ci-auto-rescue/releases/tag/v0.1.0-alpha"
+    ]
+  }
+}

@@ -538,6 +538,96 @@ def eval(
 
 
 @app.command()
+def config():
+    """
+    Display current Nova configuration and verify setup.
+    """
+    import os
+    from nova.config import get_settings
+    
+    console.print("[bold]Nova CI-Rescue Configuration Check[/bold]")
+    console.print("=" * 50)
+    
+    try:
+        settings = get_settings()
+        
+        # Check API keys
+        has_openai = bool(os.getenv("OPENAI_API_KEY"))
+        has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+        
+        if has_openai or has_anthropic:
+            console.print("✅ API Key: Configured ", style="green", end="")
+            if has_openai and has_anthropic:
+                console.print("(OpenAI + Anthropic)", style="dim")
+            elif has_openai:
+                console.print("(OpenAI)", style="dim")
+            else:
+                console.print("(Anthropic)", style="dim")
+        else:
+            console.print("❌ API Key: Not configured", style="red")
+            console.print("   Please set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env", style="yellow")
+        
+        # Display model configuration
+        console.print(f"✅ Model: {settings.default_llm_model}", style="green")
+        
+        # Display iteration and timeout settings
+        console.print(f"✅ Max Iterations: {settings.max_iters}", style="green")
+        console.print(f"✅ Timeout: {settings.run_timeout_sec}s", style="green")
+        console.print(f"✅ Test Timeout: {settings.test_timeout_sec}s", style="green")
+        
+        # Check telemetry directory
+        telemetry_dir = Path(settings.telemetry_dir)
+        if telemetry_dir.exists():
+            console.print(f"✅ Telemetry Dir: {telemetry_dir}", style="green")
+        else:
+            console.print(f"ℹ️  Telemetry Dir: {telemetry_dir} (will be created)", style="yellow")
+        
+        # Display allowed domains
+        if settings.allowed_domains:
+            console.print(f"✅ Allowed Domains: {', '.join(settings.allowed_domains[:3])}...", style="green")
+        
+        # Check for .env file
+        env_file = Path(".env")
+        if env_file.exists():
+            console.print(f"✅ Config File: .env found", style="green")
+        else:
+            console.print("ℹ️  Config File: Using environment variables", style="yellow")
+        
+        # Python version check
+        import sys
+        py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        if sys.version_info >= (3, 10):
+            console.print(f"✅ Python Version: {py_version}", style="green")
+        else:
+            console.print(f"⚠️  Python Version: {py_version} (3.10+ recommended)", style="yellow")
+        
+        # Git check
+        import subprocess
+        try:
+            git_version = subprocess.run(
+                ["git", "--version"], 
+                capture_output=True, 
+                text=True,
+                timeout=5
+            ).stdout.strip()
+            console.print(f"✅ Git: {git_version}", style="green")
+        except:
+            console.print("⚠️  Git: Not found or not accessible", style="yellow")
+        
+        console.print("\n[bold green]Configuration check complete![/bold green]")
+        
+        if not (has_openai or has_anthropic):
+            console.print("\n[yellow]⚠️  To get started, add your API key to .env file:[/yellow]")
+            console.print("   cp env.example .env")
+            console.print("   nano .env  # Add your API key")
+            raise typer.Exit(1)
+            
+    except Exception as e:
+        console.print(f"[red]Error checking configuration: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def version():
     """
     Show Nova CI-Rescue version.

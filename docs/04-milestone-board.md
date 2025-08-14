@@ -6,16 +6,16 @@
 
 ## Milestone Summary
 
-| Milestone                       | Key Deliverables                                       | Status      | DR Audit    |
-| ------------------------------- | ------------------------------------------------------ | ----------- | ----------- |
-| **A. Local E2E**                | CLI seeded failing tests → green on sample repo        | ✅ Complete | Ready       |
-| **A-DR. Design Review**         | Technical review, code quality, test coverage audit    | Not Started | -           |
-| **B. Quiet CI & Telemetry**     | Quiet pytest logs, telemetry wiring, packaging cleanup | Not Started | Pending     |
-| **B-DR. Design Review**         | Telemetry audit, monitoring review, package validation | Not Started | -           |
-| **C. GitHub Action & PR Proof** | Action simulate job, Scorecard PR comment, safety caps | Not Started | Pending     |
-| **C-DR. Design Review**         | Security review, CI/CD best practices, safety audit    | Not Started | -           |
-| **D. Demo & Release**           | Eval polish, starter demo repo, proof checklist        | Not Started | Pending     |
-| **D-DR. Final Design Review**   | End-to-end review, release readiness, documentation    | Not Started | -           |
+| Milestone                       | Key Deliverables                                       | Status      | DR Audit |
+| ------------------------------- | ------------------------------------------------------ | ----------- | -------- |
+| **A. Local E2E**                | CLI seeded failing tests → green on sample repo        | ✅ Complete | Ready    |
+| **A-DR. Design Review**         | Technical review, code quality, test coverage audit    | Not Started | -        |
+| **B. Quiet CI & Telemetry**     | Quiet pytest logs, telemetry wiring, packaging cleanup | Not Started | Pending  |
+| **B-DR. Design Review**         | Telemetry audit, monitoring review, package validation | Not Started | -        |
+| **C. GitHub Action & PR Proof** | Action simulate job, Scorecard PR comment, safety caps | Not Started | Pending  |
+| **C-DR. Design Review**         | Security review, CI/CD best practices, safety audit    | Not Started | -        |
+| **D. Demo & Release**           | Eval polish, starter demo repo, proof checklist        | Not Started | Pending  |
+| **D-DR. Final Design Review**   | End-to-end review, release readiness, documentation    | Not Started | -        |
 
 ## Issue Breakdown - Happy Path (Must-Have)
 
@@ -46,8 +46,9 @@
   - AC: `.nova/<run>/trace.jsonl` reconstructs full loop; per-step artifacts present
 - **OS-839** - B3 — Packaging cleanup _(must-have, packaging)_ - 1h
   - AC: Fresh venv `pip install -e .` yields working `nova` CLI without errors
-- **OS-840** - B4 — README Quickstart _(docs, must-have)_ - 2h
+- ✅ **OS-840** - B4 — README Quickstart _(docs, must-have)_ - 2h
   - AC: New user gets green run locally in ≤15 minutes
+  - **COMPLETE**: Added comprehensive 10-step quickstart guide with troubleshooting tips
 
 ### Milestone B-DR: Design Review Audit
 

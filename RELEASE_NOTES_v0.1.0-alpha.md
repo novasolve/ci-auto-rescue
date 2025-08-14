@@ -4,7 +4,7 @@
 
 **Release Date:** January 13, 2025  
 **Version:** v0.1.0-alpha  
-**Type:** Pre-release / Development Milestone  
+**Type:** Pre-release / Development Milestone
 
 ---
 
@@ -19,32 +19,37 @@ Nova CI-Rescue can now autonomously detect failing tests, generate fixes using L
 ## ✨ Key Features Delivered
 
 ### 🎯 Core Agent Loop Implementation
+
 - **Six-Stage Autonomous Workflow**: Planner → Actor → Critic → Apply → RunTests → Reflect
 - **LLM Integration**: Support for both OpenAI (GPT-4/5) and Anthropic (Claude 3) models
 - **Intelligent Planning**: Automated analysis of test failures and strategic fix generation
 - **Safety Reviews**: Built-in critic system to validate patches before application
 
 ### 🛠 CLI Interface (`nova fix`)
+
 - **Simple Command**: `nova fix /path/to/repo` - that's all you need!
-- **Configurable Options**: 
+- **Configurable Options**:
   - `--max-iters`: Control iteration limit (default: 6)
   - `--timeout`: Set execution timeout (default: 1200s)
   - `--verbose`: Detailed output mode
   - `--no-telemetry`: Privacy-focused operation
 
 ### 🔄 Git Integration & Safety
+
 - **Automatic Branch Creation**: Creates `nova-fix/<timestamp>` branches
 - **Clean Rollback**: Safe cancellation with Ctrl+C
 - **Commit Tracking**: Each fix step creates a separate commit
 - **Branch Preservation**: Successful fixes preserved for review
 
 ### 📊 Telemetry & Observability
+
 - **Comprehensive Logging**: JSONL event tracking for all agent actions
 - **Artifact Storage**: Patches saved in `.nova/<run>/diffs/`
 - **Test Reports**: JUnit-compatible test results
 - **Performance Metrics**: Timing and iteration tracking
 
 ### 🧪 Test Runner Integration
+
 - **Pytest Support**: Native integration with Python's most popular test framework
 - **Failure Detection**: Automatic identification of failing tests
 - **Progress Tracking**: Real-time test status updates
@@ -64,6 +69,7 @@ Nova CI-Rescue can now autonomously detect failing tests, generate fixes using L
 ## 🔧 Technical Accomplishments
 
 ### Completed Linear Issues (Milestone A)
+
 - ✅ **OS-832** - Seed failing tests into Planner
 - ✅ **OS-833** - Branch & revert safety
 - ✅ **OS-834** - Apply/commit loop
@@ -71,12 +77,15 @@ Nova CI-Rescue can now autonomously detect failing tests, generate fixes using L
 - ✅ **OS-836** - Smoke run on sample repo
 
 ### Architecture Components
+
 1. **Agent System** (`src/nova/agent/`)
+
    - `llm_client.py` - Unified LLM interface
    - `llm_agent_enhanced.py` - Production agent with all nodes
    - `state.py` - Comprehensive state management
 
 2. **Node Implementations** (`src/nova/nodes/`)
+
    - `planner.py` - Test analysis and strategy
    - `actor.py` - Patch generation
    - `critic.py` - Safety review
@@ -85,6 +94,7 @@ Nova CI-Rescue can now autonomously detect failing tests, generate fixes using L
    - `reflect.py` - Loop control
 
 3. **CLI & Configuration**
+
    - `cli.py` - Main entry point with rich output
    - `config.py` - Environment and settings management
 
@@ -99,6 +109,7 @@ Nova CI-Rescue can now autonomously detect failing tests, generate fixes using L
 ## 🚀 Quick Start
 
 ### Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/nova-solve/ci-auto-rescue.git
@@ -113,6 +124,7 @@ cp env.example .env
 ```
 
 ### Basic Usage
+
 ```bash
 # Fix failing tests in current directory
 nova fix
@@ -129,12 +141,14 @@ nova eval --repos eval-config.yaml
 ## 🔬 Demo & Validation
 
 ### Test Coverage
+
 - ✅ Unit tests for all core components
 - ✅ Integration tests for agent loop
 - ✅ End-to-end validation on sample repositories
 - ✅ Demo workspace with intentionally failing tests
 
 ### Sample Fix Session
+
 ```bash
 $ nova fix ./demo_test_repo
 🚀 Nova CI-Rescue v0.1.0-alpha
@@ -188,12 +202,14 @@ This is an **alpha release** focused on the happy path. Current limitations incl
 ## 📊 Quality Metrics
 
 ### Code Quality
+
 - **Test Coverage**: 85% for core components
 - **Type Hints**: Full typing throughout codebase
 - **Documentation**: Comprehensive docstrings and guides
 - **Linting**: Passes flake8 and mypy checks
 
 ### Reliability
+
 - **Error Handling**: Graceful degradation with detailed logging
 - **Interrupt Safety**: Clean Ctrl+C handling
 - **State Recovery**: Persistent state across iterations
@@ -204,18 +220,21 @@ This is an **alpha release** focused on the happy path. Current limitations incl
 ## 🔮 What's Next (Upcoming Milestones)
 
 ### Milestone B: Quiet CI & Telemetry (v0.2.0)
+
 - Optimized pytest output for CI environments
 - Enhanced telemetry with detailed artifacts
 - Package distribution improvements
 - Comprehensive quickstart documentation
 
 ### Milestone C: GitHub Action & PR Proof (v0.3.0)
+
 - GitHub Action workflow integration
 - Automated PR creation with fixes
 - CI/CD pipeline support
 - PR comment with fix scorecard
 
 ### Milestone D: Demo & Release (v1.0.0)
+
 - Production-ready release
 - Multi-language support
 - Advanced fix strategies
@@ -233,12 +252,14 @@ This is an **alpha release** focused on the happy path. Current limitations incl
 ## 📚 Documentation
 
 ### Available Guides
+
 - [Implementation Guide](IMPLEMENTATION_GUIDE.md) - Technical deep dive
 - [Happy Path Documentation](CI_RESCUE_HAPPY_PATH.md) - Complete specification
 - [Action Plan](ACTION_PLAN.md) - Development roadmap
 - [Architecture Overview](docs/02-architecture-diagram.md) - System design
 
 ### API Documentation
+
 - [LLM Client API](src/nova/agent/llm_client.py) - LLM integration
 - [Agent State](src/nova/agent/state.py) - State management
 - [CLI Reference](src/nova/cli.py) - Command-line interface
@@ -262,6 +283,7 @@ This project is currently in development. License information will be added in t
 ## 🙏 Acknowledgments
 
 Special thanks to:
+
 - OpenAI and Anthropic for LLM APIs
 - The pytest community for the excellent testing framework
 - All early testers and contributors
@@ -278,4 +300,4 @@ Special thanks to:
 
 **🎊 Thank you for trying Nova CI-Rescue v0.1.0-alpha!**
 
-*This is the beginning of autonomous test fixing. Stay tuned for more exciting updates!*
+_This is the beginning of autonomous test fixing. Stay tuned for more exciting updates!_

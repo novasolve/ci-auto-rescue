@@ -1,8 +1,10 @@
 """
 Reflect node for Nova CI-Rescue agent workflow.
+Analyzes test results and decides whether to continue or stop the agent loop.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Tuple
+from datetime import datetime
 from rich.console import Console
 
 from nova.agent.state import AgentState
@@ -12,134 +14,179 @@ console = Console()
 
 
 class ReflectNode:
-    """Node responsible for deciding whether to continue or stop the loop."""
+    """Node responsible for deciding whether to continue or stop the agent loop."""
     
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-    
+        
     def execute(
         self,
         state: AgentState,
-        telemetry: Optional[JSONLLogger] = None
-    ) -> Dict[str, Any]:
+        test_results: Dict[str, Any],
+        logger: JSONLLogger
+    ) -> Tuple[bool, str, Dict[str, Any]]:
         """
-        Analyze current state and decide next action.
+        Analyze test results and decide next action.
         
         Args:
             state: Current agent state
-            telemetry: Optional telemetry logger
+            test_results: Results from the last test run
+            logger: Telemetry logger
             
         Returns:
-            Decision dictionary with action and reason
+            Tuple of (should_continue: bool, decision: str, metadata: dict)
         """
         iteration = state.current_iteration
         
-        # Get test results from last run
-        if state.test_results:
-            last_result = state.test_results[-1]
-            failures_before = last_result.get("failures_before", 0)
-            failures_after = last_result.get("failures_after", 0)
-        else:
-            failures_before = state.total_failures
-            failures_after = state.total_failures
+        # Extract metrics from test results
+        current_failures = test_results.get("failure_count", 0)
+        previous_failures = test_results.get("previous_failure_count", 0)
+        tests_fixed = test_results.get("tests_fixed", [])
+        new_failures = test_results.get("new_failures", [])
+        
+        # Calculate progress metrics
+        progress_made = current_failures < previous_failures
+        all_fixed = current_failures == 0
+        regression = len(new_failures) > 0
+        
+        # Check termination conditions
+        timeout_reached = state.check_timeout()
+        max_iterations_reached = iteration >= state.max_iterations
+        
+        # Calculate time elapsed
+        elapsed_seconds = (datetime.now() - state.start_time).total_seconds()
         
         # Log reflect start
-        if telemetry:
-            telemetry.log_event("reflect_start", {
-                "iteration": iteration,
-                "failures_before": failures_before,
-                "failures_after": failures_after,
-                "timeout_remaining": state.timeout_seconds - (state.start_time.timestamp() if state.start_time else 0)
-            })
+        logger.log_event("reflect_start", {
+            "iteration": iteration,
+            "current_failures": current_failures,
+            "previous_failures": previous_failures,
+            "tests_fixed_count": len(tests_fixed),
+            "new_failures_count": len(new_failures),
+            "progress_made": progress_made,
+            "all_fixed": all_fixed,
+            "regression": regression,
+            "timeout_reached": timeout_reached,
+            "max_iterations_reached": max_iterations_reached,
+            "elapsed_seconds": elapsed_seconds,
+            "timestamp": datetime.utcnow().isoformat()
+        })
         
         if self.verbose:
-            console.print(f"[cyan]🤔 Reflecting on progress...[/cyan]")
+            console.print(f"\n[cyan]🤔 Reflecting on results...[/cyan]")
         
         # Decision logic
-        decision = {"action": "continue", "reason": "unknown"}
+        should_continue = False
+        decision = ""
+        reason = ""
         
-        # Check if all tests are passing
-        if state.total_failures == 0:
-            decision = {
-                "action": "success",
-                "reason": "all_tests_passing",
-                "message": f"All tests passing! Fixed in {iteration} iteration(s)."
-            }
+        if all_fixed:
+            # Success - all tests passing
+            should_continue = False
+            decision = "success"
+            reason = "all_tests_passing"
             state.final_status = "success"
+            
             if self.verbose:
-                console.print(f"[bold green]✅ {decision['message']}[/bold green]")
-        
-        # Check timeout
-        elif state.check_timeout():
-            decision = {
-                "action": "stop",
-                "reason": "timeout",
-                "message": f"Timeout reached ({state.timeout_seconds}s)"
-            }
+                console.print(f"[bold green]✅ Success! All tests are now passing.[/bold green]")
+                
+        elif timeout_reached:
+            # Timeout reached
+            should_continue = False
+            decision = "stop"
+            reason = "timeout"
             state.final_status = "timeout"
-            console.print(f"[red]⏰ {decision['message']}[/red]")
-        
-        # Check max iterations
-        elif iteration >= state.max_iterations:
-            decision = {
-                "action": "stop",
-                "reason": "max_iterations",
-                "message": f"Maximum iterations reached ({state.max_iterations})"
-            }
+            
+            if self.verbose:
+                console.print(f"[red]⏰ Timeout reached ({state.timeout_seconds}s)[/red]")
+                
+        elif max_iterations_reached:
+            # Max iterations reached
+            should_continue = False
+            decision = "stop"
+            reason = "max_iterations"
             state.final_status = "max_iters"
-            console.print(f"[red]🔄 {decision['message']}[/red]")
-        
-        # Check if we made progress
-        elif failures_after < failures_before:
-            fixed_count = failures_before - failures_after
-            decision = {
-                "action": "continue",
-                "reason": "progress_made",
-                "message": f"Fixed {fixed_count} test(s), {failures_after} remaining"
-            }
+            
             if self.verbose:
-                console.print(f"[green]✓ {decision['message']}[/green]")
-                console.print(f"[dim]Continuing to iteration {iteration + 1}...[/dim]")
-        
-        # No progress made
+                console.print(f"[red]🔄 Maximum iterations reached ({state.max_iterations})[/red]")
+                
+        elif not progress_made and iteration >= 3:
+            # No progress after 3 iterations
+            should_continue = False
+            decision = "stop"
+            reason = "no_progress"
+            state.final_status = "no_progress"
+            
+            if self.verbose:
+                console.print(f"[yellow]⚠ No progress after {iteration} iterations, stopping[/yellow]")
+                
         else:
-            decision = {
-                "action": "continue",
-                "reason": "no_progress",
-                "message": f"No progress: {failures_after} test(s) still failing"
-            }
-            if self.verbose:
-                console.print(f"[yellow]⚠ {decision['message']}[/yellow]")
-                console.print(f"[dim]Trying different approach in iteration {iteration + 1}...[/dim]")
+            # Continue trying
+            should_continue = True
+            decision = "continue"
+            
+            if progress_made:
+                reason = "progress_made"
+                if self.verbose:
+                    console.print(f"[green]✓ Progress made: fixed {len(tests_fixed)} test(s)[/green]")
+            else:
+                reason = "retry"
+                if self.verbose:
+                    console.print(f"[yellow]Retrying with different approach...[/yellow]")
+        
+        # Build metadata
+        metadata = {
+            "iteration": iteration,
+            "decision": decision,
+            "reason": reason,
+            "should_continue": should_continue,
+            "metrics": {
+                "current_failures": current_failures,
+                "previous_failures": previous_failures,
+                "tests_fixed": len(tests_fixed),
+                "new_failures": len(new_failures),
+                "total_patches_applied": len(state.patches_applied),
+                "elapsed_seconds": elapsed_seconds,
+                "iterations_remaining": state.max_iterations - iteration,
+                "timeout_remaining": max(0, state.timeout_seconds - elapsed_seconds)
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
         
         # Log reflect completion
-        if telemetry:
-            telemetry.log_event("reflect_complete", {
-                "iteration": iteration,
-                "decision": decision["action"],
-                "reason": decision["reason"],
-                "failures_remaining": state.total_failures,
-                "patches_applied": len(state.patches_applied)
-            })
+        logger.log_event("reflect_complete", metadata)
         
-        return decision
+        # Display summary if stopping
+        if not should_continue and self.verbose:
+            console.print(f"\n[bold]Summary:[/bold]")
+            console.print(f"  • Iterations: {iteration}/{state.max_iterations}")
+            console.print(f"  • Patches applied: {len(state.patches_applied)}")
+            console.print(f"  • Tests fixed: {sum(len(r.get('tests_fixed', [])) for r in [test_results])}")
+            console.print(f"  • Remaining failures: {current_failures}")
+            
+            minutes, seconds = divmod(int(elapsed_seconds), 60)
+            console.print(f"  • Time elapsed: {minutes}m {seconds}s")
+        
+        return should_continue, decision, metadata
 
 
-def reflect_node(
+def reflect(
     state: AgentState,
-    telemetry: Optional[JSONLLogger] = None,
+    test_results: Dict[str, Any],
+    logger: JSONLLogger,
     verbose: bool = False
-) -> Dict[str, Any]:
+) -> Tuple[bool, str, Dict[str, Any]]:
     """
-    Convenience function to execute the reflect node.
+    Convenience function to reflect on results using the ReflectNode.
     
     Args:
         state: Current agent state
-        telemetry: Optional telemetry logger
+        test_results: Results from the last test run
+        logger: Telemetry logger
         verbose: Enable verbose output
         
     Returns:
-        Decision dictionary
+        Tuple of (should_continue: bool, decision: str, metadata: dict)
     """
     node = ReflectNode(verbose=verbose)
-    return node.execute(state, telemetry)
+    return node.execute(state, test_results, logger)

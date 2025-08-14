@@ -94,7 +94,8 @@ class EnhancedLLMAgent:
             system_prompt = (
                 "You are a coding assistant who writes fixes as unified diffs. "
                 "Fix the SOURCE CODE to make tests pass. "
-                "Generate only valid unified diff patches with proper file paths and hunk headers."
+                "Generate only valid unified diff patches with proper file paths and hunk headers. "
+                "Ensure that each diff hunk header's line counts exactly match the changes made."
             )
             
             patch_diff = self.llm.complete(

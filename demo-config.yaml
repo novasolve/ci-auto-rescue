@@ -1,0 +1,23 @@
+# Nova CI-Rescue Configuration for Demo
+# This configuration will be used to fix the failing calculator tests
+
+# LLM model to use (you can change this to claude-3-sonnet if you have Anthropic API key)
+model: gpt-4
+
+# Give it a reasonable timeout for the demo
+timeout: 600 # 10 minutes
+
+# Allow up to 5 iterations to fix all the tests
+max_iters: 5
+
+# Safety limits - reasonable for this small demo
+max_changed_lines: 100 # The calculator.py is small
+max_changed_files: 2 # Only calculator.py should need changes
+
+# Don't modify test files or git/build directories
+blocked_paths:
+  - "tests/*" # Don't modify the test files themselves
+  - ".git/*" # Never touch git internals
+  - "__pycache__/*" # Ignore Python cache
+  - "*.pyc" # Ignore compiled Python files
+  - ".pytest_cache/*" # Ignore pytest cache

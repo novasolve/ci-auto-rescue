@@ -1,0 +1,25 @@
+# Test evaluation configuration for Nova CI-Rescue
+# This file demonstrates different ways to specify repositories
+
+runs:
+  # Local repository with custom settings
+  - name: "Demo Calculator Project"
+    path: "../demo-repo"
+    max_iters: 5
+    timeout: 600
+    
+  # Another local repository
+  - name: "Demo Test Repo"
+    path: "./demo_test_repo"
+    max_iters: 3
+    timeout: 300
+    
+  # Simple string format for local path
+  - "./demo_nova_test"
+  
+  # URL format (commented out for testing)
+  # - name: "Remote Sample"
+  #   url: "https://github.com/example/test-repo.git"
+  #   branch: "main"
+  #   max_iters: 6
+  #   timeout: 1200

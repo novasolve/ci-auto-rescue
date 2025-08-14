@@ -5,10 +5,16 @@ Nova CI-Rescue CLI interface.
 
 import os
 import re
+import sys
+import json
+import yaml
+import time
+import subprocess
+import tempfile
 import typer
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from rich.console import Console
 from rich.table import Table
 
@@ -732,11 +738,6 @@ def eval(
     """
     Evaluate Nova on multiple repositories.
     """
-    import yaml
-    import json
-    from datetime import datetime, timezone
-    from rich.table import Table
-    
     # Load configuration file if provided
     config_data = None
     if config_file is not None:
@@ -786,31 +787,97 @@ def eval(
     summary_table.add_column("Tests Fixed", style="magenta")
     
     for entry in repos_list:
-        # Determine repository path and optional config overrides
-        repo_path = Path(entry.get("path") or entry.get("repo") or entry.get("repo_path", "."))
-        if not repo_path.is_absolute():
-            # Resolve relative paths relative to the YAML file location
-            repo_path = (repos_file.parent / repo_path).resolve()
+        # Parse entry - support both string and dict format
+        repo_url = None
+        repo_path = None
+        branch = None
+        name = None
+        temp_dir = None
         
-        name = entry.get("name") or repo_path.name
-        max_iters = entry.get("max_iters") or entry.get("max_iterations", 6)
-        timeout = entry.get("timeout", 1200)
+        if isinstance(entry, str):
+            # Simple string format - could be path or URL
+            source = entry
+            if source.startswith("http") or source.startswith("git@"):
+                repo_url = source
+                name = Path(source).stem  # Extract name from URL
+            else:
+                repo_path = Path(source)
+                name = repo_path.name
+        else:
+            # Dictionary format with detailed config
+            repo_url = entry.get("url")
+            repo_path = entry.get("path") or entry.get("repo") or entry.get("repo_path")
+            branch = entry.get("branch")
+            name = entry.get("name")
+            
+            # Determine source
+            if repo_url:
+                if not name:
+                    name = Path(repo_url).stem
+            elif repo_path:
+                repo_path = Path(repo_path)
+                if not name:
+                    name = repo_path.name
+            else:
+                console.print(f"[red]Invalid entry: must have 'url' or 'path'[/red]")
+                continue
         
-        # Skip non-existent directories
-        if not repo_path.exists():
-            console.print(f"[yellow]⚠️ Skipping {name}: path does not exist ({repo_path})[/yellow]")
-            results.append({
-                "name": name,
-                "repo": str(repo_path),
-                "success": False,
-                "duration": 0,
-                "iterations": 0,
-                "tests_fixed": 0,
-                "initial_failures": 0,
-                "error": "path_not_found"
-            })
-            total_failed += 1
-            continue
+        max_iters = entry.get("max_iters", 6) if isinstance(entry, dict) else 6
+        timeout = entry.get("timeout", 1200) if isinstance(entry, dict) else 1200
+        
+        # Clone repository if URL provided
+        if repo_url:
+            console.print(f"\n[bold]Cloning {name} from {repo_url}...[/bold]")
+            temp_dir = tempfile.TemporaryDirectory(prefix=f"nova_eval_{name}_")
+            clone_cmd = ["git", "clone", "--depth=1"]
+            if branch:
+                clone_cmd.extend(["-b", branch])
+            clone_cmd.extend([repo_url, temp_dir.name])
+            
+            result = subprocess.run(clone_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                console.print(f"[red]❌ Failed to clone {name}: {result.stderr}[/red]")
+                results.append({
+                    "name": name,
+                    "repo": repo_url,
+                    "success": False,
+                    "duration": 0,
+                    "iterations": 0,
+                    "tests_fixed": 0,
+                    "initial_failures": 0,
+                    "error": "clone_failed"
+                })
+                total_failed += 1
+                if temp_dir:
+                    temp_dir.cleanup()
+                continue
+            repo_path = Path(temp_dir.name)
+        else:
+            # Use local path
+            if not repo_path.is_absolute():
+                # Resolve relative paths relative to the YAML file location
+                repo_path = (repos_file.parent / repo_path).resolve()
+            
+            # Check if local path exists
+            if not repo_path.exists():
+                console.print(f"[yellow]⚠️ Skipping {name}: path does not exist ({repo_path})[/yellow]")
+                results.append({
+                    "name": name,
+                    "repo": str(repo_path),
+                    "success": False,
+                    "duration": 0,
+                    "iterations": 0,
+                    "tests_fixed": 0,
+                    "initial_failures": 0,
+                    "error": "path_not_found"
+                })
+                total_failed += 1
+                continue
+            
+            # Checkout branch if specified for local repo
+            if branch:
+                checkout_cmd = ["git", "-C", str(repo_path), "checkout", branch]
+                subprocess.run(checkout_cmd, capture_output=True)
         
         # Announce which repo is being processed
         console.print(f"\n[bold]Running Nova on [cyan]{name}[/cyan]...[/bold]")
@@ -822,9 +889,8 @@ def eval(
         start_time = datetime.now(timezone.utc)
         
         # Run nova fix on this repository
-        import subprocess
         cmd = [
-            "python", "-m", "nova", "fix",
+            sys.executable, "-m", "nova", "fix",
             str(repo_path),
             "--max-iters", str(max_iters),
             "--timeout", str(timeout)
@@ -901,7 +967,7 @@ def eval(
         # Append result metrics
         results.append({
             "name": name,
-            "repo": str(repo_path),
+            "repo": repo_url or str(repo_path),
             "success": success_flag,
             "duration": elapsed,
             "iterations": iter_count,
@@ -910,6 +976,10 @@ def eval(
             "max_iterations": max_iters,
             "timeout": timeout
         })
+        
+        # Clean up temporary directory if we cloned a repo
+        if temp_dir:
+            temp_dir.cleanup()
     
     # Save all results to a JSON file with UTC timestamp
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -997,7 +1067,6 @@ def config():
             console.print("ℹ️  Config File: Using environment variables", style="yellow")
         
         # Python version check
-        import sys
         py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         if sys.version_info >= (3, 10):
             console.print(f"✅ Python Version: {py_version}", style="green")
@@ -1005,7 +1074,6 @@ def config():
             console.print(f"⚠️  Python Version: {py_version} (3.10+ recommended)", style="yellow")
         
         # Git check
-        import subprocess
         try:
             git_version = subprocess.run(
                 ["git", "--version"], 

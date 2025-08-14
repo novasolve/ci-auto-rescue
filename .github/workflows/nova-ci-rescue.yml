@@ -1,0 +1,149 @@
+name: Nova CI-Rescue
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+    inputs:
+      max_iterations:
+        description: 'Maximum number of fix iterations'
+        required: false
+        default: '6'
+      timeout:
+        description: 'Timeout in seconds'
+        required: false
+        default: '1200'
+
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  nova-fix:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install Nova CI-Rescue
+      run: |
+        pip install --upgrade pip
+        pip install -e .
+    
+    - name: Configure Nova
+      run: |
+        # Create .env file with API key
+        echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+        echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
+        
+        # Verify configuration
+        python -m nova config
+    
+    - name: Run Nova CI-Rescue
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        # Set iteration and timeout from inputs or defaults
+        MAX_ITERS="${{ github.event.inputs.max_iterations || '6' }}"
+        TIMEOUT="${{ github.event.inputs.timeout || '1200' }}"
+        
+        # Run Nova fix command
+        python -m nova fix . \
+          --max-iters "$MAX_ITERS" \
+          --timeout "$TIMEOUT" \
+          --verbose
+    
+    - name: Upload telemetry artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: nova-telemetry-${{ github.run_id }}
+        path: |
+          .nova/
+          telemetry/
+        retention-days: 7
+    
+    - name: Push fixes to PR branch
+      if: success()
+      run: |
+        # Check if nova-fix branch exists and has changes
+        if git show-ref --verify --quiet refs/heads/nova-fix-*; then
+          NOVA_BRANCH=$(git branch | grep nova-fix- | head -1 | tr -d ' ')
+          
+          # Check for changes
+          if [ -n "$(git diff HEAD..$NOVA_BRANCH)" ]; then
+            echo "Pushing fixes to PR branch..."
+            
+            # Configure git
+            git config --global user.name "Nova CI-Rescue Bot"
+            git config --global user.email "nova-bot@ci-rescue.com"
+            
+            # Cherry-pick commits from nova-fix branch
+            git checkout ${{ github.event.pull_request.head.ref || github.ref_name }}
+            git cherry-pick $NOVA_BRANCH
+            
+            # Push changes
+            git push origin HEAD
+            
+            echo "✅ Fixes pushed to PR branch"
+          else
+            echo "No changes to push"
+          fi
+        else
+          echo "No nova-fix branch found"
+        fi
+
+  # Optional: Run evaluation on multiple test suites
+  nova-eval:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install Nova CI-Rescue
+      run: |
+        pip install --upgrade pip
+        pip install -e .
+    
+    - name: Configure Nova
+      run: |
+        echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+        echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
+    
+    - name: Run evaluation
+      if: hashFiles('evals/*.yaml') != ''
+      run: |
+        # Find and run evaluation configs
+        for eval_file in evals/*.yaml; do
+          if [ -f "$eval_file" ]; then
+            echo "Running evaluation: $eval_file"
+            python -m nova eval "$eval_file" --verbose || true
+          fi
+        done
+    
+    - name: Upload evaluation results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: nova-eval-results-${{ github.run_id }}
+        path: evals/results/
+        retention-days: 30

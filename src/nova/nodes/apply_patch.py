@@ -12,6 +12,7 @@ from nova.agent.state import AgentState
 from nova.tools.fs import apply_and_commit_patch
 from nova.tools.git import GitBranchManager
 from nova.tools.safety_limits import check_patch_safety, SafetyConfig
+from nova.telemetry.logger import JSONLLogger
 
 console = Console()
 
@@ -28,7 +29,9 @@ class ApplyPatchNode:
         state: AgentState, 
         patch_text: str,
         git_manager: Optional[GitBranchManager] = None,
-        skip_safety_check: bool = False
+        skip_safety_check: bool = False,
+        logger: Optional[JSONLLogger] = None,
+        iteration: int = 0
     ) -> Dict[str, Any]:
         """
         Apply an approved patch to the repository and commit it.
@@ -38,12 +41,40 @@ class ApplyPatchNode:
             patch_text: The unified diff text to apply
             git_manager: Optional GitBranchManager for committing
             skip_safety_check: Skip safety validation (use with caution)
+            logger: Optional telemetry logger
+            iteration: Current iteration number
             
         Returns:
             Dictionary with results including success status and changed files
         """
         # Increment step counter
         step_number = state.increment_step()
+        
+        # Log apply start event
+        if logger:
+            patch_lines = patch_text.split('\n')
+            patch_size = len(patch_lines)
+            
+            # Count changed files from patch
+            files_in_patch = set()
+            for line in patch_lines:
+                if line.startswith('+++') or line.startswith('---'):
+                    # Extract file path
+                    parts = line.split()
+                    if len(parts) >= 2 and not parts[1].startswith('/dev/null'):
+                        # Remove b/ or a/ prefix
+                        file_path = parts[1]
+                        if file_path.startswith('b/') or file_path.startswith('a/'):
+                            file_path = file_path[2:]
+                        files_in_patch.add(file_path)
+            
+            logger.log_event("apply_start", {
+                "iteration": iteration,
+                "step_number": step_number,
+                "patch_size": patch_size,
+                "files_count": len(files_in_patch),
+                "skip_safety_check": skip_safety_check
+            })
         
         if self.verbose:
             console.print(f"[cyan]Applying patch (step {step_number})...[/cyan]")
@@ -62,6 +93,15 @@ class ApplyPatchNode:
             if not is_safe:
                 console.print("[red]✗ Patch rejected by safety limits[/red]")
                 console.print(safety_message)
+                
+                # Log safety rejection
+                if logger:
+                    logger.log_event("patch_rejected", {
+                        "iteration": iteration,
+                        "step_number": step_number,
+                        "reason": "safety_violation",
+                        "safety_message": safety_message
+                    })
                 
                 result = {
                     "success": False,
@@ -138,11 +178,28 @@ class ApplyPatchNode:
             # Track the applied patch in state
             state.patches_applied.append(patch_text)
             
+            # Log successful patch application
+            if logger:
+                logger.log_event("patch_applied", {
+                    "iteration": iteration,
+                    "step_number": step_number,
+                    "changed_files": [str(f) for f in changed_files],
+                    "files_count": len(changed_files)
+                })
+            
             if self.verbose:
                 console.print(f"[green]✓ Applied and committed patch (step {step_number})[/green]")
                 if changed_files:
                     console.print(f"[dim]Changed files: {', '.join([f.name for f in changed_files])}[/dim]")
         else:
+            # Log failed patch application
+            if logger:
+                logger.log_event("patch_error", {
+                    "iteration": iteration,
+                    "step_number": step_number,
+                    "error_details": error_details if error_details else "Unknown error"
+                })
+            
             if self.verbose:
                 console.print(f"[red]✗ Failed to apply patch (step {step_number})[/red]")
                 

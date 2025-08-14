@@ -4,6 +4,7 @@ Nova CI-Rescue Enhanced CLI with full telemetry.
 Uses modular nodes for each stage of the agent loop.
 """
 
+import os
 import typer
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,7 @@ from nova.agent import AgentState
 from nova.telemetry.logger import JSONLLogger
 from nova.config import NovaSettings
 from nova.tools.git import GitBranchManager
+from nova.tools.safety_limits import SafetyLimits
 from nova.nodes import (
     PlannerNode,
     ActorNode,

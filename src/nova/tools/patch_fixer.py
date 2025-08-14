@@ -20,6 +20,14 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
     if not patch_text:
         return patch_text
     
+    # Clean up trailing garbage characters that LLMs sometimes add
+    patch_text = patch_text.rstrip()
+    # Remove common trailing artifacts like %, ```, etc
+    while patch_text and patch_text[-1] in '%`':
+        patch_text = patch_text[:-1]
+        if verbose:
+            print(f"Removed trailing '{patch_text[-1] if patch_text else ''}' character")
+    
     lines = patch_text.split('\n')
     fixed_lines = []
     current_file = None
@@ -136,7 +144,21 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
             fixed_lines.append(line)
             i += 1
     
-    return '\n'.join(fixed_lines)
+    # Remove any trailing junk characters in diff content lines (e.g., '%' from truncated output)
+    for idx, line in enumerate(fixed_lines):
+        if line.startswith(('+', '-', ' ')) and line.rstrip().endswith(('%', '`')):
+            if verbose:
+                print(f"Removing trailing artifact character from line: '{line}'")
+            # Strip trailing `%` or `` ` `` (and any trailing spaces) from the line
+            fixed_lines[idx] = line.rstrip('%` ')
+    
+    fixed_patch_text = '\n'.join(fixed_lines)
+    
+    # Ensure the patch ends with a newline (to avoid EOF issues in git apply)
+    if not fixed_patch_text.endswith('\n'):
+        fixed_patch_text += '\n'
+    
+    return fixed_patch_text
 
 
 def parse_hunk_header(line: str) -> Tuple[int, int, int, int]:

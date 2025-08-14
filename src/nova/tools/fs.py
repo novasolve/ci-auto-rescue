@@ -309,43 +309,35 @@ def apply_and_commit_patch(
                 print("Error: Empty patch provided")
             return False, []
         
-        # Try to fix common patch format issues
+        # Fix patch format issues (trailing artifacts, hunk count mismatches) before applying
         try:
             from nova.tools.patch_fixer import fix_patch_format, validate_patch, attempt_patch_reconstruction
             
-            # Validate the patch
-            is_valid, error_msg = validate_patch(diff_text)
+            # Always apply formatting fixes to the patch text first
+            diff_text_fixed = fix_patch_format(diff_text, verbose=verbose)
+            is_valid, error_msg = validate_patch(diff_text_fixed)
             if not is_valid:
                 if verbose:
                     print(f"Patch validation failed: {error_msg}")
-                    print("Attempting to fix patch format...")
-                
-                # Try to fix the patch
-                fixed_text = fix_patch_format(diff_text, verbose=verbose)
-                
-                # Validate the fixed patch
-                is_valid, error_msg = validate_patch(fixed_text)
-                if not is_valid:
-                    # If still invalid, try reconstruction as last resort
+                    print("Attempting patch reconstruction...")
+                # Try to reconstruct the patch if format fixing wasn't enough
+                reconstructed = attempt_patch_reconstruction(diff_text_fixed, str(repo_root), verbose=verbose)
+                is_valid2, error_msg2 = validate_patch(reconstructed)
+                if is_valid2:
+                    diff_text = reconstructed
                     if verbose:
-                        print(f"Fixed patch still invalid: {error_msg}")
-                        print("Attempting patch reconstruction...")
-                    reconstructed = attempt_patch_reconstruction(diff_text, str(repo_root), verbose=verbose)
-                    
-                    # Validate reconstructed patch
-                    is_valid, error_msg = validate_patch(reconstructed)
-                    if is_valid:
-                        diff_text = reconstructed
-                        if verbose:
-                            print("Patch reconstruction successful")
-                    else:
-                        if verbose:
-                            print(f"Could not fix or reconstruct patch: {error_msg}")
-                        return False, []
+                        print("Patch reconstruction successful")
                 else:
-                    diff_text = fixed_text
                     if verbose:
-                        print("Patch format fixed successfully")
+                        print(f"Could not fix or reconstruct patch: {error_msg2}")
+                    return False, []
+            else:
+                diff_text = diff_text_fixed
+                if verbose:
+                    if diff_text_fixed != diff_text:
+                        print("Patch format issues fixed")
+                    else:
+                        print("Patch format OK")
         except ImportError as e:
             # patch_fixer not available, proceed without fixing
             if verbose:

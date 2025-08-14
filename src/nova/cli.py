@@ -353,50 +353,13 @@ def fix(
             result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
             
             if not result["success"]:
-                # Try simple fixer as fallback
-                console.print(f"[yellow]Attempting simple fix fallback...[/yellow]")
-                try:
-                    from nova.agent.simple_fixer import SimpleFixer
-                    simple_fixer = SimpleFixer(repo_path)
-                    
-                    # Group failing tests by file
-                    tests_by_file = {}
-                    for test in state.failing_tests:
-                        file_path = test.get('file', '')
-                        if file_path not in tests_by_file:
-                            tests_by_file[file_path] = []
-                        tests_by_file[file_path].append(test)
-                    
-                    # Fix each file
-                    any_fixed = False
-                    for file_path, tests in tests_by_file.items():
-                        if simple_fixer.fix_test_file(file_path, tests):
-                            any_fixed = True
-                    
-                    if any_fixed:
-                        # Commit the changes
-                        import subprocess
-                        subprocess.run(["git", "add", "-A"], cwd=repo_path, capture_output=True)
-                        subprocess.run(["git", "commit", "-m", f"nova: simple fix (step {iteration})"], cwd=repo_path, capture_output=True)
-                        console.print(f"[green]✓ Applied simple fix successfully[/green]")
-                        result["success"] = True  # Mark as successful for the rest of the flow
-                        result["step_number"] = iteration
-                        result["changed_files"] = list(tests_by_file.keys())
-                    else:
-                        state.final_status = "patch_error"
-                        telemetry.log_event("patch_error", {
-                            "iteration": iteration,
-                            "step": result.get("step_number", 0)
-                        })
-                        break
-                except Exception as e:
-                    console.print(f"[red]Simple fix fallback failed: {e}[/red]")
-                    state.final_status = "patch_error"
-                    telemetry.log_event("patch_error", {
-                        "iteration": iteration,
-                        "step": result.get("step_number", 0)
-                    })
-                    break
+                console.print(f"[red]❌ Failed to apply patch[/red]")
+                state.final_status = "patch_error"
+                telemetry.log_event("patch_error", {
+                    "iteration": iteration,
+                    "step": result.get("step_number", 0)
+                })
+                break
             else:
                 # Log successful patch application (only if not already done by fallback)
                 console.print(f"[green]✓ Patch applied and committed (step {result['step_number']})[/green]")
@@ -524,9 +487,8 @@ def fix(
         # Ensure telemetry run is ended if not already done
         if telemetry and not success and (state is None or state.final_status is None):
             telemetry.end_run(success=False)
-        # Exit with error code 1 if the process did not succeed
-        if not success:
-            raise typer.Exit(1)
+        # Exit with appropriate code (0 for success, 1 for failure)
+        raise SystemExit(0 if success else 1)
 
 
 @app.command()

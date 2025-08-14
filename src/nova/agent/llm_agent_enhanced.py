@@ -101,7 +101,7 @@ class EnhancedLLMAgent:
                 system=system_prompt,
                 user=prompt,
                 temperature=0.2,
-                max_tokens=4000
+                max_tokens=8000  # Increased to prevent truncation
             )
             
             # Extract diff from markdown if needed
@@ -130,6 +130,18 @@ class EnhancedLLMAgent:
                 # Last line doesn't look like a valid diff line
                 if len(lines) > 15:
                     print(f"Warning: Patch might be truncated at line {len(lines)}")
+                    # Try to get the rest of the patch
+                    continuation_prompt = "Continue generating the patch from where you left off. Start with the next line of the diff."
+                    continuation = self.llm.complete(
+                        system="Continue the unified diff patch. Output only the remaining diff lines.",
+                        user=continuation_prompt,
+                        temperature=0.2,
+                        max_tokens=4000
+                    )
+                    # Append continuation if it looks like valid diff content
+                    if continuation and (continuation[0] in '+-@ \\' or continuation.startswith('@@')):
+                        patch_diff = patch_diff + '\n' + continuation.strip()
+                        print(f"Added {len(continuation.split(chr(10)))} continuation lines to patch")
             
             # Ensure proper patch format
             return self._fix_patch_format(patch_diff)
@@ -211,6 +223,13 @@ class EnhancedLLMAgent:
     
     def _fix_patch_format(self, patch_diff: str) -> str:
         """Ensure patch is in proper unified diff format."""
+        # Remove any trailing non-diff characters
+        patch_diff = patch_diff.rstrip()
+        if patch_diff and patch_diff[-1] not in '\n+-@ \\':
+            # Remove trailing garbage characters
+            while patch_diff and patch_diff[-1] not in '\n+-@ \\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789)"}\'':
+                patch_diff = patch_diff[:-1]
+        
         lines = patch_diff.split('\n')
         fixed_lines = []
         in_hunk = False

@@ -24,7 +24,7 @@ class LLMAgent:
         self.client = OpenAI(api_key=self.settings.openai_api_key)
         self.model = self.settings.default_llm_model
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
         """
         Generate a patch to fix failing tests using LLM.
         
@@ -171,7 +171,7 @@ Respond with JSON:
             # Default to approving if review fails
             return True, "Review failed, auto-approving"
     
-    def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int) -> Dict[str, Any]:
+    def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int, critic_feedback: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a plan for fixing the failing tests.
         

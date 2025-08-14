@@ -184,17 +184,27 @@ def parse_plan(response: str) -> Dict[str, Any]:
         }
 
 
-def build_planner_prompt(failing_tests: List[Dict[str, Any]]) -> str:
+def build_planner_prompt(failing_tests: List[Dict[str, Any]], critic_feedback: Optional[str] = None) -> str:
     """
     Build a prompt for the planner to analyze failures and create a fix strategy.
     
     Args:
         failing_tests: List of failing test details
+        critic_feedback: Optional feedback from previous critic rejection
         
     Returns:
         Formatted prompt string
     """
-    prompt = "Analyze these failing tests and create a plan to fix them:\n\n"
+    prompt = ""
+    
+    # Include critic feedback if available
+    if critic_feedback:
+        prompt += "⚠️ PREVIOUS ATTEMPT REJECTED:\n"
+        prompt += f"The critic rejected the last patch with this feedback:\n"
+        prompt += f'"{critic_feedback}"\n\n'
+        prompt += "Please create a NEW plan that addresses this feedback and avoids the same mistakes.\n\n"
+    
+    prompt += "Analyze these failing tests and create a plan to fix them:\n\n"
     prompt += "FAILING TESTS:\n"
     prompt += "| Test Name | File | Line | Error |\n"
     prompt += "|-----------|------|------|-------|\n"
@@ -228,7 +238,8 @@ def build_planner_prompt(failing_tests: List[Dict[str, Any]]) -> str:
 
 def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]], 
                        test_contents: Dict[str, str] = None, 
-                       source_contents: Dict[str, str] = None) -> str:
+                       source_contents: Dict[str, str] = None,
+                       critic_feedback: Optional[str] = None) -> str:
     """
     Build a prompt for the actor to generate a patch based on the plan.
     
@@ -237,11 +248,20 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
         failing_tests: List of failing test details
         test_contents: Optional dict of test file contents
         source_contents: Optional dict of source file contents
+        critic_feedback: Optional feedback from previous critic rejection
         
     Returns:
         Formatted prompt string
     """
-    prompt = "Generate a unified diff patch to fix the failing tests.\n\n"
+    prompt = ""
+    
+    # Include critic feedback if available
+    if critic_feedback:
+        prompt += "⚠️ PREVIOUS PATCH REJECTED:\n"
+        prompt += f'"{critic_feedback}"\n\n'
+        prompt += "Generate a DIFFERENT patch that avoids these issues.\n\n"
+    
+    prompt += "Generate a unified diff patch to fix the failing tests.\n\n"
     
     # Include the plan
     if plan:
@@ -254,17 +274,25 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
                 prompt += f"  {i}. {step}\n"
         prompt += "\n"
     
-    # Include failing test details
+    # Include failing test details with clear actual vs expected
     prompt += "FAILING TESTS TO FIX:\n"
     for i, test in enumerate(failing_tests[:3], 1):
         prompt += f"\n{i}. Test: {test.get('name', 'unknown')}\n"
         prompt += f"   File: {test.get('file', 'unknown')}\n"
         prompt += f"   Line: {test.get('line', 0)}\n"
-        prompt += f"   Error:\n{test.get('short_traceback', 'No traceback')[:200]}\n"
+        
+        # Extract actual vs expected from error message if present
+        error_msg = test.get('short_traceback', 'No traceback')[:400]
+        prompt += f"   Error:\n{error_msg}\n"
+        
+        # Highlight the mismatch if we can identify it
+        if "Expected" in error_msg and "but got" in error_msg:
+            prompt += "   ⚠️ Pay attention to the EXACT expected vs actual values above!\n"
+            prompt += "   If the expected value is logically wrong, fix the test, not the code.\n"
     
     # Include test file contents if provided
     if test_contents:
-        prompt += "\n\nTEST FILE CONTENTS (DO NOT MODIFY - these define correct behavior):\n"
+        prompt += "\n\nTEST FILE CONTENTS (modify ONLY if tests have wrong expectations):\n"
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
             prompt += content[:2000]
@@ -287,8 +315,14 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
     prompt += "2. Include proper file paths (--- a/file and +++ b/file)\n"
     prompt += "3. Include proper @@ hunk headers with line numbers\n"
     prompt += "4. Fix the actual issues causing test failures\n"
-    prompt += "5. Not modify the test files (unless the tests themselves are wrong)\n"
+    prompt += "5. IMPORTANT: If a test expects an obviously wrong value (e.g., 2+2=5, sum([1,2,3,4,5])=20), \n"
+    prompt += "   fix the TEST's expectation, not the implementation\n"
     prompt += "6. Be minimal and focused\n"
+    prompt += "7. DO NOT introduce arbitrary constants or magic numbers just to make tests pass\n"
+    prompt += "8. DO NOT add/remove spaces or characters unless they logically belong there\n"
+    prompt += "\n"
+    prompt += "WARNING: Avoid quick hacks like hardcoding values. Focus on the root cause.\n"
+    prompt += "If the test's expected value is mathematically or logically wrong, fix the test.\n"
     prompt += "\n"
     prompt += "Return ONLY the unified diff, starting with --- and no other text."
     

@@ -256,8 +256,9 @@ def fix(
                 "failing_tests": state.total_failures
             })
             
-            # Use LLM to create plan
-            plan = llm_agent.create_plan(state.failing_tests, iteration)
+            # Use LLM to create plan (with critic feedback if available)
+            critic_feedback = getattr(state, 'critic_feedback', None) if iteration > 1 else None
+            plan = llm_agent.create_plan(state.failing_tests, iteration, critic_feedback)
             
             # Store plan in state for reference
             state.plan = plan
@@ -284,8 +285,8 @@ def fix(
             # Log actor start
             telemetry.log_event("actor_start", {"iteration": iteration})
             
-            # Generate patch with plan context
-            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan)
+            # Generate patch with plan context and critic feedback if available
+            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan, critic_feedback=critic_feedback)
             
             if not patch_diff:
                 console.print("[red]❌ Could not generate a patch[/red]")
@@ -318,14 +319,26 @@ def fix(
             
             if not patch_approved:
                 console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
-                state.final_status = "patch_rejected"
+                # Store critic feedback for next iteration
+                state.critic_feedback = review_reason
                 telemetry.log_event("critic_rejected", {
                     "iteration": iteration,
                     "reason": review_reason
                 })
-                break
+                
+                # Check if we have more iterations available
+                if iteration < state.max_iterations:
+                    console.print(f"[yellow]Will try a different approach in iteration {iteration + 1}...[/yellow]")
+                    continue  # Try again with critic feedback
+                else:
+                    # Only set final status if we're out of iterations
+                    state.final_status = "patch_rejected"
+                    break
             
             console.print("[green]✓ Patch approved by critic[/green]")
+            
+            # Clear critic feedback since patch was approved
+            state.critic_feedback = None
             
             # Log critic approval
             telemetry.log_event("critic_approved", {

@@ -23,6 +23,7 @@ class AgentState:
     
     # Planning information
     plan: Optional[Dict[str, Any]] = None
+    critic_feedback: Optional[str] = None  # Feedback from previous critic rejection
     
     # Execution state
     current_iteration: int = 0

@@ -15,7 +15,7 @@ class MockLLMAgent:
     def __init__(self, repo_path: Path):
         self.repo_path = repo_path
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
         """
         Generate a patch to fix failing tests.
         
@@ -199,7 +199,7 @@ class MockLLMAgent:
         
         return True, "Patch approved (mock review)"
     
-    def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int) -> Dict[str, Any]:
+    def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int, critic_feedback: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a plan for fixing the failing tests (mock planner).
         

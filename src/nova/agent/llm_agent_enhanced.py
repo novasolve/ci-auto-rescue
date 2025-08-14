@@ -50,7 +50,7 @@ class EnhancedLLMAgent:
         
         return source_files
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
         """
         Generate a patch to fix failing tests (Actor node).
         
@@ -58,6 +58,7 @@ class EnhancedLLMAgent:
             failing_tests: List of failing test details
             iteration: Current iteration number
             plan: Optional plan from the planner
+            critic_feedback: Optional feedback from previous critic rejection
             
         Returns:
             Unified diff string or None if no patch can be generated
@@ -85,8 +86,8 @@ class EnhancedLLMAgent:
             if source_path.exists():
                 source_contents[source_file] = source_path.read_text()
         
-        # Build the prompt using the helper function
-        prompt = build_patch_prompt(plan, failing_tests, test_contents, source_contents)
+        # Build the prompt using the helper function (now with critic feedback)
+        prompt = build_patch_prompt(plan, failing_tests, test_contents, source_contents, critic_feedback)
         
         try:
             # Use the unified LLM client
@@ -311,13 +312,14 @@ Respond with JSON:
             # Default to approving if review fails (with appropriate reason)
             return True, "Review failed, auto-approving (LLM error)"
     
-    def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int) -> Dict[str, Any]:
+    def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int, critic_feedback: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a plan for fixing the failing tests (Planner node).
         
         Args:
             failing_tests: List of failing test details
             iteration: Current iteration number
+            critic_feedback: Optional feedback from previous critic rejection
             
         Returns:
             Plan dictionary with approach and steps
@@ -325,8 +327,8 @@ Respond with JSON:
         if not failing_tests:
             return {"approach": "No failures to fix", "target_tests": [], "steps": []}
         
-        # Build planner prompt using helper function
-        prompt = build_planner_prompt(failing_tests)
+        # Build planner prompt using helper function (now with critic feedback)
+        prompt = build_planner_prompt(failing_tests, critic_feedback)
         
         try:
             system_prompt = (

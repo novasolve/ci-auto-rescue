@@ -155,7 +155,11 @@ def fix(
         
         # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
         runner = TestRunner(repo_path, verbose=verbose)
-        failing_tests = runner.run_tests(max_failures=5)
+        failing_tests, initial_junit_xml = runner.run_tests(max_failures=5)
+        
+        # Save initial test report
+        if initial_junit_xml:
+            telemetry.save_test_report(0, initial_junit_xml, report_type="junit")
         
         # Store failures in agent state
         state.add_failing_tests(failing_tests)
@@ -164,6 +168,7 @@ def fix(
         telemetry.log_event("test_discovery", {
             "total_failures": state.total_failures,
             "failing_tests": state.failing_tests,
+            "initial_report_saved": initial_junit_xml is not None
         })
         
         # Check if there are any failures (AC: if zero failures → exit 0 with message)
@@ -304,6 +309,8 @@ def fix(
                 "iteration": iteration,
                 "patch_size": len(patch_lines)
             })
+            # Save patch artifact (before apply, so we have it even if apply fails)
+            telemetry.save_patch(state.current_step + 1, patch_diff)
             
             # 3. CRITIC: Review and approve/reject the patch
             console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
@@ -371,11 +378,15 @@ def fix(
             })
             
             # Save patch artifact for auditing
-            telemetry.save_artifact(f"diffs/step-{result['step_number']}.diff", patch_diff)
+            # The patch was already saved before apply, no need to save again
             
             # 5. RUN TESTS: Check if the patch fixed the failures
             console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
-            new_failures = runner.run_tests(max_failures=5)
+            new_failures, junit_xml = runner.run_tests(max_failures=5)
+            
+            # Save test report artifact
+            if junit_xml:
+                telemetry.save_test_report(result['step_number'], junit_xml, report_type="junit")
             
             # Update state with new test results
             previous_failures = state.total_failures

@@ -8,7 +8,7 @@
 
 | Milestone                       | Key Deliverables                                       | Status      | DR Audit    |
 | ------------------------------- | ------------------------------------------------------ | ----------- | ----------- |
-| **A. Local E2E**                | CLI seeded failing tests → green on sample repo        | In Progress | Pending     |
+| **A. Local E2E**                | CLI seeded failing tests → green on sample repo        | ✅ Complete | Ready       |
 | **A-DR. Design Review**         | Technical review, code quality, test coverage audit    | Not Started | -           |
 | **B. Quiet CI & Telemetry**     | Quiet pytest logs, telemetry wiring, packaging cleanup | Not Started | Pending     |
 | **B-DR. Design Review**         | Telemetry audit, monitoring review, package validation | Not Started | -           |
@@ -19,17 +19,17 @@
 
 ## Issue Breakdown - Happy Path (Must-Have)
 
-### Milestone A: Local E2E (Happy Path)
+### Milestone A: Local E2E (Happy Path) ✅ COMPLETE
 
-- **OS-832** - A1 — Seed failing tests into Planner _(agent, backend, must-have)_ - 2h
+- ✅ **OS-832** - A1 — Seed failing tests into Planner _(agent, backend, must-have)_ - 2h
   - AC: If zero failures → exit 0 with "No failing tests"; planner prompt contains failing tests table
-- **OS-833** - A2 — Branch & revert safety _(cli, must-have)_ - 1h
+- ✅ **OS-833** - A2 — Branch & revert safety _(cli, must-have)_ - 1h
   - AC: Aborted run leaves clean working tree; success prints branch name
-- **OS-834** - A3 — Apply/commit loop _(backend, must-have)_ - 2h
+- ✅ **OS-834** - A3 — Apply/commit loop _(backend, must-have)_ - 2h
   - AC: Post-run branch shows ≥1 commits; files match patch contents
-- **OS-835** - A4 — Global timeout & max-iters _(backend, must-have)_ - 1h
+- ✅ **OS-835** - A4 — Global timeout & max-iters _(backend, must-have)_ - 1h
   - AC: Exiting early prints reason clearly; process exits >0
-- **OS-836** - A5 — Smoke run on sample repo _(must-have, testing)_ - 0.5d
+- ✅ **OS-836** - A5 — Smoke run on sample repo _(must-have, testing)_ - 0.5d
   - AC: Tests pass (green) in the end; `.nova/<run>/` contains trace, diffs, and JUnit report
 
 ### Milestone A-DR: Design Review Audit

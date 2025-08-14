@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from rich.console import Console
 
 console = Console()
@@ -38,7 +38,7 @@ class TestRunner:
         self.repo_path = repo_path
         self.verbose = verbose
         
-    def run_tests(self, max_failures: int = 5) -> List[FailingTest]:
+    def run_tests(self, max_failures: int = 5) -> Tuple[List[FailingTest], Optional[str]]:
         """
         Run pytest and capture failing tests.
         
@@ -46,21 +46,26 @@ class TestRunner:
             max_failures: Maximum number of failures to capture (default: 5)
             
         Returns:
-            List of FailingTest objects
+            Tuple of (List of FailingTest objects, JUnit XML report content)
         """
         console.print("[cyan]Running pytest to identify failing tests...[/cyan]")
         
-        # Create a temporary file for JSON report
+        # Create temporary files for reports
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
             json_report_path = tmp.name
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as tmp:
+            junit_report_path = tmp.name
+        
+        junit_xml_content = None
         
         try:
-            # Run pytest with JSON report
+            # Run pytest with JSON and JUnit reports
             cmd = [
                 "python", "-m", "pytest",
                 str(self.repo_path),
                 "--json-report",
                 f"--json-report-file={json_report_path}",
+                "--junit-xml={junit_report_path}",
                 "--tb=short",
                 f"--maxfail={max_failures}",
                 "-q",  # Quiet mode
@@ -83,23 +88,29 @@ class TestRunner:
             # Parse the JSON report
             failing_tests = self._parse_json_report(json_report_path, max_failures)
             
+            # Read the JUnit XML report if it exists
+            junit_path = Path(junit_report_path)
+            if junit_path.exists():
+                junit_xml_content = junit_path.read_text()
+            
             if not failing_tests:
                 console.print("[green]✓ No failing tests found![/green]")
-                return []
+                return [], junit_xml_content
             
             console.print(f"[yellow]Found {len(failing_tests)} failing test(s)[/yellow]")
-            return failing_tests
+            return failing_tests, junit_xml_content
             
         except FileNotFoundError:
             # pytest not installed or not found
             console.print("[red]Error: pytest not found. Please install pytest.[/red]")
-            return []
+            return [], None
         except Exception as e:
             console.print(f"[red]Error running tests: {e}[/red]")
-            return []
+            return [], None
         finally:
-            # Clean up temp file
+            # Clean up temp files
             Path(json_report_path).unlink(missing_ok=True)
+            Path(junit_report_path).unlink(missing_ok=True)
     
     def _parse_json_report(self, report_path: str, max_failures: int) -> List[FailingTest]:
         """Parse pytest JSON report to extract failing tests."""

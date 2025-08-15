@@ -1,0 +1,5 @@
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -9,1 +9,1 @@
+-    return a - b  # (Should be a + b)
++    return a + b  # fixed

@@ -10,6 +10,16 @@ from typing import Dict, List, Optional, Any, Set, Tuple
 from nova.agent.llm_client import LLMClient, parse_plan, build_planner_prompt, build_patch_prompt
 from nova.config import get_settings
 
+# Import new engine components
+try:
+    from nova.engine.source_resolver import SourceResolver
+    from nova.engine.patch_guard import preflight_patch_checks
+    from nova.engine.post_apply_check import ast_sanity_check
+    HAS_ENGINE = True
+except ImportError:
+    HAS_ENGINE = False
+    print("Warning: Nova engine modules not available, using legacy behavior")
+
 
 class LLMAgent:
     """LLM agent that implements Planner, Actor, and Critic for test fixing."""
@@ -172,14 +182,39 @@ class LLMAgent:
         test_contents: Dict[str, str] = {}
         source_contents: Dict[str, str] = {}
         source_files = set()
-        for test in failing_tests[:5]:  # Limit to first 5 tests for context
-            test_file = test.get("file", "")
-            if test_file and test_file not in test_contents:
-                test_path = self.repo_path / test_file
-                if test_path.exists():
-                    test_contents[test_file] = test_path.read_text()
-                    # Find source files imported by this test
-                    source_files.update(self.find_source_files_from_test(test_path))
+        
+        # Use enhanced source resolver if available
+        if HAS_ENGINE:
+            resolver = SourceResolver(self.repo_path)
+            test_paths = []
+            for test in failing_tests[:5]:  # Limit to first 5 tests for context
+                test_file = test.get("file", "")
+                if test_file:
+                    test_path = self.repo_path / test_file
+                    if test_path.exists():
+                        test_paths.append(test_path)
+                        test_contents[test_file] = test_path.read_text()
+            
+            # Map imports from tests to source files
+            if test_paths:
+                candidate_sources = resolver.map_imports_from_tests(test_paths)
+                for p in candidate_sources:
+                    try:
+                        rel = p.relative_to(self.repo_path)
+                        source_files.add(str(rel))
+                    except ValueError:
+                        # Path not relative to repo, skip
+                        pass
+        else:
+            # Legacy behavior
+            for test in failing_tests[:5]:  # Limit to first 5 tests for context
+                test_file = test.get("file", "")
+                if test_file and test_file not in test_contents:
+                    test_path = self.repo_path / test_file
+                    if test_path.exists():
+                        test_contents[test_file] = test_path.read_text()
+                        # Find source files imported by this test
+                        source_files.update(self.find_source_files_from_test(test_path))
         
         # Parse project configuration to understand source layout
         project_config = self._parse_project_config()

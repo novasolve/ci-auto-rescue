@@ -610,6 +610,24 @@ def fix(
                 console.print(f"[green]✓ Progress: Fixed {fixed_count} test(s), {state.total_failures} remaining[/green]")
             else:
                 console.print(f"[yellow]⚠ No progress: {state.total_failures} test(s) still failing[/yellow]")
+                
+                # Reset state if no progress was made (prevent accumulating bad changes)
+                if state.patches_applied and git_manager:
+                    console.print("[yellow]↩️ Rolling back last patch to reset state...[/yellow]")
+                    try:
+                        # Reset to previous commit
+                        git_manager._run_git_command("reset", "--hard", "HEAD~1")
+                        # Remove the last patch from history
+                        if state.patches_applied:
+                            state.patches_applied.pop()
+                        console.print("[dim]State reset to clean baseline[/dim]")
+                        telemetry.log_event("state_reset", {
+                            "iteration": iteration,
+                            "reason": "no_progress",
+                            "failures": state.total_failures
+                        })
+                    except Exception as e:
+                        console.print(f"[red]Failed to reset state: {e}[/red]")
             
             # Check timeout
             if state.check_timeout():

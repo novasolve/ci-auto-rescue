@@ -20,6 +20,13 @@ except ImportError:
     HAS_ENGINE = False
     print("Warning: Nova engine modules not available, using legacy behavior")
 
+# Import patch validator
+try:
+    from nova.agent.patch_validator import PatchValidator
+    HAS_VALIDATOR = True
+except ImportError:
+    HAS_VALIDATOR = False
+
 
 class LLMAgent:
     """LLM agent that implements Planner, Actor, and Critic for test fixing."""
@@ -28,6 +35,18 @@ class LLMAgent:
         self.repo_path = repo_path
         self.settings = get_settings()
         self.llm = LLMClient()  # Initialize unified LLM client (handles OpenAI/Anthropic)
+        # Determine if repository uses src/ layout for source code
+        self.uses_src_layout = False
+        pyproject_path = self.repo_path / "pyproject.toml"
+        if pyproject_path.exists():
+            try:
+                pyproject_text = pyproject_path.read_text()
+                if re.search(r'package_dir\s*=\s*.*src', pyproject_text) or \
+                   re.search(r'where\s*=\s*\[\s*["\']src["\']\s*\]', pyproject_text) or \
+                   re.search(r'from\s*=\s*["\']src["\']', pyproject_text):
+                    self.uses_src_layout = True
+            except Exception:
+                pass
     
     def find_source_files_from_test(self, test_file_path: Path) -> Set[str]:
         """Extract imported modules from a test file to find corresponding source files."""
@@ -77,6 +96,13 @@ class LLMAgent:
         
         # Direct paths in repo root - prioritize actual module files over __init__.py
         candidates.append(self.repo_path / f"{parts[0]}.py")
+        
+        # If using src/ layout, prioritize src/ directory
+        if self.uses_src_layout:
+            candidates.extend([
+                self.repo_path / "src" / f"{parts[0]}.py",
+                self.repo_path / "src" / parts[0] / "__init__.py",
+            ])
         
         # Common source directories
         for src_dir in ['src', 'lib', 'app']:
@@ -321,7 +347,11 @@ class LLMAgent:
                         print(f"Added {len(continuation.split(chr(10)))} continuation lines to patch")
             
             # Ensure the patch diff is properly formatted and has correct paths
-            patch_diff = self._fix_patch_format(patch_diff)
+            if HAS_VALIDATOR:
+                validator = PatchValidator(self.repo_path)
+                patch_diff = validator.fix_patch_format(patch_diff)
+            else:
+                patch_diff = self._fix_patch_format(patch_diff)
             
             # Correct patch file paths if needed
             patch_diff = self._correct_patch_paths(patch_diff, source_files)
@@ -517,7 +547,11 @@ class LLMAgent:
             
             # Repo-aware duplicate function definition check before LLM review
             try:
-                dup_error = self._detect_duplicate_defs_against_repo(patch)
+                if HAS_VALIDATOR:
+                    validator = PatchValidator(self.repo_path)
+                    dup_error = validator.detect_duplicate_defs(patch)
+                else:
+                    dup_error = self._detect_duplicate_defs_against_repo(patch)
                 if dup_error:
                     return False, dup_error
             except Exception:

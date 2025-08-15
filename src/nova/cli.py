@@ -226,7 +226,14 @@ def fix(
         # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
         runner = TestRunner(repo_path, verbose=verbose)
         failing_tests, initial_junit_xml = runner.run_tests(max_failures=5)
-        
+
+        # Use traceback info to localize fault and mark suspect files
+        try:
+            from nova.runner.test_runner import FaultLocalizer
+            FaultLocalizer.localize_failures(failing_tests, coverage_data=None)
+        except Exception:
+            pass
+
         # Save initial test report
         if initial_junit_xml:
             telemetry.save_test_report(0, initial_junit_xml, report_type="junit")
@@ -518,6 +525,14 @@ def fix(
             
             if not patch_approved:
                 console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
+                # If the same feedback occurs consecutively, assume stagnation and alter strategy
+                if iteration > 1 and critic_feedback and critic_feedback.strip() == review_reason.strip():
+                    console.print("[yellow]⚠️ Repeated critic feedback detected – switching strategy.[/yellow]")
+                    # Reduce scope: focus on a single failing test in the next iteration
+                    if len(state.failing_tests) > 1:
+                        state.failing_tests = state.failing_tests[:1]
+                        state.total_failures = len(state.failing_tests)
+                        console.print("[yellow]↳ Focusing on one failing test to narrow the problem scope.[/yellow]")
                 # Store critic feedback for next iteration
                 state.critic_feedback = review_reason
                 telemetry.log_event("critic_rejected", {
@@ -606,6 +621,11 @@ def fix(
             
             # Update state with new test results
             previous_failures = state.total_failures
+            try:
+                from nova.runner.test_runner import FaultLocalizer
+                FaultLocalizer.localize_failures(new_failures, coverage_data=None)
+            except Exception:
+                pass
             state.add_failing_tests(new_failures)
             state.test_results.append({
                 "iteration": iteration,

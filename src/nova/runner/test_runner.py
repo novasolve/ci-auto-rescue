@@ -31,6 +31,8 @@ class FailingTest:
             "file": self.file,
             "line": self.line,
             "short_traceback": self.short_traceback,
+            "suspect_file": self.suspect_file,
+            "suspect_line": self.suspect_line,
         }
 
 

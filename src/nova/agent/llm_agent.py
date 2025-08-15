@@ -594,18 +594,23 @@ class LLMAgent:
             
             # Parse JSON response from LLM
             if '{' in response and '}' in response:
-                start = response.find('{')
-                end = response.rfind('}') + 1
-                review_json = json.loads(response[start:end])
-                return review_json.get('approved', False), review_json.get('reason', 'No reason provided')
+                try:
+                    start = response.index('{')
+                    end = response.rfind('}') + 1
+                    review_json = json.loads(response[start:end])
+                    return review_json.get('approved', False), review_json.get('reason', 'No reason provided')
+                except Exception as parse_err:
+                    print(f"Warning: Failed to parse critic review JSON: {parse_err}")
+                    return False, "Invalid review format (auto-rejected)"
             
-            # If parsing fails, default to approving (with generic reason)
-            return True, "Patch review passed (parsing failed, auto-approved)"
+            # If no JSON found in response, treat as rejection
+            print("Warning: Critic review response not in JSON format – rejecting patch.")
+            return False, "Unparseable review (auto-rejected)"
             
         except Exception as e:
-            print(f"Error in patch review: {e}")
-            # If review process fails, default to approving the patch
-            return True, "Review failed, auto-approving (LLM error)"
+            print(f"Error during patch review: {e}")
+            # On any unexpected error, reject to be safe
+            return False, f"Review failed (auto-rejected due to error)"
 
     def _detect_duplicate_defs_against_repo(self, patch: str) -> Optional[str]:
         """Detect added function definitions that duplicate existing ones in repo without removal.
@@ -714,8 +719,20 @@ class LLMAgent:
             # Attach iteration metadata and source file hints
             plan['iteration'] = iteration
             
-            # Determine source files that likely need fixes (from test imports)
-            source_files = set()
+            # Determine source files to include, prioritizing suspect files from tracebacks
+            source_files: Set[str] = set()
+            for test in failing_tests[:5]:
+                suspect_path = test.get("suspect_file")
+                if suspect_path:
+                    sp = Path(suspect_path)
+                    if sp.is_absolute():
+                        try:
+                            sp = sp.relative_to(self.repo_path)
+                        except ValueError:
+                            pass
+                    if (self.repo_path / sp).exists():
+                        source_files.add(str(sp))
+            # Fall back to import-based discovery for additional context
             for test in failing_tests[:5]:
                 test_path = self.repo_path / test.get("file", "")
                 if test_path.exists():

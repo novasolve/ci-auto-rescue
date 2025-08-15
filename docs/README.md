@@ -4,6 +4,12 @@ This folder contains all documentation for the CI-Rescue v1.0 Happy Path project
 
 ## 📚 Document Structure
 
+### 🎯 Main Documentation
+
+- **[Nova v1.0 Complete Documentation](nova-v1-documentation.md)** - Comprehensive guide covering installation, usage, configuration, CI/CD integration, architecture, security, and marketing materials
+
+### Planning & Development Docs
+
 1. **[Happy Path One-Pager](01-happy-path-one-pager.md)** - Executive summary and current status
 2. **[Architecture Diagram](02-architecture-diagram.md)** - System components and flow
 3. **[Task Dependency Graph](03-task-dependency-graph.md)** - Task dependencies and sequencing
@@ -23,6 +29,10 @@ This folder contains all documentation for the CI-Rescue v1.0 Happy Path project
 - [Slite Workspace](https://joinnova.slite.com)
 
 ## 📝 How to Use
+
+### For Users
+
+Read the **[Nova v1.0 Complete Documentation](nova-v1-documentation.md)** for comprehensive guidance on installation, configuration, usage, and CI/CD integration.
 
 ### For Development
 
@@ -57,15 +67,17 @@ These documents are designed to be copied directly into Slite:
 
 ## ✅ Document Status
 
-| Document       | Status      | Last Updated | Owner     |
-| -------------- | ----------- | ------------ | --------- |
-| One-Pager      | ✅ Complete | 2025-08-13   | Sebastian |
-| Architecture   | ✅ Complete | 2025-08-13   | Sebastian |
-| Dependencies   | ✅ Complete | 2025-08-13   | Sebastian |
-| Milestones     | ✅ Complete | 2025-08-13   | Sebastian |
-| Proof Template | ✅ Complete | 2025-08-13   | Sebastian |
-| Quickstart     | ✅ Complete | 2025-08-13   | Sebastian |
-| Risks          | ✅ Complete | 2025-08-13   | Sebastian |
-| Demo Script    | ✅ Complete | 2025-08-13   | Sebastian |
-| Links          | ✅ Complete | 2025-08-13   | Sebastian |
-| Team Notes     | ✅ Complete | 2025-08-13   | Sebastian |
+| Document            | Status      | Last Updated | Owner     |
+| ------------------- | ----------- | ------------ | --------- |
+| Nova v1.0 Full Docs | ✅ Complete | 2025-08-13   | Sebastian |
+| One-Pager           | ✅ Complete | 2025-08-13   | Sebastian |
+| Architecture        | ✅ Complete | 2025-08-13   | Sebastian |
+| Dependencies        | ✅ Complete | 2025-08-13   | Sebastian |
+| Milestones          | ✅ Complete | 2025-08-13   | Sebastian |
+| Proof Template      | ✅ Complete | 2025-08-13   | Sebastian |
+| Quickstart          | ✅ Complete | 2025-08-13   | Sebastian |
+| Risks               | ✅ Complete | 2025-08-13   | Sebastian |
+| Demo Script         | ✅ Complete | 2025-08-13   | Sebastian |
+| Links               | ✅ Complete | 2025-08-13   | Sebastian |
+| Team Notes          | ✅ Complete | 2025-08-13   | Sebastian |
+| DR Audit Checklist  | ✅ Complete | 2025-08-13   | Sebastian |

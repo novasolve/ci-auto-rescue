@@ -1157,7 +1157,8 @@ def version():
     """
     Show Nova CI-Rescue version.
     """
-    console.print("[green]Nova CI-Rescue[/green] v1.0.0")
+    from nova import __version__
+    console.print(f"[green]Nova CI-Rescue[/green] v{__version__}")
 
 
 if __name__ == "__main__":

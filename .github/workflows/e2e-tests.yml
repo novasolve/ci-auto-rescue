@@ -1,0 +1,229 @@
+name: Nova CI-Rescue End-to-End Tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  demo:
+    name: Run Nova on Demo Repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository (Nova code + demo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Initialize Demo Git Repository
+        run: |
+          git init demo-repo
+          cd demo-repo
+          git add .
+          git commit -m "Initial commit (demo repo with failing tests)"
+
+      - name: Install Nova and Demo Dependencies
+        run: |
+          # Install Nova (current repository) and its dependencies
+          pip install --upgrade pip
+          pip install -e .
+          # Install demo-repo test requirements
+          pip install -r demo-repo/requirements.txt
+
+      - name: Run Initial Tests (Pre-Nova Fix)
+        id: demo_initial_tests
+        working-directory: demo-repo
+        continue-on-error: true
+        run: |
+          echo "Running initial tests on demo-repo..."
+          pytest --tb=short --maxfail=10 --junit-xml=initial_tests.xml || true
+          # Parse JUnit report to count failures
+          if [ -f "initial_tests.xml" ]; then
+            failures=$(python -c "import xml.etree.ElementTree as ET; root=ET.parse('initial_tests.xml').getroot(); \
+                                   fails=int(root.get('failures', 0) or 0) + int(root.get('errors', 0) or 0); print(fails)")
+            echo "failures=$failures" >> $GITHUB_OUTPUT
+            echo "Found $failures failing tests initially."
+          else
+            echo "failures=0" >> $GITHUB_OUTPUT
+            echo "Warning: initial_tests.xml not found."
+          fi
+
+      - name: Run Nova CI-Rescue (Demo Repo)
+        working-directory: demo-repo
+        run: |
+          echo "Running Nova CI-Rescue on demo-repo (max 6 iterations, 20 min timeout)..."
+          nova fix . --max-iters 6 --timeout 1200 --verbose | tee nova_run.log
+
+      - name: Run Final Tests (Post-Nova Fix)
+        working-directory: demo-repo
+        run: |
+          echo "Running tests after Nova fix (demo-repo)..."
+          pytest --tb=short --maxfail=10 --junit-xml=final_tests.xml || true
+
+      - name: Verify E2E Results (Demo)
+        run: python tests/verify_e2e_results.py demo-repo demo-repo/nova_run.log
+
+      - name: Upload Demo Telemetry Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: demo-repo/.nova/
+          retention-days: 30
+
+      - name: Upload Demo Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-test-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            demo-repo/initial_tests.xml
+            demo-repo/final_tests.xml
+            demo-repo/.nova/*/reports/*.xml
+          retention-days: 30
+
+      - name: Upload Demo Patches
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-patches-${{ github.run_id }}-${{ github.run_attempt }}
+          path: demo-repo/.nova/*/patches/*.patch
+          retention-days: 30
+
+      - name: Upload Demo Nova Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-nova-log-${{ github.run_id }}-${{ github.run_attempt }}
+          path: demo-repo/nova_run.log
+          retention-days: 30
+
+  external:
+    name: Run Nova on External Repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Nova Repository (CI-Rescue code)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout External Repository
+        uses: actions/checkout@v4
+        with:
+          repository: someuser/someproject # Placeholder for real repo
+          path: external-repo
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Install Nova and External Dependencies
+        run: |
+          # Install Nova (current repository) and its dependencies
+          pip install --upgrade pip
+          pip install -e .
+          # Install external project test requirements, if available
+          if [ -f "external-repo/requirements.txt" ]; then pip install -r external-repo/requirements.txt; fi
+          if [ -f "external-repo/requirements-dev.txt" ]; then pip install -r external-repo/requirements-dev.txt; fi
+          if [ -f "external-repo/pyproject.toml" ]; then pip install -e external-repo; fi
+          # Ensure pytest is available
+          pip install pytest
+
+      - name: Run Initial Tests (Pre-Nova Fix)
+        id: external_initial_tests
+        working-directory: external-repo
+        continue-on-error: true
+        run: |
+          echo "Running initial tests on external repository..."
+          pytest --tb=short --maxfail=10 --junit-xml=initial_tests.xml || true
+          # Count initial failures from JUnit report
+          if [ -f "initial_tests.xml" ]; then
+            failures=$(python -c "import xml.etree.ElementTree as ET; root=ET.parse('initial_tests.xml').getroot(); \
+                                   fails=int(root.get('failures', 0) or 0) + int(root.get('errors', 0) or 0); print(fails)")
+            echo "failures=$fails" >> $GITHUB_OUTPUT  # Save count as output
+            echo "Found $fails failing tests initially."
+          else
+            echo "failures=0" >> $GITHUB_OUTPUT
+            echo "No initial test results found (tests passed)."
+          fi
+
+      - name: Inject Failing Test (if needed)
+        if: steps.external_initial_tests.outputs.failures == '0'
+        working-directory: external-repo
+        run: |
+          echo "Injecting an intentional failing test into external repository..."
+          mkdir -p tests
+          cat > tests/test_nova_injected_failure.py << 'EOF'
+          def test_nova_injected_failure():
+              # Intentional failing test to provoke Nova fix
+              assert False, "Injected failure"
+          EOF
+          git add tests/test_nova_injected_failure.py
+          git commit -m "Add failing test for Nova CI-Rescue"
+
+      - name: Run Nova CI-Rescue (External Repo)
+        working-directory: external-repo
+        run: |
+          echo "Running Nova CI-Rescue on external repository..."
+          nova fix . --max-iters 6 --timeout 1200 --verbose | tee nova_run.log
+
+      - name: Run Final Tests (Post-Nova Fix)
+        working-directory: external-repo
+        run: |
+          echo "Running tests after Nova fix (external repo)..."
+          pytest --tb=short --maxfail=10 --junit-xml=final_tests.xml || true
+
+      - name: Verify E2E Results (External)
+        run: python tests/verify_e2e_results.py external-repo external-repo/nova_run.log
+
+      - name: Upload External Telemetry Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: external-repo/.nova/
+          retention-days: 30
+
+      - name: Upload External Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-test-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            external-repo/initial_tests.xml
+            external-repo/final_tests.xml
+            external-repo/.nova/*/reports/*.xml
+          retention-days: 30
+
+      - name: Upload External Patches
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-patches-${{ github.run_id }}-${{ github.run_attempt }}
+          path: external-repo/.nova/*/patches/*.patch
+          retention-days: 30
+
+      - name: Upload External Nova Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-nova-log-${{ github.run_id }}-${{ github.run_attempt }}
+          path: external-repo/nova_run.log
+          retention-days: 30
+
+env:
+  # API keys for LLMs (at least one must be provided via repository secrets)
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # (Optional) GitHub integration tokens
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  PR_NUMBER: ${{ secrets.PR_NUMBER }}

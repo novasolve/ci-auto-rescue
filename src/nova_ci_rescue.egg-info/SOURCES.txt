@@ -1,8 +1,15 @@
+MANIFEST.in
 README.md
+VERSION
 pyproject.toml
+setup.cfg
+setup.py
 src/nova/__init__.py
+src/nova/__main__.py
 src/nova/cli.py
+src/nova/cli_enhanced.py
 src/nova/config.py
+src/nova/github_integration.py
 src/nova/agent/__init__.py
 src/nova/agent/llm_agent.py
 src/nova/agent/llm_agent_enhanced.py
@@ -20,10 +27,13 @@ src/nova/runner/__init__.py
 src/nova/runner/test_runner.py
 src/nova/telemetry/__init__.py
 src/nova/telemetry/logger.py
+src/nova/telemetry/viewer.py
+src/nova/tools/__init__.py
 src/nova/tools/fs.py
 src/nova/tools/git.py
 src/nova/tools/http.py
 src/nova/tools/patch_fixer.py
+src/nova/tools/safety_limits.py
 src/nova/tools/sandbox.py
 src/nova_ci_rescue.egg-info/PKG-INFO
 src/nova_ci_rescue.egg-info/SOURCES.txt
@@ -31,5 +41,3 @@ src/nova_ci_rescue.egg-info/dependency_links.txt
 src/nova_ci_rescue.egg-info/entry_points.txt
 src/nova_ci_rescue.egg-info/requires.txt
 src/nova_ci_rescue.egg-info/top_level.txt
-tests/test_passing.py
-tests/test_sample.py

@@ -46,6 +46,10 @@ jobs:
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
           echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
 
+          # Optional: Use static branch name instead of timestamped branch
+          # Uncomment the following line to always use 'nova-fix' as the branch name
+          # echo "NOVA_FIX_BRANCH_NAME=nova-fix" >> .env
+
           # Verify configuration
           python -m nova config
 
@@ -78,31 +82,39 @@ jobs:
       - name: Push fixes to PR branch
         if: success()
         run: |
-          # Check if nova-fix branch exists and has changes
-          if git show-ref --verify --quiet refs/heads/nova-fix-*; then
-            NOVA_BRANCH=$(git branch | grep nova-fix- | head -1 | tr -d ' ')
+          echo "📤 Checking for Nova fix branch..."
+
+          # Get the current branch name
+          BRANCH=$(git branch --show-current)
+
+          # Check if we're on a nova-fix branch (supports both 'nova-fix' and 'nova-fix/*' patterns)
+          if [ -n "$BRANCH" ] && [[ "$BRANCH" == nova-fix* ]]; then
+            echo "Nova fix branch detected: $BRANCH"
             
             # Check for changes
-            if [ -n "$(git diff HEAD..$NOVA_BRANCH)" ]; then
+            if [ -n "$(git diff HEAD~1..HEAD 2>/dev/null)" ]; then
               echo "Pushing fixes to PR branch..."
               
               # Configure git
               git config --global user.name "Nova CI-Rescue Bot"
               git config --global user.email "nova-bot@ci-rescue.com"
               
-              # Cherry-pick commits from nova-fix branch
-              git checkout ${{ github.event.pull_request.head.ref || github.ref_name }}
-              git cherry-pick $NOVA_BRANCH
+              # Push branch to remote if not already present
+              if git branch -r | grep -qw "origin/$BRANCH"; then
+                echo "Branch $BRANCH already exists on origin"
+                # Force push to update the branch
+                git push origin "$BRANCH:$BRANCH" --force
+              else
+                echo "Pushing branch $BRANCH to origin..."
+                git push origin "$BRANCH:$BRANCH"
+              fi
               
-              # Push changes
-              git push origin HEAD
-              
-              echo "✅ Fixes pushed to PR branch"
+              echo "✅ Fixes pushed to branch: $BRANCH"
             else
               echo "No changes to push"
             fi
           else
-            echo "No nova-fix branch found"
+            echo "No nova-fix branch found (current branch: ${BRANCH:-none})"
           fi
 
   # Optional: Run evaluation on multiple test suites

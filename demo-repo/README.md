@@ -50,6 +50,7 @@ pytest tests/
 ```
 
 You should see multiple test failures:
+
 - `test_addition` fails because `add()` returns `a - b` instead of `a + b`
 - `test_multiplication` fails because `multiply()` returns `a + b` instead of `a * b`
 - `test_division` fails because `divide()` uses integer division instead of float division
@@ -65,6 +66,7 @@ nova fix . --max-iters 5 --timeout 300 --verbose
 ```
 
 Nova will:
+
 1. 🔍 Discover the failing tests
 2. 🤔 Analyze the test failures and source code
 3. 🔧 Generate patches to fix the bugs
@@ -87,11 +89,13 @@ This repository includes a GitHub Actions workflow that automatically runs Nova 
 
 ### Setup
 
-1. **Add API Key Secret**: 
+1. **Add API Key Secret**:
+
    - Go to Settings → Secrets and variables → Actions
    - Add a secret named `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`
 
 2. **Enable GitHub Actions**:
+
    - Go to Actions tab
    - Enable workflows for this repository
 
@@ -114,6 +118,7 @@ This repository includes a GitHub Actions workflow that automatically runs Nova 
 When Nova runs, it provides detailed information about its process:
 
 ### Console Output
+
 ```
 Nova CI-Rescue 🚀
 Repository: /path/to/demo-repo
@@ -171,16 +176,19 @@ Nova CI-Rescue includes several safety features to prevent unintended changes:
 Try these experiments to see Nova in action:
 
 ### 1. Break Different Things
+
 - Modify `calc.py` to introduce new bugs
 - Add new test cases that fail
 - See how Nova adapts to different failure patterns
 
 ### 2. Complex Scenarios
+
 - Add multiple related bugs
 - Create test dependencies
 - Introduce edge cases
 
 ### 3. Configuration Options
+
 - Adjust `--max-iters` to control fix attempts
 - Use `--verbose` for detailed output
 - Try different LLM models via config
@@ -197,6 +205,7 @@ For more information about Nova CI-Rescue:
 ## 🤝 Contributing
 
 This is a demo repository for Nova CI-Rescue. To contribute to Nova itself:
+
 - Report issues at [Nova CI-Rescue Issues](https://github.com/nova-ci-rescue/issues)
 - See the main repository for contribution guidelines
 

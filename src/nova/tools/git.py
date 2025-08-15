@@ -3,6 +3,7 @@ Git operations for Nova CI-Rescue.
 Handles branch management and repository state.
 """
 
+import os
 import subprocess
 import signal
 import sys
@@ -56,8 +57,8 @@ class GitBranchManager:
         return success and not output
     
     def create_fix_branch(self) -> str:
-        """Create a new nova-fix/<timestamp> branch and switch to it."""
-        # Store original HEAD and branch name
+        """Create a new fix branch (default 'nova-fix/<timestamp>' or a static name if configured) and switch to it."""
+        # Store original HEAD commit and branch name for later restoration
         self.original_head = self._get_current_head()
         if not self.original_head:
             raise RuntimeError("Failed to get current HEAD commit")
@@ -85,12 +86,19 @@ class GitBranchManager:
                     if success:
                         self.original_branch = "master"
         
-        # Generate branch name with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.branch_name = f"nova-fix/{timestamp}"
+        # Determine branch naming strategy
+        branch_override = os.environ.get("NOVA_FIX_BRANCH_NAME")
+        if branch_override:
+            # Use static branch name from configuration/environment
+            self.branch_name = branch_override
+            # Create or reset this branch to current HEAD
+            success, output = self._run_git_command("checkout", "-B", self.branch_name)
+        else:
+            # Default: generate unique timestamped branch name
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.branch_name = f"nova-fix/{timestamp}"
+            success, output = self._run_git_command("checkout", "-b", self.branch_name)
         
-        # Create and checkout new branch
-        success, output = self._run_git_command("checkout", "-b", self.branch_name)
         if not success:
             raise RuntimeError(f"Failed to create branch {self.branch_name}: {output}")
         

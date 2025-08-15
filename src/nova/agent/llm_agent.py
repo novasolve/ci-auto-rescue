@@ -102,7 +102,9 @@ class LLMAgent:
                 "You are a coding assistant who writes fixes as unified diffs. "
                 "Fix the SOURCE CODE to make tests pass. "
                 "Generate only valid unified diff patches with proper file paths and hunk headers. "
-                "Ensure that each diff hunk header's line counts exactly match the changes made."
+                "Ensure that each diff hunk header's line counts exactly match the changes made. "
+                "CRITICAL: When fixing functions, use proper diff format: remove old lines with '-' prefix "
+                "and add new lines with '+' prefix. NEVER create duplicate function definitions."
             )
             patch_diff = self.llm.complete(
                 system=system_prompt,

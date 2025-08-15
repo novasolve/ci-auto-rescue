@@ -114,6 +114,7 @@ class PatchAnalysis:
     files_deleted: Set[str] = field(default_factory=set)
     denied_files: Set[str] = field(default_factory=set)
     violations: List[str] = field(default_factory=list)
+    duplicate_functions: Set[str] = field(default_factory=set)  # Track potential duplicate function definitions
     is_safe: bool = True
 
 
@@ -210,6 +211,22 @@ class SafetyLimits:
                 analysis.total_lines_added += 1
                 analysis.total_lines_changed += 1
                 
+                # Check for potential duplicate function definitions
+                # Look for Python function definitions being added
+                if re.match(r'\+\s*def\s+(\w+)\s*\(', line):
+                    func_match = re.match(r'\+\s*def\s+(\w+)\s*\(', line)
+                    if func_match:
+                        func_name = func_match.group(1)
+                        # Check if this function is being added without removing the old one
+                        # We'll check if there's a corresponding removal in the patch
+                        has_removal = any(
+                            re.match(rf'-\s*def\s+{re.escape(func_name)}\s*\(', l) 
+                            for l in lines
+                        )
+                        if not has_removal:
+                            # Function is being added without removing existing one
+                            analysis.duplicate_functions.add(f"{func_name} in {current_file}")
+                
             elif current_file and line.startswith('-') and not line.startswith('---'):
                 # Removed line
                 analysis.total_lines_removed += 1
@@ -258,6 +275,16 @@ class SafetyLimits:
                 denied_list += f", ... ({len(analysis.denied_files) - 5} more)"
             violations.append(
                 f"Attempts to modify restricted files: {denied_list}"
+            )
+        
+        # Check for duplicate function definitions
+        if analysis.duplicate_functions:
+            dup_list = ', '.join(sorted(analysis.duplicate_functions)[:3])  # Show first 3
+            if len(analysis.duplicate_functions) > 3:
+                dup_list += f", ... ({len(analysis.duplicate_functions) - 3} more)"
+            violations.append(
+                f"Patch introduces duplicate function definitions: {dup_list}. "
+                f"Functions should be modified in-place, not duplicated."
             )
         
         analysis.violations = violations

@@ -65,6 +65,8 @@ class LLMAgent:
             
             # Parse imports using regex for better accuracy
             import_pattern = r'^\s*(?:from\s+([\w\.]+)\s+import|import\s+([\w\.]+))'
+            project_config = self._parse_project_config()
+            prefers_src = bool(project_config.get('has_src_layout') or project_config.get('package_dir'))
             for line in test_content.split('\n'):
                 match = re.match(import_pattern, line)
                 if match:
@@ -81,12 +83,45 @@ class LLMAgent:
                         
                         # Try to find the source file in various locations
                         candidates = self._get_candidate_source_paths(module)
+                        # If project prefers src layout, de-prioritize root-level candidates
+                        if prefers_src and candidates:
+                            if candidates[0].parent == self.repo_path:
+                                first = candidates.pop(0)
+                                candidates.append(first)
                         for candidate in candidates:
                             if candidate.exists():
                                 source_files.add(str(candidate.relative_to(self.repo_path)))
                                 break
         except Exception as e:
             print(f"Error parsing test file {test_file_path}: {e}")
+        # If no source files identified from imports, attempt heuristic mapping from test filename
+        if not source_files:
+            try:
+                project_config = locals().get('project_config') or self._parse_project_config()
+                src_dirs = ["src", "lib", "app"]
+                if project_config.get('has_src_layout') or project_config.get('package_dir'):
+                    src_dirs = ["src"] + [d for d in src_dirs if d != "src"]
+                src_dirs.append(".")
+                test_rel = test_file_path.relative_to(self.repo_path)
+                parts = list(test_rel.parts)
+                if parts and parts[0].lower() == "tests":
+                    parts = parts[1:]
+                test_name = parts[-1]
+                base_name = Path(test_name).stem
+                if base_name.startswith("test_"):
+                    base_name = base_name[5:]
+                elif base_name.endswith("_test"):
+                    base_name = base_name[:-5]
+                candidate_filename = base_name + ".py"
+                subdir_parts = parts[:-1]
+                for src_dir in src_dirs:
+                    base_path = self.repo_path / src_dir
+                    candidate_path = base_path.joinpath(*subdir_parts) / candidate_filename
+                    if candidate_path.exists():
+                        source_files.add(str(candidate_path.relative_to(self.repo_path)))
+                        break
+            except Exception:
+                pass
         return source_files
     
     def _get_candidate_source_paths(self, module_name: str) -> List[Path]:
@@ -529,33 +564,18 @@ class LLMAgent:
                     reason += f" (and {len(issues) - 3} more issues)"
                 return False, reason
         else:
-            # Legacy safety checks
-            patch_lines = patch.split('\n')
-            files_touched = sum(1 for line in patch_lines if line.startswith('+++ b/'))
-            
-            if len(patch_lines) >= 1000:
-                return False, f"Patch too large ({len(patch_lines)} lines)"
-            
-            if files_touched > 10:
-                return False, f"Too many files modified ({files_touched})"
-            
-            # Disallow modifications to critical or config files for safety
-            dangerous_patterns = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
-            for line in patch_lines:
-                if any(pattern in line for pattern in dangerous_patterns):
-                    return False, "Patch modifies protected/configuration files"
-            
-            # Repo-aware duplicate function definition check before LLM review
+            # Legacy safety checks delegated to SafetyLimits for consistency
             try:
-                if HAS_VALIDATOR:
-                    validator = PatchValidator(self.repo_path)
-                    dup_error = validator.detect_duplicate_defs(patch)
-                else:
-                    dup_error = self._detect_duplicate_defs_against_repo(patch)
-                if dup_error:
-                    return False, dup_error
+                from nova.tools.safety_limits import SafetyLimits
+                safety = SafetyLimits()
+                is_safe, violations = safety.validate_patch(patch)
+                if not is_safe:
+                    reason = "Preflight checks failed: " + "; ".join(violations[:3])
+                    if len(violations) > 3:
+                        reason += f" (and {len(violations) - 3} more)"
+                    return False, reason
             except Exception:
-                # Non-fatal; fall through to LLM critic
+                # If SafetyLimits not available, fall back silently
                 pass
 
         # Use LLM to perform semantic review of the patch

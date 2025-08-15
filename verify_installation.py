@@ -104,7 +104,7 @@ def verify_installation():
         test_imports = [
             "from nova import __version__",
             "from nova.cli import app",
-            "from nova.config import NovaConfig",
+            "from nova.config import CLIConfig",
             "from nova.agent.state import AgentState",
             "from nova.nodes.run_tests import RunTestsNode"
         ]

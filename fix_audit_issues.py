@@ -1,330 +1,387 @@
 #!/usr/bin/env python3
 """
-Script to fix critical issues found in the Happy Path audit.
-Run this to address the immediate problems identified.
+fix_audit_issues.py - Automated fix script for Nova CI-Rescue Happy Path audit issues.
+
+This script applies all the fixes identified in the Happy Path tutorial audit:
+1. Fix NovaConfig -> CLIConfig import in verify_installation.py
+2. Add global --version flag support in CLI
+3. Align version references to 1.0.0
+4. Fix timeout environment variable in GitHub Actions
+5. Create troubleshooting documentation
+
+Usage:
+    python fix_audit_issues.py [--check-only]
+    
+Options:
+    --check-only    Only check for issues without fixing them
 """
 
-import os
 import sys
-from pathlib import Path
+import pathlib
+import re
+import argparse
+from typing import List, Tuple
 
-def fix_verify_installation():
-    """Fix the import issue in verify_installation.py"""
-    file_path = Path("verify_installation.py")
-    if not file_path.exists():
-        print(f"⚠️  File not found: {file_path}")
-        return False
+
+class AuditFixer:
+    """Applies fixes for Nova CI-Rescue audit issues."""
     
-    content = file_path.read_text()
+    def __init__(self, repo_root: pathlib.Path = None, check_only: bool = False):
+        """Initialize the fixer with the repository root."""
+        self.repo_root = repo_root or pathlib.Path(__file__).parent
+        self.check_only = check_only
+        self.issues_found = []
+        self.fixes_applied = []
+        
+    def log(self, message: str, status: str = "INFO"):
+        """Log a message with status indicator."""
+        symbols = {
+            "INFO": "ℹ️",
+            "SUCCESS": "✅",
+            "WARNING": "⚠️",
+            "ERROR": "❌",
+            "CHECK": "🔍",
+            "FIX": "🔧"
+        }
+        print(f"{symbols.get(status, '•')} {message}")
     
-    # Fix the import statement
-    old_import = '"from nova.config import NovaConfig",'
-    new_import = '"from nova.config import CLIConfig",'
-    
-    if old_import in content:
-        content = content.replace(old_import, new_import)
-        file_path.write_text(content)
-        print(f"✅ Fixed import in {file_path}")
+    def check_file_exists(self, path: pathlib.Path) -> bool:
+        """Check if a file exists."""
+        full_path = self.repo_root / path
+        if not full_path.exists():
+            self.log(f"File not found: {path}", "WARNING")
+            return False
         return True
-    else:
-        print(f"ℹ️  Import already fixed or different in {file_path}")
+    
+    def fix_verify_installation_import(self) -> bool:
+        """Fix NovaConfig -> CLIConfig import in verify_installation.py."""
+        file_path = self.repo_root / "verify_installation.py"
+        
+        if not self.check_file_exists(pathlib.Path("verify_installation.py")):
+            return False
+            
+        content = file_path.read_text()
+        
+        # Check if fix is needed
+        if "NovaConfig" in content:
+            self.issues_found.append("NovaConfig import in verify_installation.py")
+            
+            if not self.check_only:
+                # Apply fix
+                updated_content = content.replace("NovaConfig", "CLIConfig")
+                file_path.write_text(updated_content)
+                self.fixes_applied.append("Updated NovaConfig to CLIConfig in verify_installation.py")
+                self.log("Fixed NovaConfig -> CLIConfig import", "SUCCESS")
+                return True
+            else:
+                self.log("Found NovaConfig import that needs fixing", "CHECK")
+        else:
+            self.log("verify_installation.py already uses CLIConfig", "SUCCESS")
+            
         return False
+    
+    def add_cli_version_flag(self) -> bool:
+        """Add global --version flag support to CLI."""
+        cli_path = self.repo_root / "src/nova/cli.py"
+        
+        if not self.check_file_exists(pathlib.Path("src/nova/cli.py")):
+            return False
+            
+        content = cli_path.read_text()
+        
+        # Check if callback already exists
+        if "@app.callback" in content:
+            self.log("CLI already has callback (--version likely supported)", "SUCCESS")
+            return False
+            
+        # Check if fix is needed
+        if "--version" not in content or "version: bool = typer.Option" not in content:
+            self.issues_found.append("Missing --version flag in CLI")
+            
+            if not self.check_only:
+                # Find insertion point (after app = typer.Typer)
+                app_pattern = r'(app = typer\.Typer\([^)]*\)\nconsole = Console\(\))'
+                
+                callback_code = '''
 
-def add_version_command():
-    """Add version command to CLI if missing"""
-    cli_path = Path("src/nova/cli.py")
-    if not cli_path.exists():
-        print(f"⚠️  CLI file not found: {cli_path}")
-        return False
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False, 
+        "--version", 
+        "-V", 
+        help="Show Nova version and exit",
+        is_eager=True
+    )
+):
+    """
+    Nova CI-Rescue: Automated test fixing agent.
     
-    content = cli_path.read_text()
-    
-    # Check if version command already exists
-    if "@app.command()\ndef version():" in content:
-        print("ℹ️  Version command already exists")
-        return False
-    
-    # Add version command after the last command
-    version_command = '''
-@app.command()
-def version():
-    """Display Nova CI-Rescue version."""
-    try:
+    Main callback to handle global options like --version.
+    """
+    if version:
         from nova import __version__
-        console.print(f"nova-ci-rescue v{__version__}")
-    except ImportError:
-        console.print("nova-ci-rescue v0.1.1")  # Fallback version
+        console.print(f"[green]Nova CI-Rescue[/green] v{__version__}")
+        raise typer.Exit()
+    
+    # If no command is provided and not --version, show help
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
 '''
-    
-    # Find a good place to insert (before if __name__ == "__main__":)
-    insertion_point = 'if __name__ == "__main__":'
-    if insertion_point in content:
-        content = content.replace(
-            insertion_point,
-            version_command + "\n\n" + insertion_point
-        )
-        cli_path.write_text(content)
-        print(f"✅ Added version command to {cli_path}")
-        return True
-    else:
-        print(f"⚠️  Could not find insertion point in {cli_path}")
-        return False
-
-def update_readme_version():
-    """Update README to clarify version numbering"""
-    readme_path = Path("README.md")
-    if not readme_path.exists():
-        print(f"⚠️  README not found: {readme_path}")
+                
+                # Insert the callback after app initialization
+                updated_content = re.sub(
+                    app_pattern,
+                    r'\1' + callback_code,
+                    content
+                )
+                
+                cli_path.write_text(updated_content)
+                self.fixes_applied.append("Added global --version flag to CLI")
+                self.log("Added --version flag support to CLI", "SUCCESS")
+                return True
+            else:
+                self.log("CLI needs --version flag support", "CHECK")
+        else:
+            self.log("CLI already supports --version flag", "SUCCESS")
+            
         return False
     
-    content = readme_path.read_text()
+    def align_version_references(self) -> bool:
+        """Align all version references to 1.0.0."""
+        init_path = self.repo_root / "src/nova/__init__.py"
+        version_path = self.repo_root / "VERSION"
+        
+        if not self.check_file_exists(pathlib.Path("src/nova/__init__.py")):
+            return False
+            
+        init_content = init_path.read_text()
+        target_version = "1.0.0"
+        fixed = False
+        
+        # Check __init__.py version
+        version_match = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", init_content)
+        if version_match:
+            current_version = version_match.group(1)
+            if current_version != target_version:
+                self.issues_found.append(f"Version mismatch in __init__.py: {current_version}")
+                
+                if not self.check_only:
+                    updated_content = re.sub(
+                        r"__version__\s*=\s*['\"][^'\"]+['\"]",
+                        f"__version__ = '{target_version}'",
+                        init_content
+                    )
+                    init_path.write_text(updated_content)
+                    self.fixes_applied.append(f"Updated __version__ to {target_version}")
+                    self.log(f"Updated __version__ to {target_version}", "SUCCESS")
+                    fixed = True
+                else:
+                    self.log(f"Version needs update: {current_version} -> {target_version}", "CHECK")
+            else:
+                self.log(f"__version__ already set to {target_version}", "SUCCESS")
+        
+        # Check VERSION file
+        if version_path.exists():
+            version_content = version_path.read_text().strip()
+            if version_content != target_version:
+                self.issues_found.append(f"VERSION file mismatch: {version_content}")
+                
+                if not self.check_only:
+                    version_path.write_text(target_version)
+                    self.fixes_applied.append(f"Updated VERSION file to {target_version}")
+                    self.log(f"Updated VERSION file to {target_version}", "SUCCESS")
+                    fixed = True
+                else:
+                    self.log(f"VERSION file needs update: {version_content} -> {target_version}", "CHECK")
+            else:
+                self.log(f"VERSION file already set to {target_version}", "SUCCESS")
+                
+        return fixed
     
-    # Update version references to be consistent
-    changes_made = False
-    
-    # Fix version in title area
-    old_version = "**v1.0 - Happy Path Edition**"
-    new_version = "**v0.1.1 - Happy Path MVP Edition**"
-    if old_version in content:
-        content = content.replace(old_version, new_version)
-        changes_made = True
-    
-    # Fix version disclaimer title
-    old_title = "## ⚠️ Important: Happy Path v1.0 Disclaimer"
-    new_title = "## ⚠️ Important: Happy Path v0.1.1 (MVP) Disclaimer"
-    if old_title in content:
-        content = content.replace(old_title, new_title)
-        changes_made = True
-    
-    # Fix version references in text
-    content = content.replace("Nova v1.0 CAN", "Nova v0.1.1 CAN")
-    content = content.replace("Nova v1.0 CANNOT", "Nova v0.1.1 CANNOT")
-    
-    if changes_made:
-        readme_path.write_text(content)
-        print(f"✅ Updated version references in {readme_path}")
-        return True
-    else:
-        print(f"ℹ️  No version updates needed in {readme_path}")
+    def fix_github_action_timeout(self) -> bool:
+        """Fix timeout environment variable in GitHub Actions."""
+        workflow_path = self.repo_root / ".github/workflows/nova.yml"
+        
+        if not workflow_path.exists():
+            self.log("GitHub workflow nova.yml not found", "WARNING")
+            return False
+            
+        content = workflow_path.read_text()
+        
+        # Check if fix is needed
+        if "NOVA_TIMEOUT=" in content and "NOVA_RUN_TIMEOUT_SEC=" not in content:
+            self.issues_found.append("Incorrect timeout env var in GitHub Actions")
+            
+            if not self.check_only:
+                updated_content = content.replace(
+                    "NOVA_TIMEOUT=",
+                    "NOVA_RUN_TIMEOUT_SEC="
+                )
+                workflow_path.write_text(updated_content)
+                self.fixes_applied.append("Fixed timeout env var in GitHub Actions")
+                self.log("Fixed NOVA_TIMEOUT -> NOVA_RUN_TIMEOUT_SEC", "SUCCESS")
+                return True
+            else:
+                self.log("GitHub Actions uses wrong timeout env var", "CHECK")
+        else:
+            self.log("GitHub Actions timeout configuration is correct", "SUCCESS")
+            
         return False
-
-def create_troubleshooting_guide():
-    """Create a basic troubleshooting guide"""
-    guide_path = Path("docs/troubleshooting-guide.md")
     
-    if guide_path.exists():
-        print(f"ℹ️  Troubleshooting guide already exists: {guide_path}")
-        return False
-    
-    content = '''# Nova CI-Rescue Troubleshooting Guide
+    def create_troubleshooting_guide(self) -> bool:
+        """Create or update troubleshooting documentation."""
+        docs_dir = self.repo_root / "docs"
+        troubleshoot_path = docs_dir / "troubleshooting.md"
+        
+        if troubleshoot_path.exists():
+            self.log("Troubleshooting guide already exists", "SUCCESS")
+            return False
+            
+        self.issues_found.append("Missing troubleshooting documentation")
+        
+        if not self.check_only:
+            # Ensure docs directory exists
+            docs_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create a basic troubleshooting guide
+            content = """# Nova CI-Rescue Troubleshooting Guide
 
-## Common Issues and Solutions
+This guide helps resolve common issues when using Nova CI-Rescue.
 
-### 1. API Key Not Found
+## Common Issues
 
-**Error:** `Error: OPENAI_API_KEY not found in environment`
-
-**Solution:**
+### Missing API Keys
+**Problem:** Nova fails with API key error.  
+**Solution:** Set your API keys via environment variables:
 ```bash
-# Option 1: Export in shell
-export OPENAI_API_KEY="sk-..."
-
-# Option 2: Create .env file
-echo "OPENAI_API_KEY=sk-..." > .env
-
-# Option 3: Pass via command line
-OPENAI_API_KEY="sk-..." nova fix .
+export OPENAI_API_KEY="your-key"
+export ANTHROPIC_API_KEY="your-key"  # Optional
 ```
 
-### 2. Installation Issues
-
-**Error:** `ModuleNotFoundError: No module named 'nova'`
-
-**Solution:**
+### Timeout Issues
+**Problem:** Nova times out before completing.  
+**Solution:** Increase the timeout:
 ```bash
-# Reinstall Nova
+nova fix . --timeout 1800  # 30 minutes
+```
+
+### Import Errors
+**Problem:** Import errors with NovaConfig or CLIConfig.  
+**Solution:** Reinstall the package:
+```bash
 pip uninstall nova-ci-rescue
 pip install -e .
-
-# Verify installation
-python -c "import nova; print(nova.__version__)"
 ```
 
-### 3. Version Command Not Working
-
-**Error:** `No such option: --version`
-
-**Solution:**
-```bash
-# Use the version command instead
-nova version
-
-# Or check via Python
-python -c "import nova; print(nova.__version__)"
-```
-
-### 4. Timeout Errors
-
-**Error:** `Timeout reached: Exceeded 600s limit`
-
-**Solution:**
-```bash
-# Increase timeout
-nova fix . --timeout 1800  # 30 minutes
-
-# Or set via environment
-export NOVA_RUN_TIMEOUT_SEC=1800
-nova fix .
-```
-
-### 5. Patch Rejected by Safety Limits
-
-**Error:** `Patch rejected: Exceeds maximum lines changed: 350 > 200`
-
-**Solution:**
-```bash
-# Option 1: Review and apply manually
-git diff > manual_review.patch
-
-# Option 2: Increase limits (use with caution)
-nova fix . --max-lines 500
-
-# Option 3: Break into smaller changes
-nova fix . --max-iters 1  # One fix at a time
-```
-
-### 6. Git Branch Conflicts
-
-**Error:** `Branch 'nova-fix-...' already exists`
-
-**Solution:**
-```bash
-# Clean up old branches
-git branch -D nova-fix-*
-
-# Or reset to main
-git checkout main
-git reset --hard origin/main
-```
-
-### 7. Test Runner Not Found
-
-**Error:** `pytest: command not found`
-
-**Solution:**
-```bash
-# Install pytest
-pip install pytest pytest-json-report
-
-# Verify installation
-pytest --version
-```
-
-### 8. Memory or Resource Issues
-
-**Error:** `Process killed` or system becomes unresponsive
-
-**Solution:**
-```bash
-# Limit iterations
-nova fix . --max-iters 1
-
-# Run with verbose output to see progress
-nova fix . --verbose
-
-# Check system resources
-top  # or htop
-```
+### Version Command Not Working
+**Problem:** `nova --version` doesn't work.  
+**Solution:** Update to version 1.0.0 or later.
 
 ## Getting Help
 
-If you encounter issues not covered here:
-
-1. Check the logs: `.nova/<run>/trace.jsonl`
-2. Search existing issues: [GitHub Issues](https://github.com/nova-solve/nova-ci-rescue/issues)
-3. Ask in Discord: [discord.gg/nova-solve]
-4. Email support: support@novasolve.ai
-
-## Debug Mode
-
-For detailed debugging:
-
-```bash
-# Enable debug logging
-export NOVA_DEBUG=true
-export NOVA_LOG_LEVEL=DEBUG
-nova fix . --verbose
-
-# Check Python path issues
-python -c "import sys; print(sys.path)"
-python -c "import nova; print(nova.__file__)"
-```
-
-## Reporting Issues
-
-When reporting issues, please include:
-
-1. Nova version: `nova version` or `pip show nova-ci-rescue`
-2. Python version: `python --version`
-3. Operating system: `uname -a` (Unix) or `ver` (Windows)
-4. Error message and stack trace
-5. Relevant logs from `.nova/<run>/trace.jsonl`
-6. Minimal reproduction steps
-
-## FAQ
-
-**Q: Why does Nova make seemingly incorrect changes?**
-A: Nova uses LLM models which can sometimes misunderstand context. Always review changes before committing.
-
-**Q: Can I use Nova with private/enterprise models?**
-A: Yes, configure your API endpoint in the environment or config file.
-
-**Q: How much does it cost to run Nova?**
-A: Typical fixes cost $0.05-$0.15 in API calls, depending on complexity.
-
-**Q: Can Nova fix all test failures?**
-A: No, Nova v0.1.1 handles simple unit test failures. Complex integration tests, flaky tests, and environment-specific issues may not be fixable.
-
-**Q: Is my code sent to OpenAI/Anthropic?**
-A: Only relevant code context is sent, not your entire codebase. Use self-hosted models for sensitive code.
-'''
+For more issues, please check:
+- [GitHub Issues](https://github.com/your-org/nova-ci-rescue/issues)
+- [Documentation](https://github.com/your-org/nova-ci-rescue/docs)
+"""
+            
+            troubleshoot_path.write_text(content)
+            self.fixes_applied.append("Created troubleshooting.md")
+            self.log("Created troubleshooting documentation", "SUCCESS")
+            return True
+        else:
+            self.log("Troubleshooting guide needs to be created", "CHECK")
+            
+        return False
     
-    guide_path.write_text(content)
-    print(f"✅ Created troubleshooting guide: {guide_path}")
-    return True
+    def run(self) -> Tuple[int, int]:
+        """Run all fixes and return counts of issues and fixes."""
+        self.log("Nova CI-Rescue Audit Fixer", "INFO")
+        self.log("=" * 50, "INFO")
+        
+        if self.check_only:
+            self.log("Running in CHECK-ONLY mode", "INFO")
+        else:
+            self.log("Applying fixes...", "INFO")
+        
+        print()
+        
+        # Run all fixes
+        self.log("Checking verify_installation.py...", "CHECK")
+        self.fix_verify_installation_import()
+        
+        print()
+        self.log("Checking CLI version flag...", "CHECK")
+        self.add_cli_version_flag()
+        
+        print()
+        self.log("Checking version alignment...", "CHECK")
+        self.align_version_references()
+        
+        print()
+        self.log("Checking GitHub Actions...", "CHECK")
+        self.fix_github_action_timeout()
+        
+        print()
+        self.log("Checking troubleshooting docs...", "CHECK")
+        self.create_troubleshooting_guide()
+        
+        return len(self.issues_found), len(self.fixes_applied)
+
 
 def main():
-    """Run all fixes"""
-    print("🔧 Fixing audit issues...\n")
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="Fix Nova CI-Rescue Happy Path audit issues"
+    )
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Only check for issues without fixing them"
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=pathlib.Path,
+        help="Repository root directory (default: current directory)"
+    )
     
-    fixes_applied = 0
+    args = parser.parse_args()
     
-    # Fix critical issues
-    if fix_verify_installation():
-        fixes_applied += 1
+    # Run the fixer
+    fixer = AuditFixer(
+        repo_root=args.repo_root,
+        check_only=args.check_only
+    )
     
-    if add_version_command():
-        fixes_applied += 1
+    issues_count, fixes_count = fixer.run()
     
-    if update_readme_version():
-        fixes_applied += 1
+    # Print summary
+    print("\n" + "=" * 50)
+    print("SUMMARY")
+    print("=" * 50)
     
-    if create_troubleshooting_guide():
-        fixes_applied += 1
-    
-    print(f"\n✅ Applied {fixes_applied} fixes")
-    
-    if fixes_applied > 0:
-        print("\n📝 Next steps:")
-        print("1. Review the changes with: git diff")
-        print("2. Test the fixes:")
-        print("   - python verify_installation.py")
-        print("   - nova version")
-        print("3. Commit the changes:")
-        print("   - git add -A")
-        print('   - git commit -m "fix: Address critical issues from Happy Path audit"')
+    if args.check_only:
+        if issues_count > 0:
+            print(f"❌ Found {issues_count} issue(s) that need fixing:")
+            for issue in fixer.issues_found:
+                print(f"   • {issue}")
+            print(f"\nRun without --check-only to apply fixes.")
+            sys.exit(1)
+        else:
+            print("✅ No issues found! All checks passed.")
+            sys.exit(0)
     else:
-        print("\nℹ️  No fixes were needed or all issues already addressed")
+        if fixes_count > 0:
+            print(f"✅ Applied {fixes_count} fix(es):")
+            for fix in fixer.fixes_applied:
+                print(f"   • {fix}")
+            print(f"\n✨ All fixes applied successfully!")
+        else:
+            print("✅ No fixes needed! Everything is already up to date.")
+        sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

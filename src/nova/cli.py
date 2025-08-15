@@ -32,6 +32,33 @@ app = typer.Typer(
 console = Console()
 
 
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False, 
+        "--version", 
+        "-V", 
+        help="Show Nova version and exit",
+        is_eager=True
+    )
+):
+    """
+    Nova CI-Rescue: Automated test fixing agent.
+    
+    Main callback to handle global options like --version.
+    """
+    if version:
+        from nova import __version__
+        console.print(f"[green]Nova CI-Rescue[/green] v{__version__}")
+        raise typer.Exit()
+    
+    # If no command is provided and not --version, show help
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
+
 def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None) -> None:
     """
     Print a comprehensive summary when exiting the agent loop.

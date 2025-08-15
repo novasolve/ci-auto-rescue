@@ -3,20 +3,25 @@ Simple calculator module with a deliberately buggy implementation.
 This is for demonstrating Nova CI-Rescue's automated fixing capabilities.
 """
 
+"""
+
 def add(a, b):
     """Add two numbers."""
-    # Buggy implementation: returns incorrect result on purpose
-    return a - b  # (Should be a + b)
+    return a + b  # fixed
 
 def subtract(a, b):
     """Subtract b from a."""
+def subtract(a, b):
+    """Subtract b from a."""
     # Bug: off-by-one error in subtraction
-    return a - b - 1  # (Should be a - b)
+    return a - b  # fixed
 
 def multiply(a, b):
     """Multiply two numbers."""
+def multiply(a, b):
+    """Multiply two numbers."""
     # Bug: incorrect operation used
-    return a + b  # (Should be a * b)
+    return a * b  # fixed
 
 def divide(a, b):
     """Divide a by b."""

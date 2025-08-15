@@ -1,0 +1,6 @@
+@@ -6,4 +6,3 @@
+ def add(a, b):
+     """Add two numbers."""
+-    # Bug: incorrect operation used
+-    return a - b  # (Should be a + b)
++    return a + b

@@ -477,7 +477,7 @@ class LLMAgent:
     
     def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]]) -> Tuple[bool, str]:
         """
-        Review a patch using LLM (Critic node).
+        Review a patch using preflight checks and LLM (Critic node).
         
         Args:
             patch: The patch diff to review.
@@ -489,30 +489,40 @@ class LLMAgent:
         if not patch:
             return False, "Empty patch"
         
-        # Basic safety limits for the patch before LLM review
-        patch_lines = patch.split('\n')
-        files_touched = sum(1 for line in patch_lines if line.startswith('+++ b/'))
-        
-        if len(patch_lines) >= 1000:
-            return False, f"Patch too large ({len(patch_lines)} lines)"
-        
-        if files_touched > 10:
-            return False, f"Too many files modified ({files_touched})"
-        
-        # Disallow modifications to critical or config files for safety
-        dangerous_patterns = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
-        for line in patch_lines:
-            if any(pattern in line for pattern in dangerous_patterns):
-                return False, "Patch modifies protected/configuration files"
-        
-        # Repo-aware duplicate function definition check before LLM review
-        try:
-            dup_error = self._detect_duplicate_defs_against_repo(patch)
-            if dup_error:
-                return False, dup_error
-        except Exception:
-            # Non-fatal; fall through to LLM critic
-            pass
+        # Use enhanced preflight checks if available
+        if HAS_ENGINE:
+            ok, issues = preflight_patch_checks(patch, forbid_test_edits=True)
+            if not ok:
+                # Combine all issues into a single reason
+                reason = "Preflight checks failed: " + "; ".join(issues[:3])
+                if len(issues) > 3:
+                    reason += f" (and {len(issues) - 3} more issues)"
+                return False, reason
+        else:
+            # Legacy safety checks
+            patch_lines = patch.split('\n')
+            files_touched = sum(1 for line in patch_lines if line.startswith('+++ b/'))
+            
+            if len(patch_lines) >= 1000:
+                return False, f"Patch too large ({len(patch_lines)} lines)"
+            
+            if files_touched > 10:
+                return False, f"Too many files modified ({files_touched})"
+            
+            # Disallow modifications to critical or config files for safety
+            dangerous_patterns = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
+            for line in patch_lines:
+                if any(pattern in line for pattern in dangerous_patterns):
+                    return False, "Patch modifies protected/configuration files"
+            
+            # Repo-aware duplicate function definition check before LLM review
+            try:
+                dup_error = self._detect_duplicate_defs_against_repo(patch)
+                if dup_error:
+                    return False, dup_error
+            except Exception:
+                # Non-fatal; fall through to LLM critic
+                pass
 
         # Use LLM to perform semantic review of the patch
         try:

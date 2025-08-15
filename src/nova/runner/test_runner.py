@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from rich.console import Console
+from nova.config import get_settings
 
 console = Console()
 
@@ -80,12 +81,17 @@ class TestRunner:
                 console.print(f"[dim]Running: {' '.join(cmd)}[/dim]")
             
             # Run pytest (we expect it to fail if there are failing tests)
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=str(self.repo_path),
-            )
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(self.repo_path),
+                    timeout=get_settings().test_timeout_sec  # enforce test run timeout
+                )
+            except subprocess.TimeoutExpired:
+                console.print(f"[red]Error: Test execution timed out after {get_settings().test_timeout_sec} seconds[/red]")
+                return [], None
             
             # Parse the JSON report
             failing_tests = self._parse_json_report(json_report_path, max_failures)
@@ -218,12 +224,17 @@ class TestRunner:
                     "-q", "--no-header", "--no-summary", "-rN"
                 ]
                 
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    cwd=str(self.repo_path),
-                )
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        cwd=str(self.repo_path),
+                        timeout=get_settings().test_timeout_sec  # enforce test run timeout
+                    )
+                except subprocess.TimeoutExpired:
+                    # If test times out during flakiness check, skip it
+                    result = type('obj', (object,), {'returncode': 1})()
                 
                 if result.returncode == 0:
                     passes += 1
@@ -254,12 +265,18 @@ class TestRunner:
                 "-q", "--no-header", "--no-summary"
             ]
             
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=str(self.repo_path),
-            )
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(self.repo_path),
+                    timeout=get_settings().test_timeout_sec  # enforce test run timeout
+                )
+            except subprocess.TimeoutExpired:
+                if self.verbose:
+                    console.print(f"[yellow]Warning: Coverage collection timed out after {get_settings().test_timeout_sec} seconds[/yellow]")
+                return None
             
             # Load and return coverage data
             coverage_path = Path(coverage_file)

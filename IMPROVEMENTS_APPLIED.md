@@ -1,12 +1,15 @@
 # Improvements Applied from Branch to Main
 
 ## Summary
+
 Successfully transferred key improvements from the `nova-fix/20250814_204553` branch to the main branch.
 
 ## ✅ Applied Successfully
 
-### 1. **LLM Agent Unification** 
+### 1. **LLM Agent Unification**
+
 **Status: COMPLETE**
+
 - Merged `llm_agent.py` and `llm_agent_enhanced.py` into a single comprehensive `llm_agent.py`
 - Deleted redundant `llm_agent_enhanced.py` file
 - Added backward compatibility with `EnhancedLLMAgent = LLMAgent` alias
@@ -20,7 +23,9 @@ Successfully transferred key improvements from the `nova-fix/20250814_204553` br
   - Patch format fixing
 
 ### 2. **Documentation Added**
+
 **Status: COMPLETE**
+
 - Created `docs/llm_agent_unification.md` with full details
 - Created `docs/cli_unification_summary.md` documenting the CLI architecture
 - Added migration helper script `src/nova/cli_migration_helper.py`
@@ -28,8 +33,10 @@ Successfully transferred key improvements from the `nova-fix/20250814_204553` br
 ## ⚠️ Partially Applied
 
 ### 3. **CLI Unification**
-**Status: PARTIAL** 
+
+**Status: PARTIAL**
 The stashed branch contained a major CLI unification that would:
+
 - Combine `cli.py` and `cli_enhanced.py` into a unified structure
 - Add `nova enhanced` subcommand structure
 - Extract shared utility functions (40% code reduction)
@@ -40,12 +47,14 @@ The stashed branch contained a major CLI unification that would:
 ## What You Got
 
 ### From the Old Branch:
+
 1. ✅ **All LLM agent enhancements** - Fully unified into single agent with all advanced features
 2. ✅ **Backward compatibility** - Old code using `EnhancedLLMAgent` still works
 3. ✅ **Documentation** - Complete documentation of changes
 4. ✅ **Migration helper** - Script to help transition to new structure
 
 ### Current State on Main:
+
 - **Single unified LLM agent** with all enhancements
 - **No redundant code** in agent implementation
 - **All imports updated** to use unified agent
@@ -53,7 +62,9 @@ The stashed branch contained a major CLI unification that would:
 - **Cleaner architecture** with better separation of concerns
 
 ## Verification
+
 All changes verified with:
+
 ```bash
 # LLM Agent works
 python -c "from src.nova.agent.llm_agent import LLMAgent, EnhancedLLMAgent"
@@ -69,11 +80,14 @@ python -c "from src.nova.agent.llm_client import LLMClient, parse_plan, ..."
 ```
 
 ## Next Steps (Optional Future Work)
+
 If you want to complete the CLI unification later:
+
 1. Review `docs/cli_unification_summary.md` for the design
 2. Use `src/nova/cli_migration_helper.py` to find old usage
 3. Gradually extract shared functions
 4. Add the `enhanced_app` subcommand structure
 
 ## Conclusion
+
 The most important improvements (LLM agent unification) have been successfully applied to main. The codebase is now cleaner with no redundant agent implementations, while maintaining full backward compatibility.

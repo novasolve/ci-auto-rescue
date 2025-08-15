@@ -8,19 +8,35 @@ This folder contains all documentation for the CI-Rescue v1.0 Happy Path project
 
 - **[Nova v1.0 Complete Documentation](nova-v1-documentation.md)** - Comprehensive guide covering installation, usage, configuration, CI/CD integration, architecture, security, and marketing materials
 
+### Core User Documentation
+
+1. **[Quickstart Guide](06-quickstart-guide.md)** - Getting started with Nova
+2. **[Detailed Usage Examples](15-detailed-usage-examples.md)** - Step-by-step tutorials with demo repository
+3. **[Limitations & Known Issues](13-limitations-and-known-issues.md)** - Current limitations and workarounds
+4. **[Expectations & Success Criteria](14-expectations-and-success-criteria.md)** - Setting realistic expectations
+5. **[FAQ](18-faq.md)** - Frequently asked questions and answers
+6. **[Troubleshooting Guide](19-troubleshooting-guide.md)** - Debugging common issues and solutions
+7. **[Safety Limits](safety-limits.md)** - Security features and guardrails
+8. **[GitHub Actions Setup](github-action-setup.md)** - CI/CD integration guide
+
+### UX & Visual Documentation
+
+9. **[UX & CLI Improvements](16-ux-cli-improvements.md)** - Enhanced CLI output and error messages
+10. **[Visual Assets Guide](17-visual-assets-guide.md)** - Screenshots, diagrams, and marketing materials
+
 ### Planning & Development Docs
 
-1. **[Happy Path One-Pager](01-happy-path-one-pager.md)** - Executive summary and current status
-2. **[Architecture Diagram](02-architecture-diagram.md)** - System components and flow
-3. **[Task Dependency Graph](03-task-dependency-graph.md)** - Task dependencies and sequencing
-4. **[Milestone Board](04-milestone-board.md)** - Linear integration and issue tracking
-5. **[Proof Checklist Template](05-proof-checklist-template.md)** - Standardized success metrics
-6. **[Quickstart Guide](06-quickstart-guide.md)** - Getting started with Nova
-7. **[Risks & Guardrails](07-risks-and-guardrails.md)** - Safety measures and limitations
-8. **[Demo Script](08-demo-script.md)** - Step-by-step demo instructions
-9. **[Links & Resources](09-links-and-resources.md)** - All external links and references
-10. **[Team Notes](10-team-notes.md)** - Updates, decisions, and meeting notes
-11. **[DR Audit Checklist](11-dr-audit-checklist.md)** - Design Review audit process and checklists
+11. **[Happy Path One-Pager](01-happy-path-one-pager.md)** - Executive summary and current status
+12. **[Architecture Diagram](02-architecture-diagram.md)** - System components and flow
+13. **[Task Dependency Graph](03-task-dependency-graph.md)** - Task dependencies and sequencing
+14. **[Milestone Board](04-milestone-board.md)** - Linear integration and issue tracking
+15. **[Proof Checklist Template](05-proof-checklist-template.md)** - Standardized success metrics
+16. **[Risks & Guardrails](07-risks-and-guardrails.md)** - Safety measures and limitations
+17. **[Demo Script](08-demo-script.md)** - Step-by-step demo instructions
+18. **[Links & Resources](09-links-and-resources.md)** - All external links and references
+19. **[Team Notes](10-team-notes.md)** - Updates, decisions, and meeting notes
+20. **[DR Audit Checklist](11-dr-audit-checklist.md)** - Design Review audit process and checklists
+21. **[Security Features Audit](12-audit-security-features.md)** - Security audit documentation
 
 ## 🚀 Quick Links
 
@@ -67,17 +83,26 @@ These documents are designed to be copied directly into Slite:
 
 ## ✅ Document Status
 
-| Document            | Status      | Last Updated | Owner     |
-| ------------------- | ----------- | ------------ | --------- |
-| Nova v1.0 Full Docs | ✅ Complete | 2025-08-13   | Sebastian |
-| One-Pager           | ✅ Complete | 2025-08-13   | Sebastian |
-| Architecture        | ✅ Complete | 2025-08-13   | Sebastian |
-| Dependencies        | ✅ Complete | 2025-08-13   | Sebastian |
-| Milestones          | ✅ Complete | 2025-08-13   | Sebastian |
-| Proof Template      | ✅ Complete | 2025-08-13   | Sebastian |
-| Quickstart          | ✅ Complete | 2025-08-13   | Sebastian |
-| Risks               | ✅ Complete | 2025-08-13   | Sebastian |
-| Demo Script         | ✅ Complete | 2025-08-13   | Sebastian |
-| Links               | ✅ Complete | 2025-08-13   | Sebastian |
-| Team Notes          | ✅ Complete | 2025-08-13   | Sebastian |
-| DR Audit Checklist  | ✅ Complete | 2025-08-13   | Sebastian |
+| Document                | Status      | Last Updated | Owner     |
+| ----------------------- | ----------- | ------------ | --------- |
+| Nova v1.0 Full Docs     | ✅ Complete | 2025-08-13   | Sebastian |
+| One-Pager               | ✅ Complete | 2025-08-13   | Sebastian |
+| Architecture            | ✅ Complete | 2025-08-13   | Sebastian |
+| Dependencies            | ✅ Complete | 2025-08-13   | Sebastian |
+| Milestones              | ✅ Complete | 2025-08-13   | Sebastian |
+| Proof Template          | ✅ Complete | 2025-08-13   | Sebastian |
+| Quickstart              | ✅ Complete | 2025-08-13   | Sebastian |
+| Risks                   | ✅ Complete | 2025-08-13   | Sebastian |
+| Demo Script             | ✅ Complete | 2025-08-13   | Sebastian |
+| Links                   | ✅ Complete | 2025-08-13   | Sebastian |
+| Team Notes              | ✅ Complete | 2025-08-13   | Sebastian |
+| DR Audit Checklist      | ✅ Complete | 2025-08-13   | Sebastian |
+| Security Audit          | ✅ Complete | 2025-08-13   | Sebastian |
+| **NEW DOCUMENTATION:**  |             |              |           |
+| Limitations & Issues    | ✅ Complete | 2025-08-15   | Sebastian |
+| Expectations & Success  | ✅ Complete | 2025-08-15   | Sebastian |
+| Detailed Usage Examples | ✅ Complete | 2025-08-15   | Sebastian |
+| UX & CLI Improvements   | ✅ Complete | 2025-08-15   | Sebastian |
+| Visual Assets Guide     | ✅ Complete | 2025-08-15   | Sebastian |
+| FAQ                     | ✅ Complete | 2025-08-15   | Sebastian |
+| Troubleshooting Guide   | ✅ Complete | 2025-08-15   | Sebastian |

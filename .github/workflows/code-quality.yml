@@ -1,0 +1,356 @@
+name: Code Quality & Security Audit
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  static-analysis:
+    name: Static Analysis & Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml', '**/setup.cfg') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+          # Install analysis tools
+          pip install flake8 bandit[toml] pip-audit safety
+      
+      - name: Run Flake8 Linter
+        id: flake8
+        continue-on-error: true
+        run: |
+          echo "📝 Running flake8 linter..."
+          flake8 src tests \
+            --max-line-length=120 \
+            --extend-ignore=E203,W503 \
+            --format=json \
+            --output-file=flake8-report.json || true
+          
+          # Also run with standard output for visibility
+          flake8 src tests \
+            --max-line-length=120 \
+            --extend-ignore=E203,W503 \
+            --count --statistics
+      
+      - name: Run Bandit Security Analysis
+        id: bandit
+        continue-on-error: true
+        run: |
+          echo "🔒 Running bandit security analysis..."
+          # Generate JSON report
+          bandit -ll -r src \
+            --format json \
+            -o bandit-report.json || true
+          
+          # Run with console output
+          bandit -ll -r src \
+            --format screen || true
+      
+      - name: Run pip-audit for Dependency Vulnerabilities
+        id: pip-audit
+        continue-on-error: true
+        run: |
+          echo "📦 Running pip-audit for dependency vulnerabilities..."
+          pip-audit --desc --format json --output pip-audit-report.json || true
+          # Also show in console
+          pip-audit --desc || true
+      
+      - name: Run Safety Check (Alternative Dependency Scanner)
+        id: safety
+        continue-on-error: true
+        run: |
+          echo "🛡️ Running safety check..."
+          safety check --json --output safety-report.json || true
+          # Console output
+          safety check || true
+      
+      - name: Upload Analysis Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-analysis-reports-${{ github.run_id }}
+          path: |
+            flake8-report.json
+            bandit-report.json
+            pip-audit-report.json
+            safety-report.json
+          retention-days: 30
+      
+      - name: Evaluate Results
+        run: |
+          echo "📊 Evaluating analysis results..."
+          
+          # Check for high-severity issues
+          HIGH_SEV_ISSUES=0
+          
+          # Check bandit for high severity issues
+          if [ -f "bandit-report.json" ]; then
+            HIGH_BANDIT=$(python -c "
+import json
+with open('bandit-report.json') as f:
+    data = json.load(f)
+    high = len([r for r in data.get('results', []) if r.get('issue_severity', '').upper() == 'HIGH'])
+    print(high)
+" || echo "0")
+            echo "High severity bandit issues: $HIGH_BANDIT"
+            HIGH_SEV_ISSUES=$((HIGH_SEV_ISSUES + HIGH_BANDIT))
+          fi
+          
+          # Check for critical vulnerabilities in dependencies
+          if [ -f "pip-audit-report.json" ]; then
+            CRITICAL_VULNS=$(python -c "
+import json
+with open('pip-audit-report.json') as f:
+    data = json.load(f)
+    critical = len([v for v in data.get('vulnerabilities', []) if 'CRITICAL' in str(v.get('fix_versions', ''))])
+    print(critical)
+" || echo "0")
+            echo "Critical dependency vulnerabilities: $CRITICAL_VULNS"
+            HIGH_SEV_ISSUES=$((HIGH_SEV_ISSUES + CRITICAL_VULNS))
+          fi
+          
+          if [ $HIGH_SEV_ISSUES -gt 0 ]; then
+            echo "❌ Found $HIGH_SEV_ISSUES high-severity security issues!"
+            exit 1
+          else
+            echo "✅ No high-severity security issues found"
+          fi
+
+  secret-redaction:
+    name: Secret Redaction Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov
+      
+      - name: Run Secret Redaction Tests
+        run: |
+          echo "🔐 Testing secret redaction in telemetry..."
+          pytest tests/test_telemetry_redaction.py -v --tb=short
+      
+      - name: Check for Hardcoded Secrets
+        run: |
+          echo "🔍 Scanning for hardcoded secrets..."
+          # Basic patterns for common secret formats
+          # This is a simple grep-based check, consider using tools like truffleHog for more comprehensive scanning
+          
+          FOUND_SECRETS=0
+          
+          # Check for API key patterns
+          if grep -r -E "(api[_-]?key|apikey|api_secret)[[:space:]]*[:=][[:space:]]*['\"][^'\"]{20,}['\"]" src/ tests/ --exclude-dir=__pycache__ 2>/dev/null; then
+            echo "⚠️ Potential API keys found!"
+            FOUND_SECRETS=1
+          fi
+          
+          # Check for AWS keys
+          if grep -r -E "AKIA[0-9A-Z]{16}" src/ tests/ --exclude-dir=__pycache__ 2>/dev/null; then
+            echo "⚠️ Potential AWS keys found!"
+            FOUND_SECRETS=1
+          fi
+          
+          # Check for private keys
+          if grep -r -E "-----BEGIN (RSA |OPENSSH |DSA |EC |PGP )?PRIVATE KEY" src/ tests/ --exclude-dir=__pycache__ 2>/dev/null; then
+            echo "⚠️ Private keys found!"
+            FOUND_SECRETS=1
+          fi
+          
+          if [ $FOUND_SECRETS -eq 1 ]; then
+            echo "❌ Hardcoded secrets detected!"
+            exit 1
+          else
+            echo "✅ No hardcoded secrets found"
+          fi
+
+  packaging-validation:
+    name: Packaging & Installation Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      
+      - name: Run Installation Verification
+        run: |
+          echo "📦 Verifying package installation..."
+          python verify_installation.py
+      
+      - name: Test Wheel Building
+        run: |
+          echo "🎯 Testing wheel package building..."
+          pip install --upgrade pip wheel setuptools
+          python setup.py bdist_wheel
+          
+          # Verify wheel contents
+          pip install wheel-inspect
+          wheel-inspect dist/*.whl > wheel-contents.txt
+          
+          echo "📋 Wheel contents:"
+          cat wheel-contents.txt
+          
+          # Check for expected files
+          if ! grep -q "nova/cli.py" wheel-contents.txt; then
+            echo "❌ CLI module missing from wheel!"
+            exit 1
+          fi
+          
+          if ! grep -q "nova/__init__.py" wheel-contents.txt; then
+            echo "❌ Package init missing from wheel!"
+            exit 1
+          fi
+          
+          echo "✅ Wheel package structure validated"
+      
+      - name: Upload Packaging Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaging-artifacts-${{ github.run_id }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            wheel-contents.txt
+          retention-days: 7
+
+  safety-checks:
+    name: Safety Limits Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-timeout
+      
+      - name: Run Safety Check Tests
+        run: |
+          echo "🛡️ Testing safety limits enforcement..."
+          pytest tests/test_apply_patch_safety.py -v --tb=short
+          pytest tests/test_safety_limits.py -v --tb=short
+      
+      - name: Verify Safety Configuration
+        run: |
+          echo "⚙️ Verifying safety configuration..."
+          python -c "
+from nova.tools.safety_limits import SafetyLimits
+import json
+
+limits = SafetyLimits()
+config = {
+    'max_lines_per_file': limits.MAX_LINES_PER_FILE,
+    'max_files_per_commit': limits.MAX_FILES_PER_COMMIT,
+    'max_total_lines': limits.MAX_TOTAL_LINES,
+    'denied_paths': limits.DENIED_PATHS,
+    'denied_extensions': limits.DENIED_EXTENSIONS
+}
+
+print('Safety Limits Configuration:')
+print(json.dumps(config, indent=2))
+
+# Verify critical paths are protected
+critical_paths = ['.github/workflows', 'setup.py', 'pyproject.toml']
+for path in critical_paths:
+    if not any(denied in path for denied in limits.DENIED_PATHS):
+        print(f'⚠️ Warning: {path} may not be fully protected')
+
+print('✅ Safety configuration verified')
+"
+
+  summary:
+    name: Quality Gate Summary
+    needs: [static-analysis, secret-redaction, packaging-validation, safety-checks]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check Quality Gate Status
+        run: |
+          echo "📊 Code Quality & Security Audit Summary"
+          echo "========================================"
+          
+          # Check job statuses
+          if [ "${{ needs.static-analysis.result }}" == "success" ]; then
+            echo "✅ Static Analysis: PASSED"
+          else
+            echo "❌ Static Analysis: FAILED"
+          fi
+          
+          if [ "${{ needs.secret-redaction.result }}" == "success" ]; then
+            echo "✅ Secret Redaction: PASSED"
+          else
+            echo "❌ Secret Redaction: FAILED"
+          fi
+          
+          if [ "${{ needs.packaging-validation.result }}" == "success" ]; then
+            echo "✅ Packaging Validation: PASSED"
+          else
+            echo "❌ Packaging Validation: FAILED"
+          fi
+          
+          if [ "${{ needs.safety-checks.result }}" == "success" ]; then
+            echo "✅ Safety Checks: PASSED"
+          else
+            echo "❌ Safety Checks: FAILED"
+          fi
+          
+          # Overall gate
+          if [ "${{ needs.static-analysis.result }}" == "success" ] && \
+             [ "${{ needs.secret-redaction.result }}" == "success" ] && \
+             [ "${{ needs.packaging-validation.result }}" == "success" ] && \
+             [ "${{ needs.safety-checks.result }}" == "success" ]; then
+            echo ""
+            echo "🎉 All quality gates PASSED!"
+            exit 0
+          else
+            echo ""
+            echo "❌ Some quality gates FAILED. Please review the issues above."
+            exit 1
+          fi

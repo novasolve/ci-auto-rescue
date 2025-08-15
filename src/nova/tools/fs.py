@@ -111,6 +111,11 @@ def apply_unified_diff(repo_root: Path, diff_text: str) -> List[Path]:
 
         if getattr(pf, "is_removed_file", False) and src_rel:
             path = (repo_root / src_rel).resolve()
+            # Try src/ directory if file doesn't exist
+            if not path.exists() and not src_rel.startswith("src/"):
+                alt_path = (repo_root / "src" / src_rel).resolve()
+                if alt_path.exists():
+                    path = alt_path
             if not _is_within(repo_root, path):
                 raise PermissionError(f"Refusing to modify path outside repo: {path}")
             targets.append((path, pf))
@@ -121,10 +126,21 @@ def apply_unified_diff(repo_root: Path, diff_text: str) -> List[Path]:
                 # Some diffs might specify only source on rename/delete with no target
                 if src_rel:
                     path = (repo_root / src_rel).resolve()
+                    # Try src/ directory if file doesn't exist
+                    if not path.exists() and not src_rel.startswith("src/"):
+                        alt_path = (repo_root / "src" / src_rel).resolve()
+                        if alt_path.exists():
+                            path = alt_path
                 else:
                     raise ValueError("Patch file missing path information")
             else:
                 path = (repo_root / tgt_rel).resolve()
+                # Try src/ directory if file doesn't exist and not adding new file
+                if not path.exists() and not getattr(pf, "is_added_file", False):
+                    if not tgt_rel.startswith("src/"):
+                        alt_path = (repo_root / "src" / tgt_rel).resolve()
+                        if alt_path.exists():
+                            path = alt_path
             if not _is_within(repo_root, path):
                 raise PermissionError(f"Refusing to modify path outside repo: {path}")
             targets.append((path, pf))

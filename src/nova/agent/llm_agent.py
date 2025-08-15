@@ -65,9 +65,8 @@ class LLMAgent:
         candidates = []
         parts = module_name.split('.')
         
-        # Direct paths in repo root
+        # Direct paths in repo root - prioritize actual module files over __init__.py
         candidates.append(self.repo_path / f"{parts[0]}.py")
-        candidates.append(self.repo_path / parts[0] / "__init__.py")
         
         # Common source directories
         for src_dir in ['src', 'lib', 'app']:
@@ -75,7 +74,6 @@ class LLMAgent:
             if src_path.exists():
                 # Try the module directly under src/
                 candidates.append(src_path / f"{parts[0]}.py")
-                candidates.append(src_path / parts[0] / "__init__.py")
                 
                 # For multi-part modules like 'package.module'
                 if len(parts) > 1:
@@ -83,6 +81,17 @@ class LLMAgent:
                     for i, part in enumerate(parts[:-1]):
                         path = path / part
                         candidates.append(path / f"{parts[-1]}.py")
+        
+        # Add __init__.py files LAST (lowest priority)
+        candidates.append(self.repo_path / parts[0] / "__init__.py")
+        for src_dir in ['src', 'lib', 'app']:
+            src_path = self.repo_path / src_dir
+            if src_path.exists():
+                candidates.append(src_path / parts[0] / "__init__.py")
+                if len(parts) > 1:
+                    path = src_path
+                    for i, part in enumerate(parts[:-1]):
+                        path = path / part
                         candidates.append(path / "__init__.py")
         
         return candidates

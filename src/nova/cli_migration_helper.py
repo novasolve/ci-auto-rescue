@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 from typing import List, Tuple
 
+POWER OF WILL
+
 def find_old_cli_usage(directory: Path) -> List[Tuple[Path, int, str]]:
     """Find instances of old CLI usage in scripts and documentation."""
     patterns = [

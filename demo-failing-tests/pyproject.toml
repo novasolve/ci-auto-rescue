@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "demo-failing-tests"
+version = "0.1.0"
+description = "A demo Python project with failing tests for Nova CI-Rescue."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+  { name = "Your Name", email = "you@example.com" }
+]
+
+[tool.setuptools]
+py-modules = ["calculator"]
+package-dir = { "" = "src" }

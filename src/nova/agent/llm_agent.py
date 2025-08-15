@@ -215,6 +215,15 @@ class LLMAgent:
             if any(pattern in line for pattern in dangerous_patterns):
                 return False, "Patch modifies protected/configuration files"
         
+        # Repo-aware duplicate function definition check before LLM review
+        try:
+            dup_error = self._detect_duplicate_defs_against_repo(patch)
+            if dup_error:
+                return False, dup_error
+        except Exception:
+            # Non-fatal; fall through to LLM critic
+            pass
+
         # Use LLM to perform semantic review of the patch
         try:
             system_prompt = (
@@ -223,23 +232,24 @@ class LLMAgent:
             )
             
             user_prompt = f"""Review this patch that attempts to fix failing tests:
-
-PATCH:
-```diff
-{patch[:1500]}
-```
-
-FAILING TESTS IT SHOULD FIX:
-{json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:3]], indent=2)}
-
-Evaluate if this patch:
-1. Actually fixes the failing tests
-2. Doesn't introduce new bugs or break existing functionality
-3. Follows good coding practices
-4. Is minimal and focused on the problem
-
-Respond with JSON:
-{{"approved": true/false, "reason": "brief explanation"}}"""
+ 
+ PATCH:
+ ```diff
+ {patch[:1500]}
+ ```
+ 
+ FAILING TESTS IT SHOULD FIX:
+ {json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:3]], indent=2)}
+ 
+ Evaluate if this patch:
+ 1. Actually fixes the failing tests
+ 2. Doesn't introduce new bugs or break existing functionality
+ 3. Follows good coding practices
+ 4. Is minimal and focused on the problem
+ 5. Doesn't introduce duplicate function definitions (modifies existing functions rather than adding new ones)
+ 
+ Respond with JSON:
+ {"approved": true/false, "reason": "brief explanation"}"""
             
             response = self.llm.complete(
                 system=system_prompt,
@@ -262,6 +272,57 @@ Respond with JSON:
             print(f"Error in patch review: {e}")
             # If review process fails, default to approving the patch
             return True, "Review failed, auto-approving (LLM error)"
+
+    def _detect_duplicate_defs_against_repo(self, patch: str) -> Optional[str]:
+        """Detect added function definitions that duplicate existing ones in repo without removal.
+        Returns an error message if duplication is detected; otherwise None.
+        """
+        try:
+            patch_lines = patch.split('\n')
+            current_file: Optional[str] = None
+            for line in patch_lines:
+                if line.startswith('+++ '):
+                    parts = line.split()
+                    if len(parts) > 1:
+                        file_path = parts[1]
+                        if file_path.startswith('b/'):
+                            file_path = file_path[2:]
+                        current_file = file_path
+                    else:
+                        current_file = None
+                    continue
+
+                if not current_file:
+                    continue
+
+                # Only consider python files
+                if not current_file.endswith('.py'):
+                    continue
+
+                if line.startswith('+'):
+                    stripped = line[1:].lstrip()
+                    if stripped.startswith('def '):
+                        func_name = stripped[len('def '):].split('(')[0].strip()
+                        orig_path = self.repo_path / current_file
+                        original_content = ""
+                        try:
+                            original_content = orig_path.read_text()
+                        except Exception:
+                            original_content = ""
+                        if f"def {func_name}(" in original_content:
+                            # Ensure the original def is being removed somewhere in patch
+                            original_def_removed = any(
+                                ol.startswith('-') and ol[1:].lstrip().startswith(f"def {func_name}(")
+                                for ol in patch_lines
+                            )
+                            if not original_def_removed:
+                                return (
+                                    f"Patch introduces a duplicate definition of function '{func_name}' "
+                                    f"in {current_file}. Modify the existing function in-place instead."
+                                )
+            return None
+        except Exception:
+            return None
     
     def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int,
                     critic_feedback: Optional[str] = None) -> Dict[str, Any]:

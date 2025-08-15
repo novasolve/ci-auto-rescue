@@ -24,26 +24,123 @@ class LLMAgent:
         source_files = set()
         try:
             test_content = test_file_path.read_text()
-            # Find import statements using regex
-            import_pattern = r'^\s*(?:from|import)\s+([\w\.]+)'
+            
+            # Extended list of standard library and test framework modules to skip
+            skip_modules = {
+                'pytest', 'unittest', 'sys', 'os', 'json', 're', 'io', 'typing',
+                'pathlib', 'datetime', 'time', 'math', 'random', 'collections',
+                'itertools', 'functools', 'warnings', 'copy', 'logging', 'tempfile',
+                'subprocess', 'shutil', 'importlib', 'contextlib', 'abc', 'enum',
+                'dataclasses', 'asyncio', 'threading', 'multiprocessing'
+            }
+            
+            # Parse imports using regex for better accuracy
+            import_pattern = r'^\s*(?:from\s+([\w\.]+)\s+import|import\s+([\w\.]+))'
             for line in test_content.split('\n'):
                 match = re.match(import_pattern, line)
                 if match:
-                    module = match.group(1).split('.')[0]
-                    # Skip standard library and common test frameworks
-                    if module not in ['pytest', 'unittest', 'sys', 'os', 'json', 're']:
-                        # Look for a corresponding source file (module.py or module/__init__.py)
-                        possible_files = [
-                            self.repo_path / f"{module}.py",
-                            self.repo_path / module / "__init__.py",
-                        ]
-                        for pf in possible_files:
-                            if pf.exists():
-                                source_files.add(str(pf.relative_to(self.repo_path)))
+                    # Get the module name from either 'from X import' or 'import X'
+                    module = match.group(1) or match.group(2)
+                    if module:
+                        # Handle relative imports (e.g., from ..src.calculator import ...)
+                        module = module.lstrip('.')
+                        base_module = module.split('.')[0]
+                        
+                        # Skip standard library modules
+                        if base_module in skip_modules:
+                            continue
+                        
+                        # Try to find the source file in various locations
+                        candidates = self._get_candidate_source_paths(module)
+                        for candidate in candidates:
+                            if candidate.exists():
+                                source_files.add(str(candidate.relative_to(self.repo_path)))
                                 break
         except Exception as e:
             print(f"Error parsing test file {test_file_path}: {e}")
         return source_files
+    
+    def _get_candidate_source_paths(self, module_name: str) -> List[Path]:
+        """Get candidate paths where a module might be located."""
+        candidates = []
+        parts = module_name.split('.')
+        
+        # Direct paths in repo root
+        candidates.append(self.repo_path / f"{parts[0]}.py")
+        candidates.append(self.repo_path / parts[0] / "__init__.py")
+        
+        # Common source directories
+        for src_dir in ['src', 'lib', 'app']:
+            src_path = self.repo_path / src_dir
+            if src_path.exists():
+                # Try the module directly under src/
+                candidates.append(src_path / f"{parts[0]}.py")
+                candidates.append(src_path / parts[0] / "__init__.py")
+                
+                # For multi-part modules like 'package.module'
+                if len(parts) > 1:
+                    path = src_path
+                    for i, part in enumerate(parts[:-1]):
+                        path = path / part
+                        candidates.append(path / f"{parts[-1]}.py")
+                        candidates.append(path / "__init__.py")
+        
+        return candidates
+    
+    def _parse_project_config(self) -> Dict[str, Any]:
+        """Parse project configuration files to understand source layout."""
+        config = {}
+        
+        # Try to parse pyproject.toml
+        pyproject_path = self.repo_path / "pyproject.toml"
+        if pyproject_path.exists():
+            try:
+                import tomli
+                with open(pyproject_path, 'rb') as f:
+                    pyproject = tomli.load(f)
+                    
+                # Check for package-dir in setuptools config
+                if 'tool' in pyproject and 'setuptools' in pyproject['tool']:
+                    setuptools = pyproject['tool']['setuptools']
+                    if 'package-dir' in setuptools:
+                        config['package_dir'] = setuptools['package-dir']
+                    if 'packages' in setuptools:
+                        config['packages'] = setuptools['packages']
+            except (ImportError, Exception) as e:
+                # If tomli is not available or parsing fails, try basic regex
+                try:
+                    content = pyproject_path.read_text()
+                    # Look for package-dir patterns
+                    if 'package-dir' in content and 'src' in content:
+                        config['has_src_layout'] = True
+                except:
+                    pass
+        
+        # Try to parse setup.cfg
+        setup_cfg_path = self.repo_path / "setup.cfg"
+        if setup_cfg_path.exists():
+            try:
+                parser = configparser.ConfigParser()
+                parser.read(setup_cfg_path)
+                if 'options' in parser:
+                    if 'package_dir' in parser['options']:
+                        config['package_dir'] = parser['options']['package_dir']
+                    if 'packages' in parser['options']:
+                        config['packages'] = parser['options']['packages']
+            except:
+                pass
+        
+        # Try to parse setup.py for common patterns
+        setup_py_path = self.repo_path / "setup.py"
+        if setup_py_path.exists():
+            try:
+                content = setup_py_path.read_text()
+                if 'package_dir' in content and '"src"' in content:
+                    config['has_src_layout'] = True
+            except:
+                pass
+        
+        return config
     
     def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int,
                        plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
@@ -75,17 +172,41 @@ class LLMAgent:
                     # Find source files imported by this test
                     source_files.update(self.find_source_files_from_test(test_path))
         
+        # Parse project configuration to understand source layout
+        project_config = self._parse_project_config()
+        
         # If no source files found via imports, try to find them in common locations
         if not source_files:
+            # Determine source directories based on project config
+            src_dirs = ["src", "lib", "app"]
+            if project_config.get('has_src_layout') or project_config.get('package_dir'):
+                # Prioritize src/ if project uses src layout
+                src_dirs = ["src"] + [d for d in src_dirs if d != "src"]
+            
+            # Also check the root directory
+            src_dirs.append(".")
+            
             # Look for Python files in common source directories
-            for src_dir in ["src", "lib", "app", "."]:
+            for src_dir in src_dirs:
                 src_path = self.repo_path / src_dir
                 if src_path.exists() and src_path.is_dir():
-                    # Find all Python files in this directory (excluding tests and __pycache__)
-                    for py_file in src_path.glob("*.py"):
-                        if not py_file.name.startswith("test_") and not py_file.name.endswith("_test.py"):
-                            rel_path = py_file.relative_to(self.repo_path)
-                            source_files.add(str(rel_path))
+                    # Find all Python files in this directory and subdirectories (excluding tests)
+                    for py_file in src_path.rglob("*.py"):
+                        # Skip test files and cache directories
+                        rel_path = py_file.relative_to(self.repo_path)
+                        path_str = str(rel_path)
+                        if ('test' in path_str.lower() or 
+                            '__pycache__' in path_str or
+                            py_file.name.startswith("test_") or 
+                            py_file.name.endswith("_test.py") or
+                            py_file.name == "conftest.py"):
+                            continue
+                        source_files.add(str(rel_path))
+                        # If we found files in src/, don't look in other directories
+                        if src_dir == "src" and source_files:
+                            break
+                if source_files and src_dir in ["src", "lib", "app"]:
+                    break  # Stop if we found files in a common source directory
         
         # Read content of identified source files
         for source_file in source_files:
@@ -101,10 +222,14 @@ class LLMAgent:
             system_prompt = (
                 "You are a coding assistant who writes fixes as unified diffs. "
                 "Fix the SOURCE CODE to make tests pass. "
-                "Generate only valid unified diff patches with proper file paths and hunk headers. "
-                "Ensure that each diff hunk header's line counts exactly match the changes made. "
-                "CRITICAL: When fixing functions, use proper diff format: remove old lines with '-' prefix "
-                "and add new lines with '+' prefix. NEVER create duplicate function definitions."
+                "Generate only valid unified diff patches with CORRECT file paths and hunk headers. \n"
+                "CRITICAL RULES:\n"
+                "1. Use the EXACT file paths shown in the 'SOURCE CODE FILES TO FIX' section (e.g., src/calculator.py)\n"
+                "2. File paths must match the actual repository structure\n"
+                "3. Each hunk header's line counts must exactly match the changes made\n"
+                "4. When fixing functions, remove old lines with '-' and add new lines with '+'\n"
+                "5. NEVER create duplicate function definitions\n"
+                "6. The diff must target the actual files shown in the prompt, not guessed paths"
             )
             patch_diff = self.llm.complete(
                 system=system_prompt,
@@ -151,8 +276,13 @@ class LLMAgent:
                         patch_diff = patch_diff + '\n' + continuation.strip()
                         print(f"Added {len(continuation.split(chr(10)))} continuation lines to patch")
             
-            # Ensure the patch diff is properly formatted
-            return self._fix_patch_format(patch_diff)
+            # Ensure the patch diff is properly formatted and has correct paths
+            patch_diff = self._fix_patch_format(patch_diff)
+            
+            # Correct patch file paths if needed
+            patch_diff = self._correct_patch_paths(patch_diff, source_files)
+            
+            return patch_diff
             
         except Exception as e:
             print(f"Error generating patch: {e}")
@@ -198,6 +328,108 @@ class LLMAgent:
             fixed_lines.append(line)
         
         return '\n'.join(fixed_lines)
+    
+    def _correct_patch_paths(self, patch_diff: str, known_source_files: Set[str]) -> str:
+        """Correct file paths in patch if they don't match actual repository structure.
+        
+        Args:
+            patch_diff: The patch diff string
+            known_source_files: Set of known source file paths from discovery
+            
+        Returns:
+            Corrected patch diff
+        """
+        if not patch_diff or not known_source_files:
+            return patch_diff
+        
+        lines = patch_diff.split('\n')
+        corrected_lines = []
+        current_file = None
+        file_corrections = {}  # Map incorrect paths to correct ones
+        
+        for line in lines:
+            # Detect file headers
+            if line.startswith('--- '):
+                # Extract file path from --- line
+                parts = line.split()
+                if len(parts) >= 2:
+                    file_path = parts[1]
+                    if file_path.startswith('a/'):
+                        file_path = file_path[2:]
+                    
+                    # Check if this file path needs correction
+                    corrected_path = self._find_correct_path(file_path, known_source_files)
+                    if corrected_path and corrected_path != file_path:
+                        file_corrections[file_path] = corrected_path
+                        line = f"--- a/{corrected_path}"
+                        print(f"Corrected patch path: {file_path} -> {corrected_path}")
+                    current_file = corrected_path or file_path
+            
+            elif line.startswith('+++ '):
+                # Extract file path from +++ line
+                parts = line.split()
+                if len(parts) >= 2:
+                    file_path = parts[1]
+                    if file_path.startswith('b/'):
+                        file_path = file_path[2:]
+                    
+                    # Use the correction from --- line if available
+                    if file_path in file_corrections:
+                        line = f"+++ b/{file_corrections[file_path]}"
+                    else:
+                        corrected_path = self._find_correct_path(file_path, known_source_files)
+                        if corrected_path and corrected_path != file_path:
+                            line = f"+++ b/{corrected_path}"
+            
+            corrected_lines.append(line)
+        
+        return '\n'.join(corrected_lines)
+    
+    def _find_correct_path(self, incorrect_path: str, known_files: Set[str]) -> Optional[str]:
+        """Find the correct file path from known files.
+        
+        Args:
+            incorrect_path: Potentially incorrect file path from patch
+            known_files: Set of known correct file paths
+            
+        Returns:
+            Correct file path or None if not found
+        """
+        # Direct match
+        if incorrect_path in known_files:
+            return incorrect_path
+        
+        # Extract just the filename
+        filename = Path(incorrect_path).name
+        
+        # Look for files with the same name in known files
+        candidates = [f for f in known_files if Path(f).name == filename]
+        
+        if len(candidates) == 1:
+            # Unique match found
+            return candidates[0]
+        elif len(candidates) > 1:
+            # Multiple matches - try to find best match
+            # Prefer files in src/ directory
+            src_candidates = [f for f in candidates if f.startswith('src/')]
+            if len(src_candidates) == 1:
+                return src_candidates[0]
+            
+            # Otherwise return the first match
+            return candidates[0]
+        
+        # Try checking if adding 'src/' prefix helps
+        if not incorrect_path.startswith('src/'):
+            src_path = f"src/{incorrect_path}"
+            if src_path in known_files:
+                return src_path
+        
+        # Check if the file exists at the incorrect path (maybe it's a new file)
+        full_path = self.repo_path / incorrect_path
+        if full_path.exists():
+            return incorrect_path
+        
+        return None
     
     def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]]) -> Tuple[bool, str]:
         """

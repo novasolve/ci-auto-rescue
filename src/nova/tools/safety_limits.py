@@ -5,6 +5,7 @@ This module provides safety checks to prevent excessive or dangerous modificatio
 from being applied automatically.
 """
 
+import os
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
@@ -129,6 +130,24 @@ class SafetyLimits:
         """
         self.config = config or SafetyConfig()
         self.verbose = verbose
+        
+        # Override config from environment variables if set
+        if os.environ.get("NOVA_MAX_LINES_CHANGED"):
+            try:
+                self.config.max_lines_changed = int(os.environ["NOVA_MAX_LINES_CHANGED"])
+            except ValueError:
+                pass  # Keep default if invalid value
+        
+        if os.environ.get("NOVA_MAX_FILES_MODIFIED"):
+            try:
+                self.config.max_files_modified = int(os.environ["NOVA_MAX_FILES_MODIFIED"])
+            except ValueError:
+                pass  # Keep default if invalid value
+        
+        if os.environ.get("NOVA_DENIED_PATHS"):
+            # Parse comma-separated list of paths
+            custom_paths = [p.strip() for p in os.environ["NOVA_DENIED_PATHS"].split(",")]
+            self.config.denied_paths.extend(custom_paths)
         
         # Compile regex patterns for efficiency
         self.denied_patterns = [

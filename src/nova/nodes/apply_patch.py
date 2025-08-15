@@ -130,6 +130,54 @@ class ApplyPatchNode:
                 else:
                     console.print(f"[dim]  {line}[/dim]")
         
+        # Preflight validation: ensure the patch cleanly applies before modifying files
+        preflight_error = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
+                f.write(patch_text)
+                preflight_file = f.name
+
+            preflight = subprocess.run(
+                ["git", "apply", "--check", "--whitespace=nowarn", preflight_file],
+                cwd=state.repo_path,
+                capture_output=True,
+                text=True
+            )
+
+            if preflight.returncode != 0:
+                preflight_error = (preflight.stderr or preflight.stdout or "Unknown error")
+        finally:
+            try:
+                import os
+                if 'preflight_file' in locals():
+                    os.unlink(preflight_file)
+            except Exception:
+                pass
+
+        if preflight_error is not None:
+            if self.verbose:
+                console.print("[red]✗ Patch preflight check failed — will not apply[/red]")
+                console.print("[yellow]Git apply --check output:[/yellow]")
+                for line in preflight_error.split('\n'):
+                    if line.strip():
+                        console.print(f"  [dim]• {line.strip()}[/dim]")
+
+            if logger:
+                logger.log_event("preflight_failed", {
+                    "iteration": iteration,
+                    "step_number": step_number,
+                    "error_details": preflight_error
+                })
+
+            return {
+                "success": False,
+                "step_number": step_number,
+                "changed_files": [],
+                "patch_text": patch_text,
+                "preflight_failed": True,
+                "error": "context_mismatch"
+            }
+
         # Apply the patch and commit it
         success, changed_files = apply_and_commit_patch(
             repo_root=state.repo_path,

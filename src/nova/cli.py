@@ -423,6 +423,17 @@ def fix(
         while state.increment_iteration():
             iteration = state.current_iteration
             console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
+
+            # Ensure a clean working tree before generating a new patch
+            try:
+                if git_manager:
+                    git_manager._run_git_command("reset", "--hard", "HEAD")
+                    git_manager._run_git_command("clean", "-fd")
+                    if verbose:
+                        console.print("[dim]Working tree reset to HEAD and cleaned[/dim]")
+            except Exception as e:
+                if verbose:
+                    console.print(f"[yellow]Warning: pre-iteration reset failed: {e}[/yellow]")
             
             # 1. PLANNER: Generate a plan based on failing tests
             console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
@@ -542,11 +553,26 @@ def fix(
                     })
                 else:
                     console.print(f"[red]❌ Failed to apply patch[/red]")
-                    state.final_status = "patch_error"
                     telemetry.log_event("patch_error", {
                         "iteration": iteration,
                         "step": result.get("step_number", 0)
                     })
+                    # Retry logic on patch application failure (including preflight failure)
+                    if iteration < state.max_iterations:
+                        console.print("[yellow]Patch apply failed – resetting state and retrying...[/yellow]")
+                        try:
+                            if git_manager:
+                                git_manager._run_git_command("reset", "--hard", "HEAD")
+                                git_manager._run_git_command("clean", "-fd")
+                        except Exception as e:
+                            if verbose:
+                                console.print(f"[red]Failed to reset state after patch error: {e}[/red]")
+                        # Provide feedback to next iteration
+                        state.critic_feedback = "Patch application failed (possible context mismatch)."
+                        # Continue to next iteration
+                        continue
+                    else:
+                        state.final_status = "patch_error"
                 break
             else:
                 # Log successful patch application (only if not already done by fallback)

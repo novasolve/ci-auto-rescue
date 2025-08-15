@@ -7,6 +7,17 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Optional Docker-based sandbox support
+try:
+    from .docker_sandbox import (
+        is_docker_available,
+        run_pytest_in_docker,
+        run_code_in_docker,
+    )
+    HAS_DOCKER = True
+except Exception:
+    HAS_DOCKER = False
+
 
 def _limits_preexec(cpu_seconds: Optional[int] = None, max_address_space_bytes: Optional[int] = None):
     try:
@@ -129,3 +140,11 @@ def run_command(
 
 
 __all__ = ["run_command"]
+
+# Re-export docker helpers if available
+if HAS_DOCKER:
+    __all__ += [
+        "is_docker_available",
+        "run_pytest_in_docker",
+        "run_code_in_docker",
+    ]

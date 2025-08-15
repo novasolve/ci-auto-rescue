@@ -258,7 +258,7 @@ def validate_patch(patch_text: str) -> Tuple[bool, str]:
     return True, "Valid"
 
 
-def extract_simple_changes(patch_text: str) -> List[Tuple[str, str, str]]:
+def extract_simple_changes(patch_text: str) -> List[Tuple[str, str, any]]:
     """
     Extract simple change tuples from a patch for fallback application.
     
@@ -266,7 +266,8 @@ def extract_simple_changes(patch_text: str) -> List[Tuple[str, str, str]]:
         patch_text: The patch text
         
     Returns:
-        List of (filename, old_line, new_line) tuples
+        List of (filename, old_line, new_line) tuples.
+        new_line may be a string or a list of strings for multi-line additions.
     """
     changes = []
     current_file = None
@@ -284,16 +285,29 @@ def extract_simple_changes(patch_text: str) -> List[Tuple[str, str, str]]:
                 current_file = filename
         
         elif line.startswith('-') and not line.startswith('---'):
-            # Found a removal, look for corresponding addition
+            # Found a removal, gather all consecutive additions
             old_line = line[1:]
+            plus_lines = []
+            j = i + 1
             
-            # Look ahead for the addition
-            for j in range(i+1, min(i+10, len(lines))):
-                if lines[j].startswith('+') and not lines[j].startswith('+++'):
-                    new_line = lines[j][1:]
-                    if current_file:
-                        changes.append((current_file, old_line, new_line))
-                    break
+            # Collect all consecutive '+' lines
+            while j < len(lines) and lines[j].startswith('+') and not lines[j].startswith('+++'):
+                plus_lines.append(lines[j][1:])
+                j += 1
+            
+            if current_file:
+                if len(plus_lines) == 0:
+                    # Line deletion
+                    changes.append((current_file, old_line, []))
+                elif len(plus_lines) == 1:
+                    # Single line replacement
+                    changes.append((current_file, old_line, plus_lines[0]))
+                else:
+                    # Multi-line replacement
+                    changes.append((current_file, old_line, plus_lines))
+            
+            # Skip the lines we just processed
+            i = j - 1
         
         i += 1
     
@@ -302,24 +316,25 @@ def extract_simple_changes(patch_text: str) -> List[Tuple[str, str, str]]:
 
 def attempt_patch_reconstruction(patch_text: str, repo_root: str, verbose: bool = False) -> str:
     """
-    Attempt to reconstruct a truncated patch by analyzing what was changed.
+    Reconstruct a patch with correct context using actual file content.
+    Handles mismatches in comments and multi-line replacements.
     
     Args:
-        patch_text: The truncated patch text
+        patch_text: The patch text (may have context mismatches)
         repo_root: Repository root path
         verbose: Enable verbose output
         
     Returns:
-        Reconstructed patch text (may still be incomplete)
+        Reconstructed patch text with correct context
     """
-    import os
     from pathlib import Path
     
-    # Extract what we can from the truncated patch
+    # Extract changes from the patch
     changes = extract_simple_changes(patch_text)
     
-    if not changes and verbose:
-        print("Could not extract any changes from truncated patch")
+    if not changes:
+        if verbose:
+            print("Could not extract any changes from patch for reconstruction")
         return patch_text
     
     # Group changes by file
@@ -329,50 +344,109 @@ def attempt_patch_reconstruction(patch_text: str, repo_root: str, verbose: bool 
             file_changes[filename] = []
         file_changes[filename].append((old_line, new_line))
     
-    # Try to reconstruct a complete patch
+    # Reconstruct patch with correct context
     reconstructed_lines = []
     
     for filename, changes_list in file_changes.items():
         file_path = Path(repo_root) / filename
+        
+        # Try with src/ prefix if file not found
+        if not file_path.exists() and not filename.startswith('src/'):
+            file_path = Path(repo_root) / 'src' / filename
+            if file_path.exists():
+                filename = f'src/{filename}'
         
         if not file_path.exists():
             if verbose:
                 print(f"Warning: File {filename} not found, skipping reconstruction")
             continue
         
-        # Read the file content
+        # Read the current file content
         try:
-            with open(file_path, 'r') as f:
-                file_lines = f.readlines()
+            file_lines = file_path.read_text(encoding='utf-8').splitlines(keepends=True)
         except Exception as e:
             if verbose:
                 print(f"Error reading {filename}: {e}")
             continue
         
-        # Create a simple patch for this file
+        # Add file headers
         reconstructed_lines.append(f"--- a/{filename}")
         reconstructed_lines.append(f"+++ b/{filename}")
         
-        # Find and replace each change
+        # Helper function to strip comments for fuzzy matching
+        def strip_comment(s: str) -> str:
+            """Remove inline comments and trailing whitespace for comparison."""
+            s = s.rstrip()
+            # Split on '#' and take only the code part
+            if '#' in s:
+                return s.split('#')[0].rstrip()
+            return s
+        
+        # Process each change
         for old_line, new_line in changes_list:
-            # Find the line number
-            for i, file_line in enumerate(file_lines):
-                if file_line.rstrip() == old_line.rstrip():
-                    # Found the line to change
-                    line_num = i + 1
+            found = False
+            
+            # Try fuzzy matching - ignore comment differences
+            old_stripped = strip_comment(old_line)
+            
+            for idx, file_line in enumerate(file_lines):
+                file_stripped = strip_comment(file_line)
+                
+                # Fuzzy match: compare code without comments
+                if old_stripped and file_stripped == old_stripped:
+                    found = True
+                    line_num = idx + 1  # 1-indexed
                     
-                    # Create a simple hunk
-                    reconstructed_lines.append(f"@@ -{line_num},1 +{line_num},1 @@")
-                    reconstructed_lines.append(f"-{old_line}")
-                    reconstructed_lines.append(f"+{new_line}")
+                    # Handle different new_line types
+                    if isinstance(new_line, list):
+                        # Multi-line replacement
+                        new_count = len(new_line)
+                        if verbose:
+                            print(f"Reconstructing change at {filename}:{line_num}, "
+                                  f"replacing 1 line with {new_count} lines")
+                        
+                        reconstructed_lines.append(f"@@ -{line_num},1 +{line_num},{new_count} @@")
+                        # Use actual file line (with original comment) for removal
+                        reconstructed_lines.append(f"-{file_line.rstrip()}")
+                        # Add all new lines
+                        for nl in new_line:
+                            reconstructed_lines.append(f"+{nl.rstrip()}")
+                    else:
+                        # Single line replacement
+                        if verbose:
+                            print(f"Reconstructing change at {filename}:{line_num}")
+                        
+                        reconstructed_lines.append(f"@@ -{line_num},1 +{line_num},1 @@")
+                        # Use actual file line for removal
+                        reconstructed_lines.append(f"-{file_line.rstrip()}")
+                        # Use provided new line
+                        reconstructed_lines.append(f"+{new_line.rstrip()}")
                     break
-        else:
-            if verbose:
-                print(f"Warning: Could not find line '{old_line}' in {filename}")
+            
+            if not found and verbose:
+                print(f"Warning: Could not find match for '{old_line.strip()}' in {filename}")
+                # Try exact match as fallback
+                for idx, file_line in enumerate(file_lines):
+                    if file_line.rstrip() == old_line.rstrip():
+                        found = True
+                        line_num = idx + 1
+                        if isinstance(new_line, list):
+                            new_count = len(new_line)
+                            reconstructed_lines.append(f"@@ -{line_num},1 +{line_num},{new_count} @@")
+                            reconstructed_lines.append(f"-{file_line.rstrip()}")
+                            for nl in new_line:
+                                reconstructed_lines.append(f"+{nl.rstrip()}")
+                        else:
+                            reconstructed_lines.append(f"@@ -{line_num},1 +{line_num},1 @@")
+                            reconstructed_lines.append(f"-{file_line.rstrip()}")
+                            reconstructed_lines.append(f"+{new_line.rstrip()}")
+                        break
     
+    # Return reconstructed patch if we built any hunks
     if reconstructed_lines:
         if verbose:
-            print(f"Reconstructed patch with {len(file_changes)} file(s)")
-        return '\n'.join(reconstructed_lines)
+            print(f"Successfully reconstructed patch for {len(file_changes)} file(s)")
+        return '\n'.join(reconstructed_lines) + '\n'
     
+    # Fall back to original if reconstruction failed
     return patch_text

@@ -681,6 +681,76 @@ def apply_patch_with_git(
                 elif "already exists" in output.lower():
                     console.print("[yellow]Hint: Trying to create a file that already exists.[/yellow]")
             
+            # Try patch reconstruction with fuzzy matching before giving up
+            if verbose:
+                from rich.console import Console
+                console = Console()
+                console.print("[yellow]Patch failed to apply with git. Attempting smart reconstruction...[/yellow]")
+            
+            try:
+                from nova.tools.patch_fixer import attempt_patch_reconstruction
+                
+                # Reconstruct patch with fuzzy matching
+                reconstructed_patch = attempt_patch_reconstruction(diff_text, str(repo_root), verbose=verbose)
+                
+                if reconstructed_patch and reconstructed_patch.strip() != diff_text.strip():
+                    # Write reconstructed patch
+                    patch_file.write_text(reconstructed_patch)
+                    
+                    # Try applying reconstructed patch
+                    if git_manager and isinstance(git_manager, GitBranchManager):
+                        success_recon, output_recon = git_manager._run_git_command("apply", "--check", "--whitespace=nowarn", str(patch_file))
+                    else:
+                        result_recon = subprocess.run(
+                            ["git", "apply", "--check", "--whitespace=nowarn", str(patch_file)],
+                            cwd=repo_root,
+                            capture_output=True,
+                            text=True
+                        )
+                        success_recon = result_recon.returncode == 0
+                        output_recon = result_recon.stderr or result_recon.stdout
+                    
+                    if success_recon:
+                        if verbose:
+                            console.print("[green]✓ Reconstructed patch can be applied![/green]")
+                        
+                        # Apply the reconstructed patch
+                        if git_manager and isinstance(git_manager, GitBranchManager):
+                            success_apply, output_apply = git_manager._run_git_command("apply", "--whitespace=nowarn", str(patch_file))
+                        else:
+                            result_apply = subprocess.run(
+                                ["git", "apply", "--whitespace=nowarn", str(patch_file)],
+                                cwd=repo_root,
+                                capture_output=True,
+                                text=True
+                            )
+                            success_apply = result_apply.returncode == 0
+                        
+                        if success_apply:
+                            # Get changed files
+                            if git_manager and isinstance(git_manager, GitBranchManager):
+                                success1, unstaged = git_manager._run_git_command("diff", "--name-only")
+                                success2, staged = git_manager._run_git_command("diff", "--name-only", "--cached")
+                                success3, untracked = git_manager._run_git_command("ls-files", "--others", "--exclude-standard")
+                                output = "\n".join([unstaged, staged, untracked]).strip()
+                            else:
+                                result1 = subprocess.run(["git", "diff", "--name-only"], cwd=repo_root, capture_output=True, text=True)
+                                result2 = subprocess.run(["git", "diff", "--name-only", "--cached"], cwd=repo_root, capture_output=True, text=True)
+                                result3 = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], cwd=repo_root, capture_output=True, text=True)
+                                output = "\n".join([result1.stdout, result2.stdout, result3.stdout]).strip()
+                            
+                            changed_files = [Path(repo_root) / f.strip() for f in output.split('\n') if f.strip()]
+                            
+                            if verbose:
+                                console.print(f"[green]✓ Reconstructed patch applied successfully![/green]")
+                                if changed_files:
+                                    console.print(f"[dim]Changed files: {', '.join([f.name for f in changed_files])}[/dim]")
+                            
+                            return changed_files
+            except Exception as e:
+                if verbose:
+                    console.print(f"[red]Reconstruction failed: {e}[/red]")
+            
             # Log to telemetry if available
             if telemetry and hasattr(telemetry, 'log_event'):
                 telemetry.log_event("patch_error", {
@@ -694,7 +764,7 @@ def apply_patch_with_git(
                 patch_hash = hashlib.md5(diff_text.encode()).hexdigest()[:8]
                 telemetry.save_artifact(f"failed_patches/patch_{patch_hash}.diff", diff_text)
             
-            # Do NOT attempt Python fallback here – return empty result on failure
+            # Fallback failed, return empty result
             return []
         
         # Apply the patch for real

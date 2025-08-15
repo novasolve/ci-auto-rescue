@@ -4,29 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       max_iterations:
-        description: 'Maximum number of fix iterations'
+        description: "Maximum number of fix iterations"
         required: false
-        default: '6'
+        default: "6"
         type: string
       timeout:
-        description: 'Overall timeout in seconds'
+        description: "Overall timeout in seconds"
         required: false
-        default: '1200'
+        default: "1200"
         type: string
       verbose:
-        description: 'Enable verbose output'
+        description: "Enable verbose output"
         required: false
         default: false
         type: boolean
       python_version:
-        description: 'Python version to use'
+        description: "Python version to use"
         required: false
-        default: '3.11'
+        default: "3.11"
         type: choice
         options:
-          - '3.10'
-          - '3.11'
-          - '3.12'
+          - "3.10"
+          - "3.11"
+          - "3.12"
 
 permissions:
   contents: write
@@ -39,18 +39,18 @@ jobs:
   nova-fix:
     name: Fix Failing Tests with Nova
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for proper git operations
-          
+          fetch-depth: 0 # Fetch all history for proper git operations
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python_version }}
-          
+
       - name: Cache pip packages
         uses: actions/cache@v3
         with:
@@ -58,11 +58,11 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/setup.py') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-            
+
       - name: Install Nova CI-Rescue
         run: |
           echo "📦 Installing Nova CI-Rescue and dependencies..."
-          
+
           # Check if this repo is Nova itself or a target repo
           if [ -f "pyproject.toml" ] && grep -q "nova-ci-rescue" pyproject.toml; then
             echo "Installing Nova from current repository..."
@@ -78,52 +78,52 @@ jobs:
             git clone https://github.com/novasolve/ci-auto-rescue.git /tmp/nova-ci-rescue
             pip install -e /tmp/nova-ci-rescue
           fi
-          
+
           # Install test dependencies if they exist
           if [ -f "requirements.txt" ]; then
             pip install -r requirements.txt
           fi
-          
+
           if [ -f "requirements-test.txt" ]; then
             pip install -r requirements-test.txt
           fi
-          
+
           # Verify installation
           nova --help
-          
+
       - name: Configure Nova Environment
         run: |
           echo "🔧 Configuring Nova environment..."
-          
+
           # Set up API keys from secrets (if provided)
           if [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
             echo "✅ OpenAI API key configured"
           fi
-          
+
           if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
             echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
             echo "✅ Anthropic API key configured"
           fi
-          
+
           # Set Nova configuration
           echo "NOVA_TELEMETRY_DIR=telemetry" >> $GITHUB_ENV
           echo "NOVA_MAX_ITERS=${{ inputs.max_iterations }}" >> $GITHUB_ENV
           echo "NOVA_TIMEOUT=${{ inputs.timeout }}" >> $GITHUB_ENV
-          
+
           # Configure git for commits
           git config --global user.email "nova-bot@github.com"
           git config --global user.name "Nova CI-Rescue Bot"
-          
+
       - name: Run Initial Tests (Pre-Fix)
         id: initial_tests
         continue-on-error: true
         run: |
           echo "🧪 Running initial tests to identify failures..."
-          
+
           # Run pytest with JUnit XML output
           pytest --tb=short --maxfail=10 --junit-xml=initial_tests.xml || true
-          
+
           # Count failures
           if [ -f "initial_tests.xml" ]; then
             failures=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('initial_tests.xml'); root = tree.getroot(); failures = int(root.get('failures', 0)); errors = int(root.get('errors', 0)); print(failures + errors)")
@@ -133,25 +133,25 @@ jobs:
             echo "initial_failures=0" >> $GITHUB_OUTPUT
             echo "⚠️ No test results found"
           fi
-          
+
       - name: Run Nova Fix
         id: nova_fix
         run: |
           echo "🚀 Running Nova CI-Rescue to fix failing tests..."
           echo "================================================"
-          
+
           # Prepare verbose flag
           VERBOSE_FLAG=""
           if [ "${{ inputs.verbose }}" = "true" ]; then
             VERBOSE_FLAG="--verbose"
           fi
-          
+
           # Run Nova fix command
           nova fix . \
             --max-iters ${{ inputs.max_iterations }} \
             --timeout ${{ inputs.timeout }} \
             $VERBOSE_FLAG || NOVA_EXIT_CODE=$?
-          
+
           # Check exit code
           if [ "${NOVA_EXIT_CODE:-0}" -eq 0 ]; then
             echo "✅ Nova successfully fixed all tests!"
@@ -160,16 +160,16 @@ jobs:
             echo "⚠️ Nova completed with some tests still failing or hit limits"
             echo "nova_success=false" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Run Final Tests (Post-Fix)
         id: final_tests
         if: always()
         run: |
           echo "🧪 Running final tests to verify fixes..."
-          
+
           # Run pytest with JUnit XML output
           pytest --tb=short --maxfail=10 --junit-xml=final_tests.xml || true
-          
+
           # Count failures
           if [ -f "final_tests.xml" ]; then
             failures=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('final_tests.xml'); root = tree.getroot(); failures = int(root.get('failures', 0)); errors = int(root.get('errors', 0)); print(failures + errors)")
@@ -178,38 +178,38 @@ jobs:
           else
             echo "final_failures=0" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Generate Summary Report
         if: always()
         run: |
           echo "📝 Generating summary report..."
-          
+
           # Create summary markdown
           cat > summary.md << EOF
           # Nova CI-Rescue Execution Summary
-          
+
           ## Results
           - **Initial Failures**: ${{ steps.initial_tests.outputs.initial_failures }}
           - **Final Failures**: ${{ steps.final_tests.outputs.final_failures }}
           - **Tests Fixed**: $((${{ steps.initial_tests.outputs.initial_failures }} - ${{ steps.final_tests.outputs.final_failures }}))
           - **Success**: ${{ steps.nova_fix.outputs.nova_success }}
-          
+
           ## Configuration
           - **Max Iterations**: ${{ inputs.max_iterations }}
           - **Timeout**: ${{ inputs.timeout }}s
           - **Python Version**: ${{ inputs.python_version }}
           - **Verbose**: ${{ inputs.verbose }}
-          
+
           ## Artifacts
           - Telemetry traces and logs: \`telemetry/\`
           - Patches applied: \`telemetry/*/patches/\`
           - Test reports: \`telemetry/*/reports/\`
           - Nova working directory: \`.nova/\`
           EOF
-          
+
           # Add to GitHub summary
           cat summary.md >> $GITHUB_STEP_SUMMARY
-          
+
       - name: Upload Telemetry Artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -219,7 +219,7 @@ jobs:
             telemetry/
           retention-days: 30
           if-no-files-found: warn
-          
+
       - name: Upload Nova Working Directory
         if: always()
         uses: actions/upload-artifact@v4
@@ -229,7 +229,7 @@ jobs:
             .nova/
           retention-days: 7
           if-no-files-found: warn
-          
+
       - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -242,7 +242,7 @@ jobs:
             telemetry/*/reports/*.json
           retention-days: 30
           if-no-files-found: warn
-          
+
       - name: Upload Patches
         if: always()
         uses: actions/upload-artifact@v4
@@ -252,13 +252,13 @@ jobs:
             telemetry/*/patches/*.patch
           retention-days: 30
           if-no-files-found: warn
-          
+
       - name: Create PR with Fixes (if branch created)
         if: steps.nova_fix.outputs.nova_success == 'true' && github.event_name == 'workflow_dispatch'
         continue-on-error: true
         run: |
           echo "📤 Checking for nova-fix branch to create PR..."
-          
+
           # Check if nova-fix branch exists and has changes
           if git branch -r | grep -q "origin/nova-fix"; then
             echo "Nova fix branch exists on remote"
@@ -290,7 +290,7 @@ jobs:
           else
             echo "No nova-fix branch found"
           fi
-          
+
       - name: Comment on Issue/PR (if triggered from issue)
         if: always() && github.event_name == 'workflow_dispatch'
         continue-on-error: true

@@ -1,4 +1,4 @@
-# Test dependencies
+# Requirements for the Nova CI-Rescue demo repository
 pytest>=7.0.0
-pytest-cov>=4.0.0
 pytest-json-report>=1.5.0
+nova-ci-rescue>=1.0.0

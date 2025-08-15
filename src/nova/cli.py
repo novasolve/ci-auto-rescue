@@ -227,6 +227,33 @@ def fix(
             repo = os.getenv("GITHUB_REPOSITORY")
             pr_num = os.getenv("PR_NUMBER")
             
+            # Try to auto-detect PR number if not provided
+            if not pr_num:
+                # Try GitHub Actions event number
+                pr_num = os.getenv("GITHUB_EVENT_NUMBER")
+                
+                # Try to parse from GITHUB_REF (e.g., refs/pull/123/merge)
+                if not pr_num:
+                    github_ref = os.getenv("GITHUB_REF")
+                    if github_ref and "pull/" in github_ref:
+                        import re
+                        match = re.search(r"pull/(\d+)/", github_ref)
+                        if match:
+                            pr_num = match.group(1)
+                
+                # Try to parse from GitHub event JSON
+                if not pr_num:
+                    event_path = os.getenv("GITHUB_EVENT_PATH")
+                    if event_path and os.path.exists(event_path):
+                        try:
+                            import json
+                            with open(event_path, "r") as f:
+                                event_data = json.load(f)
+                            if "pull_request" in event_data:
+                                pr_num = str(event_data["pull_request"]["number"])
+                        except:
+                            pass
+            
             if token and repo:
                 try:
                     from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
@@ -604,6 +631,33 @@ def fix(
         token = os.getenv("GITHUB_TOKEN")
         repo = os.getenv("GITHUB_REPOSITORY")  # e.g. "owner/repo"
         pr_num = os.getenv("PR_NUMBER")
+        
+        # Try to auto-detect PR number if not provided
+        if not pr_num:
+            # Try GitHub Actions event number
+            pr_num = os.getenv("GITHUB_EVENT_NUMBER")
+            
+            # Try to parse from GITHUB_REF (e.g., refs/pull/123/merge)
+            if not pr_num:
+                github_ref = os.getenv("GITHUB_REF")
+                if github_ref and "pull/" in github_ref:
+                    import re
+                    match = re.search(r"pull/(\d+)/", github_ref)
+                    if match:
+                        pr_num = match.group(1)
+            
+            # Try to parse from GitHub event JSON
+            if not pr_num:
+                event_path = os.getenv("GITHUB_EVENT_PATH")
+                if event_path and os.path.exists(event_path):
+                    try:
+                        import json
+                        with open(event_path, "r") as f:
+                            event_data = json.load(f)
+                        if "pull_request" in event_data:
+                            pr_num = str(event_data["pull_request"]["number"])
+                    except:
+                        pass
         
         if token and repo:
             try:
@@ -1103,7 +1157,7 @@ def version():
     """
     Show Nova CI-Rescue version.
     """
-    console.print("[green]Nova CI-Rescue[/green] v0.1.0")
+    console.print("[green]Nova CI-Rescue[/green] v1.0.0")
 
 
 if __name__ == "__main__":

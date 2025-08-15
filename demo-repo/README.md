@@ -1,169 +1,210 @@
 # Nova CI-Rescue Demo Repository
 
-This is a demonstration repository for testing the **Nova CI-Rescue** GitHub Action. It contains a simple Python calculator module with intentional bugs that Nova can automatically detect and fix.
+This repository demonstrates Nova CI-Rescue in action. It contains a simple Python calculator module with deliberately failing tests that Nova CI-Rescue can automatically fix.
 
-## 🎯 Purpose
+## 🚀 Quick Start
 
-This demo repository showcases how Nova CI-Rescue can:
+### Prerequisites
 
-- Detect failing tests in your CI pipeline
-- Analyze the failures and understand the root cause
-- Generate patches to fix the issues
-- Apply the fixes and verify they work
-- Create artifacts and reports for review
+- Python 3.10 or higher
+- An LLM API key (OpenAI or Anthropic)
+- Nova CI-Rescue installed (`pip install nova-ci-rescue`)
 
-## 🐛 Intentional Bugs
-
-The `src/calculator.py` module contains several intentional bugs:
-
-1. **Subtraction Bug**: Uses addition operator instead of subtraction
-2. **Division Bug**: Missing zero division check
-3. **Power Bug**: Uses multiplication instead of exponentiation
-4. **Square Root Bug**: Doesn't handle negative numbers
-5. **Factorial Bug**: Off-by-one error in the range
-6. **Fibonacci Bug**: Wrong initial values for sequence
-7. **Prime Check Bug**: Inefficient algorithm checking up to n
-
-## 📁 Project Structure
+### Repository Structure
 
 ```
 demo-repo/
 ├── src/
-│   ├── __init__.py
-│   └── calculator.py      # Calculator module with bugs
+│   └── calc.py           # Calculator module with intentional bugs
 ├── tests/
-│   ├── __init__.py
-│   └── test_calculator.py # Test suite that exposes the bugs
-├── .gitignore
-├── pyproject.toml         # Project configuration
-├── requirements.txt       # Test dependencies
-└── README.md             # This file
+│   └── test_calc.py       # Test suite that will fail initially
+├── .github/
+│   └── workflows/
+│       └── nova.yml       # GitHub Actions workflow for automated fixes
+└── README.md              # This file
 ```
 
-## 🚀 Running the Demo
+## 🔧 Running Nova CI-Rescue Locally
 
-### Local Testing
+### Step 1: Set up the environment
 
-1. **Install dependencies:**
+```bash
+# Clone this demo repository
+git clone <repo-url>
+cd demo-repo
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+# Install dependencies
+pip install pytest nova-ci-rescue
 
-2. **Run tests to see failures:**
+# Set your LLM API key
+export OPENAI_API_KEY="your-api-key-here"
+# OR
+export ANTHROPIC_API_KEY="your-api-key-here"
+```
 
-   ```bash
-   pytest tests/ -v
-   ```
+### Step 2: Verify the tests are failing
 
-   You should see multiple test failures due to the intentional bugs.
+```bash
+# Run tests to see the failures
+pytest tests/
+```
 
-3. **Run Nova CI-Rescue locally:**
+You should see multiple test failures:
+- `test_addition` fails because `add()` returns `a - b` instead of `a + b`
+- `test_multiplication` fails because `multiply()` returns `a + b` instead of `a * b`
+- `test_division` fails because `divide()` uses integer division instead of float division
 
-   ```bash
-   # Install Nova CI-Rescue
-   pip install -e /path/to/nova-ci-rescue
+### Step 3: Run Nova CI-Rescue
 
-   # Run Nova fix
-   nova fix . --max-iters 6 --timeout 1200 --verbose
-   ```
+```bash
+# Run Nova to automatically fix the failing tests
+nova fix .
 
-### GitHub Actions
+# You can also specify options:
+nova fix . --max-iters 5 --timeout 300 --verbose
+```
 
-1. **Manual Trigger:**
+Nova will:
+1. 🔍 Discover the failing tests
+2. 🤔 Analyze the test failures and source code
+3. 🔧 Generate patches to fix the bugs
+4. ✅ Apply the patches and verify tests pass
+5. 📝 Create a fix branch with the changes
 
-   - Go to the Actions tab in your GitHub repository
-   - Select "Nova CI Rescue" workflow
-   - Click "Run workflow"
-   - Configure parameters:
-     - Max iterations (default: 6)
-     - Timeout in seconds (default: 1200)
-     - Verbose output (default: false)
-     - Python version (default: 3.11)
+### Step 4: Verify the fixes
 
-2. **View Results:**
-   - Check the workflow run summary
-   - Download artifacts:
-     - `nova-telemetry-*`: Complete telemetry logs and traces
-     - `nova-workdir-*`: Nova working directory files
-     - `test-reports-*`: JUnit XML test reports
-     - `patches-*`: All generated patches
+```bash
+# Run tests again - they should all pass now!
+pytest tests/
 
-## 📊 Expected Results
+# Check what changes Nova made
+git diff
+```
 
-When Nova CI-Rescue runs on this demo repository, it should:
+## 🤖 GitHub Actions Integration
 
-1. **Detect 7-8 failing tests** in the initial test run
-2. **Generate patches** to fix each bug:
+This repository includes a GitHub Actions workflow that automatically runs Nova CI-Rescue when tests fail.
 
-   - Change `a + b` to `a - b` in subtract method
-   - Add zero division check in divide method
-   - Change `base * exponent` to `base ** exponent` in power method
-   - Add negative number check in square_root method
-   - Fix range to `range(1, n+1)` in factorial method
-   - Fix initial Fibonacci values
-   - Optimize prime checking algorithm
+### Setup
 
-3. **Apply fixes** and verify all tests pass
-4. **Create artifacts** with detailed logs and patches
+1. **Add API Key Secret**: 
+   - Go to Settings → Secrets and variables → Actions
+   - Add a secret named `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`
 
-## 🔧 Configuration
+2. **Enable GitHub Actions**:
+   - Go to Actions tab
+   - Enable workflows for this repository
 
-### Environment Variables
+3. **Create a Pull Request**:
+   - Make any change that causes tests to fail
+   - Open a pull request
+   - Nova will automatically run and attempt to fix the tests
+   - If successful, it will commit the fixes to your PR
 
-For the GitHub Action to work with LLM providers, set these secrets in your repository:
+### Workflow Features
 
-- `OPENAI_API_KEY`: For OpenAI GPT models
-- `ANTHROPIC_API_KEY`: For Anthropic Claude models
+- **Automatic Triggering**: Runs on PRs and pushes to main/develop
+- **Smart Detection**: Only runs Nova if tests are actually failing
+- **Fix Commits**: Automatically commits fixes back to the PR
+- **Status Reports**: Posts check runs and PR comments with results
+- **Safety Limits**: Configured with reasonable timeouts and iteration limits
 
-### Workflow Configuration
+## 📊 Understanding Nova's Output
 
-The workflow accepts these inputs:
+When Nova runs, it provides detailed information about its process:
 
-| Parameter        | Description               | Default | Range            |
-| ---------------- | ------------------------- | ------- | ---------------- |
-| `max_iterations` | Maximum fix attempts      | 6       | 1-20             |
-| `timeout`        | Overall timeout (seconds) | 1200    | 60-7200          |
-| `verbose`        | Enable detailed output    | false   | true/false       |
-| `python_version` | Python version to use     | 3.11    | 3.10, 3.11, 3.12 |
+### Console Output
+```
+Nova CI-Rescue 🚀
+Repository: /path/to/demo-repo
+Max iterations: 5
+Timeout: 300s
 
-## 📈 Success Metrics
+🔍 Discovering failing tests...
+Found 3 failing test(s):
+┌─────────────────────┬──────────────────┬─────────────────┐
+│ Test Name           │ Location         │ Error           │
+├─────────────────────┼──────────────────┼─────────────────┤
+│ test_addition       │ test_calc.py:15  │ assert 5 == -1  │
+│ test_multiplication │ test_calc.py:21  │ assert 12 == 7  │
+│ test_division       │ test_calc.py:27  │ assert 5.0 == 5 │
+└─────────────────────┴──────────────────┴─────────────────┘
 
-A successful Nova CI-Rescue run will show:
+━━━ Iteration 1/5 ━━━
+📋 Planning fix strategy...
+🔧 Generating patch...
+✓ Patch approved by critic
+📝 Applying patch...
+🧪 Running tests...
+✅ All tests passing!
+```
 
-- ✅ All tests passing after fixes
-- 📝 Generated patches for each bug
-- 📊 Test reports showing before/after results
-- 🔍 Detailed telemetry logs
-- 💾 Saved artifacts for audit trail
+### Artifacts
 
-## 🧪 Test Coverage
+Nova creates a `.nova/` directory with detailed logs and artifacts:
 
-The test suite covers:
+```
+.nova/
+└── 20250814-163320/     # Timestamp of the run
+    ├── trace.jsonl      # Detailed execution trace
+    ├── patches/         # Generated patches
+    │   └── patch_1.diff
+    ├── test_results/    # Test results after each iteration
+    │   ├── before.xml
+    │   └── after_1.xml
+    └── reports/
+        └── summary.md   # Run summary report
+```
 
-- Basic arithmetic operations (add, subtract, multiply, divide)
-- Advanced operations (power, square root, factorial)
-- Edge cases (division by zero, negative numbers)
-- Utility functions (Fibonacci, prime checking, GCD)
-- History tracking and management
+## 🛡️ Safety Features
 
-## 📝 Notes
+Nova CI-Rescue includes several safety features to prevent unintended changes:
 
-- This is a simplified demo for testing purposes
-- In real scenarios, Nova CI-Rescue handles more complex codebases
-- The bugs are intentionally simple to demonstrate the concept
-- Nova uses LLMs to understand and fix the issues contextually
+- **File Limits**: Won't modify more than 10 files in a single run
+- **Line Limits**: Patches are limited to 500 lines of changes
+- **Protected Files**: Won't modify CI configs, build files, or documentation
+- **Timeout Protection**: Stops after the configured timeout (default: 20 minutes)
+- **Iteration Limits**: Stops after max iterations (default: 6)
 
-## 🔗 Links
+## 🧪 Experimenting with Nova
 
-- [Nova CI-Rescue Documentation](https://github.com/novasolve/ci-auto-rescue)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Pytest Documentation](https://docs.pytest.org/)
+Try these experiments to see Nova in action:
+
+### 1. Break Different Things
+- Modify `calc.py` to introduce new bugs
+- Add new test cases that fail
+- See how Nova adapts to different failure patterns
+
+### 2. Complex Scenarios
+- Add multiple related bugs
+- Create test dependencies
+- Introduce edge cases
+
+### 3. Configuration Options
+- Adjust `--max-iters` to control fix attempts
+- Use `--verbose` for detailed output
+- Try different LLM models via config
+
+## 📖 Documentation
+
+For more information about Nova CI-Rescue:
+
+- [Main Documentation](../docs/README.md)
+- [Quickstart Guide](../docs/06-quickstart-guide.md)
+- [Safety Limits](../docs/safety-limits.md)
+- [GitHub Integration](../docs/github-action-setup.md)
+
+## 🤝 Contributing
+
+This is a demo repository for Nova CI-Rescue. To contribute to Nova itself:
+- Report issues at [Nova CI-Rescue Issues](https://github.com/nova-ci-rescue/issues)
+- See the main repository for contribution guidelines
 
 ## 📄 License
 
-This demo repository is part of the Nova CI-Rescue project.
+This demo repository is provided as-is for demonstration purposes.
+Nova CI-Rescue is proprietary software - see the main repository for license details.
 
 ---
 
-**Created for demonstrating Nova CI-Rescue capabilities**
+**Note**: This demo intentionally contains bugs to showcase Nova's capabilities. In a real project, you would not deliberately introduce bugs! 😄

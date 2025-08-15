@@ -257,15 +257,7 @@ def fix(
                     break
             
             # 4. APPLY PATCH
-            apply_result = apply_node.execute(state, patch_diff, git_manager)
-            
-            # Log patch application
-            telemetry.log_event("patch_applied", {
-                "iteration": iteration,
-                "step": apply_result["step_number"],
-                "success": apply_result["success"],
-                "files_changed": apply_result.get("changed_files", [])
-            })
+            apply_result = apply_node.execute(state, patch_diff, git_manager, logger=telemetry, iteration=iteration)
             
             if not apply_result["success"]:
                 console.print(f"[red]❌ Failed to apply patch[/red]")
@@ -306,6 +298,170 @@ def fix(
             "duration_seconds": (datetime.now() - state.start_time).total_seconds()
         })
         
+        # Generate proof-of-release run report (D3)
+        if state and telemetry:
+            from nova.github_integration import ReportGenerator
+            from nova.tools.safety_limits import SafetyLimits
+            generator = ReportGenerator()
+            
+            # Calculate total lines changed across all applied patches
+            total_lines_changed = 0
+            try:
+                safety = SafetyLimits()
+                for patch_text in state.patches_applied:
+                    analysis = safety.analyze_patch(patch_text)
+                    total_lines_changed += analysis.total_lines_changed
+            except Exception:
+                total_lines_changed = None
+            
+            # Prepare markdown content
+            timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            report_md = "# Nova CI-Rescue Run Report\n\n"
+            report_md += f"**Run Timestamp:** {timestamp_str}\n\n"
+            
+            # Include high-level summary (status, runtime, iterations, files, tests)
+            elapsed_seconds = int((datetime.now() - state.start_time).total_seconds())
+            initial_failures = len(initial_results.get("failing_tests", []))
+            final_failures = len(state.failing_tests) if state.failing_tests else 0
+            tests_fixed = initial_failures - final_failures
+            
+            # Count changed files
+            files_changed = set()
+            for patch in state.patches_applied:
+                analysis = SafetyLimits().analyze_patch(patch)
+                files_changed.update(analysis.files_modified | analysis.files_added)
+            
+            # Create metrics object for summary generation
+            from nova.github_integration import RunMetrics
+            metrics = RunMetrics(
+                runtime_seconds=elapsed_seconds,
+                iterations=state.current_iteration,
+                files_changed=len(files_changed),
+                status="success" if success else (state.final_status or "failure"),
+                tests_fixed=tests_fixed,
+                tests_remaining=final_failures,
+                initial_failures=initial_failures,
+                final_failures=final_failures,
+                branch_name=branch_name
+            )
+            
+            report_md += generator.generate_check_summary(metrics) + "\n"
+            
+            # Add diff statistics section
+            report_md += "### Diff Summary\n"
+            if total_lines_changed is not None:
+                report_md += f"- Total lines changed (diff): **{total_lines_changed}**\n"
+            report_md += f"- Files changed: **{len(files_changed)}**\n"
+            if metrics.branch_name:
+                report_md += f"- Fix Branch: `{metrics.branch_name}`\n"
+            if metrics.status == "success" and metrics.tests_fixed == metrics.initial_failures:
+                report_md += f"- ✅ All {metrics.initial_failures} failing tests were fixed.\n"
+            elif metrics.tests_fixed > 0:
+                report_md += f"- ⚠️ {metrics.tests_fixed} out of {metrics.initial_failures} tests fixed; {metrics.final_failures} still failing.\n"
+            else:
+                report_md += f"- ❌ No tests were fixed. {metrics.final_failures} failures remain.\n"
+            
+            # Save the markdown report to .nova/<run>/reports/summary.md
+            reports_dir = telemetry.run_dir / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            report_file = reports_dir / "summary.md"
+            with open(report_file, "w") as f:
+                f.write(report_md)
+            console.print(f"[dim]Run summary saved to {report_file}[/dim]")
+        
+        # GitHub PR reporting
+        token = os.getenv("GITHUB_TOKEN")
+        repo = os.getenv("GITHUB_REPOSITORY")
+        pr_num = os.getenv("PR_NUMBER")
+        
+        # Try to auto-detect PR number if not provided
+        if not pr_num:
+            # Try GitHub Actions event number
+            pr_num = os.getenv("GITHUB_EVENT_NUMBER")
+            
+            # Try to parse from GITHUB_REF (e.g., refs/pull/123/merge)
+            if not pr_num:
+                github_ref = os.getenv("GITHUB_REF")
+                if github_ref and "pull/" in github_ref:
+                    import re
+                    match = re.search(r"pull/(\d+)/", github_ref)
+                    if match:
+                        pr_num = match.group(1)
+            
+            # Try to parse from GitHub event JSON
+            if not pr_num:
+                event_path = os.getenv("GITHUB_EVENT_PATH")
+                if event_path and os.path.exists(event_path):
+                    try:
+                        import json
+                        with open(event_path, "r") as f:
+                            event_data = json.load(f)
+                        if "pull_request" in event_data:
+                            pr_num = str(event_data["pull_request"]["number"])
+                    except:
+                        pass
+        
+        if token and repo:
+            try:
+                from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                
+                api = GitHubAPI(token)
+                
+                # Compute metrics from state
+                elapsed = (datetime.now() - state.start_time).total_seconds()
+                
+                # Count changed files
+                files_changed = set()
+                for patch in state.patches_applied:
+                    analysis = SafetyLimits().analyze_patch(patch)
+                    files_changed.update(analysis.files_modified | analysis.files_added)
+                
+                metrics = RunMetrics(
+                    runtime_seconds=int(elapsed),
+                    iterations=state.current_iteration,
+                    files_changed=len(files_changed),
+                    status="success" if success else (state.final_status or "failure"),
+                    tests_fixed=(len(state.failing_tests) - state.total_failures) if state.failing_tests else 0,
+                    tests_remaining=state.total_failures,
+                    initial_failures=len(state.failing_tests) if state.failing_tests else 0,
+                    final_failures=state.total_failures,
+                    branch_name=branch_name
+                )
+                
+                # Post check-run
+                head_sha = git_manager._get_current_head()
+                if head_sha:
+                    generator = ReportGenerator()
+                    api.create_check_run(
+                        repo=repo,
+                        sha=head_sha,
+                        name="CI-Auto-Rescue",
+                        status="completed",
+                        conclusion="success" if success else "failure",
+                        title=f"CI-Auto-Rescue: {metrics.status.upper()}",
+                        summary=generator.generate_check_summary(metrics)
+                    )
+                    if verbose:
+                        console.print("[dim]✅ Posted check run to GitHub[/dim]")
+                
+                # Post or update PR comment
+                if pr_num:
+                    generator = ReportGenerator()
+                    existing = api.find_pr_comment(repo, int(pr_num), "<!-- ci-auto-rescue-report -->")
+                    comment_body = generator.generate_pr_comment(metrics)
+                    
+                    if existing:
+                        api.update_pr_comment(repo, existing, comment_body)
+                        if verbose:
+                            console.print("[dim]✅ Updated existing PR comment[/dim]")
+                    else:
+                        api.create_pr_comment(repo, int(pr_num), comment_body)
+                        if verbose:
+                            console.print("[dim]✅ Created new PR comment[/dim]")
+                            
+            except Exception as e:
+                console.print(f"[yellow]⚠️ GitHub reporting failed: {e}[/yellow]")
+        
         if success:
             console.print(f"\n[green]✨ Success! Check telemetry at: {telemetry.run_dir}[/green]")
         else:
@@ -341,9 +497,165 @@ def fix(
 
 
 @app.command()
+def eval(
+    repos_file: Path = typer.Argument(..., help="YAML file containing repositories to evaluate", exists=True),
+    output_dir: Path = typer.Option(Path("./evals/results"), "--output", "-o", help="Directory for evaluation results"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    config_file: Optional[Path] = typer.Option(None, "--config", "-c", help="YAML config file for runs", exists=True)
+):
+    """Evaluate Nova on multiple repositories."""
+    import yaml
+    import json
+    import subprocess
+    import re
+    from datetime import timezone
+    
+    def load_yaml_config(config_file: Path) -> dict:
+        """Load YAML configuration file."""
+        with open(config_file, "r") as f:
+            return yaml.safe_load(f)
+    
+    # Load optional config for common settings
+    config_data = load_yaml_config(config_file) if config_file else None
+    console.print(f"[green]Nova CI-Rescue Evaluation[/green] 📊")
+    if config_file:
+        console.print(f"[dim]Loaded configuration from {config_file}[/dim]")
+    console.print(f"Repos file: {repos_file}")
+    console.print(f"Output directory: {output_dir}\n")
+
+    # Parse YAML for list of repos (supports either `runs:` key or direct list)
+    try:
+        with open(repos_file, "r") as f:
+            repos_data = yaml.safe_load(f)
+    except Exception as e:
+        console.print(f"[red]Failed to read YAML file: {e}[/red]")
+        raise typer.Exit(1)
+    if isinstance(repos_data, dict) and 'runs' in repos_data:
+        repos_list = repos_data['runs']
+    elif isinstance(repos_data, list):
+        repos_list = repos_data
+    else:
+        console.print("[red]Invalid YAML format: expected a list or 'runs:' key[/red]")
+        raise typer.Exit(1)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    results = []
+    total_success = total_failed = 0
+
+    # Prepare summary table with clear headers
+    summary_table = Table(title="Evaluation Results", header_style="bold magenta")
+    summary_table.add_column("Repository", style="cyan")
+    summary_table.add_column("Status", style="green")
+    summary_table.add_column("Duration", style="yellow")
+    summary_table.add_column("Iterations", style="blue")
+    summary_table.add_column("Tests Fixed", style="magenta")
+
+    # Optional parallel execution (stubbed for future, runs sequentially for now)
+    jobs = 1  # (Could be parameterized: e.g., typer.Option(1, "--jobs"))
+    if jobs > 1 and len(repos_list) > 1:
+        console.print(f"[yellow]Running eval on {len(repos_list)} repos with up to {jobs} parallel jobs...[/yellow]")
+        # Parallel execution not yet fully implemented – sequential fallback
+    else:
+        jobs = 1
+
+    for entry in repos_list:
+        # Determine repo path and identify scenario name
+        repo_path = Path(entry.get("path") or entry.get("repo") or entry.get("repo_path", "."))
+        if not repo_path.is_absolute():
+            repo_path = (repos_file.parent / repo_path).resolve()
+        name = entry.get("name") or repo_path.name
+        max_iters = entry.get("max_iters") or entry.get("max_iterations", 6)
+        timeout = entry.get("timeout", 1200)
+
+        if not repo_path.exists():
+            console.print(f"[yellow]⚠️ Skipping {name}: path not found ({repo_path})[/yellow]")
+            results.append({"name": name, "repo": str(repo_path), "success": False, "error": "path_not_found"})
+            total_failed += 1
+            continue
+
+        console.print(f"\n[bold]Running Nova on [cyan]{name}[/cyan]...[/bold]")
+        console.print(f"  Path: {repo_path}")
+        console.print(f"  Max iterations: {max_iters}")
+        console.print(f"  Timeout: {timeout}s")
+
+        # Execute `nova fix` for this repo in a subprocess
+        start_time = datetime.now(timezone.utc)
+        cmd = ["python", "-m", "nova", "fix", str(repo_path), "--max-iters", str(max_iters), "--timeout", str(timeout)]
+        if config_file:
+            cmd += ["--config", str(config_file)]
+        if verbose:
+            cmd.append("--verbose")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+        success_flag = (result.returncode == 0)
+
+        # Parse key metrics from output (iterations and tests fixed)
+        iter_count = tests_fixed = initial_failures = 0
+        for line in result.stdout.splitlines():
+            if "Iterations completed:" in line:
+                match = re.search(r"Iterations completed: (\d+)", line)
+                if match: 
+                    iter_count = int(match.group(1))
+            if "Initial failures:" in line:
+                match = re.search(r"Initial failures: (\d+)", line)
+                if match: 
+                    initial_failures = int(match.group(1))
+            if "Tests fixed:" in line:
+                match = re.search(r"Tests fixed: (\d+)/", line)
+                if match: 
+                    tests_fixed = int(match.group(1))
+        if success_flag and initial_failures and tests_fixed == 0:
+            tests_fixed = initial_failures  # All fixed
+
+        status_text = "✅ SUCCESS" if success_flag else "❌ FAILED"
+        console.print(f"• [yellow]{name}[/yellow]: {status_text} after {int(elapsed)}s, {iter_count} iteration(s)")
+
+        summary_table.add_row(name, "SUCCESS" if success_flag else "FAILED", f"{int(elapsed)}s", str(iter_count), str(tests_fixed))
+        total_success += (1 if success_flag else 0)
+        total_failed  += (0 if success_flag else 1)
+        results.append({
+            "name": name,
+            "repo": str(repo_path),
+            "success": success_flag,
+            "duration": elapsed,
+            "iterations": iter_count,
+            "tests_fixed": tests_fixed,
+            "initial_failures": initial_failures,
+            "max_iterations": max_iters,
+            "timeout": timeout
+        })
+    # Save results to JSON with timestamp
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    results_path = output_dir / f"{timestamp}.json"
+    with open(results_path, "w") as f:
+        json.dump({
+            "timestamp": timestamp,
+            "total_repos": len(results),
+            "successful": total_success,
+            "failed": total_failed,
+            "results": results
+        }, f, indent=2)
+
+    # Display final summary table and stats
+    console.print("\n" + "="*60)
+    console.print(summary_table)
+    console.print("="*60)
+    console.print(f"\n[bold]Evaluation Complete[/bold]")
+    console.print(f"  Total repositories: {len(results)}")
+    console.print(f"  [green]Successful: {total_success}[/green]")
+    console.print(f"  [red]Failed: {total_failed}[/red]")
+    if results:
+        success_rate = 100 * total_success / len(results)
+        console.print(f"  Success rate: {success_rate:.1f}%")
+    console.print(f"\nResults saved to: [cyan]{results_path}[/cyan]")
+    if total_failed > 0:
+        raise typer.Exit(1)
+
+
+@app.command()
 def version():
     """Show Nova CI-Rescue version."""
-    console.print("[green]Nova CI-Rescue Enhanced[/green] v0.2.0")
+    console.print("[green]Nova CI-Rescue Enhanced[/green] v1.0.0")
 
 
 if __name__ == "__main__":

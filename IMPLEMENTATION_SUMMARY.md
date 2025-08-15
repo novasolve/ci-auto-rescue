@@ -3,15 +3,17 @@
 ## ✅ Completed Features
 
 ### Milestone C2: GitHub Scorecard Integration (COMPLETED)
+
 **Status:** ✅ Fully Implemented
 
 #### Implementation Details:
+
 1. **GitHub Integration Module** (`src/nova/github_integration.py`)
    - `GitHubAPI` class for GitHub REST API interactions
    - `RunMetrics` dataclass for tracking run statistics
    - `ReportGenerator` for creating formatted reports
-   
 2. **Features Implemented:**
+
    - ✅ GitHub Check Run creation with pass/fail status
    - ✅ PR comment with detailed metrics table
    - ✅ Idempotent comments (updates existing comment instead of creating duplicates)
@@ -25,17 +27,19 @@
    - Graceful fallback if GitHub integration not configured
 
 ### Milestone D1: Nova Eval Command (COMPLETED)
+
 **Status:** ✅ Fully Implemented
 
 #### Implementation Details:
+
 1. **Batch Evaluation System** (`nova eval` command in `src/nova/cli.py`)
    - YAML configuration parsing for repository lists
    - Support for both local paths and Git URLs
    - Automatic cloning of remote repositories
    - Branch checkout support
    - Sequential execution with progress tracking
-   
 2. **Features Implemented:**
+
    - ✅ YAML input file support with flexible schema
    - ✅ Git clone support for remote repositories
    - ✅ Branch specification and checkout
@@ -54,7 +58,9 @@
 ### Additional Implementations
 
 #### GitHub Actions Workflow
+
 **File:** `.github/workflows/nova-ci-rescue.yml`
+
 - Complete CI/CD integration example
 - Support for pull_request and workflow_dispatch triggers
 - Configurable parameters (iterations, timeout)
@@ -63,7 +69,9 @@
 - Optional evaluation job for batch testing
 
 #### Test Coverage
+
 **File:** `tests/test_github_integration_new.py`
+
 - Unit tests for report generation
 - Verification of all report formats
 - API structure validation
@@ -73,11 +81,13 @@
 ### Required (Must-Have for v1.0 Release)
 
 #### 1. Milestone B Tasks
+
 - [ ] **B1: Quiet Test Output** - Ensure pytest runs quietly by default in CI
 - [ ] **B3: Package Cleanup** - Verify clean installation in fresh environment
 - [ ] **B-DR: Telemetry Audit** - Review telemetry for performance and security
 
 #### 2. Documentation
+
 - [ ] Complete "Happy Path" tutorial documentation
 - [ ] Update README with current features
 - [ ] Update Slite docs (OS-847)
@@ -86,6 +96,7 @@
 - [ ] Troubleshooting guide
 
 #### 3. Demo Repository (Milestone D2)
+
 - [ ] Create minimal demo repo with intentionally failing tests
 - [ ] Include various test failure scenarios
 - [ ] Provide example fixes for onboarding
@@ -93,17 +104,20 @@
 ### Optional (Nice-to-Have Enhancements)
 
 #### 1. Extended Configuration
+
 - [ ] `--test-cmd` option for non-pytest runners
 - [ ] Project-level config file support
 - [ ] Customizable safety limits via CLI
 
 #### 2. Enhanced Features
+
 - [ ] Parallel repository evaluation in `nova eval`
 - [ ] Real-time streaming of fix progress
 - [ ] Support for non-Python projects
 - [ ] Advanced retry strategies
 
 #### 3. Marketing & Adoption
+
 - [ ] D3: Proof-of-concept thread/documentation
 - [ ] Example success stories
 - [ ] Performance benchmarks
@@ -111,18 +125,21 @@
 ## 🎯 Linear Task List
 
 ### Immediate Priority (Complete Today)
+
 1. ✅ C2: GitHub Scorecard Integration
 2. ✅ D1: Nova Eval Command
 3. ⏳ B1: Configure quiet pytest output
 4. ⏳ B3: Package installation verification
 
 ### Tomorrow's Tasks
+
 1. Documentation updates (Happy Path, README)
 2. Create demo repository (D2)
 3. Final telemetry audit (B-DR)
 4. Design review preparation (D-DR)
 
 ### Later This Week
+
 1. Slite documentation update
 2. Extended configuration options
 3. Performance optimizations
@@ -131,6 +148,7 @@
 ## 🚀 Usage Examples
 
 ### GitHub Integration
+
 ```bash
 # Environment variables for GitHub integration
 export GITHUB_TOKEN="your-token"
@@ -142,13 +160,14 @@ python -m nova fix . --verbose
 ```
 
 ### Batch Evaluation
+
 ```yaml
 # evals/repos.yaml
 runs:
   - name: "Project A"
     path: "./project-a"
     max_iters: 5
-    
+
   - name: "Remote Project"
     url: "https://github.com/example/repo.git"
     branch: "main"
@@ -161,6 +180,7 @@ python -m nova eval evals/repos.yaml --output evals/results
 ```
 
 ### CI/CD Integration
+
 ```yaml
 # In GitHub Actions workflow
 - name: Run Nova CI-Rescue
@@ -175,6 +195,7 @@ python -m nova eval evals/repos.yaml --output evals/results
 ## 📊 Metrics & Success Criteria
 
 ### Scorecard Metrics Tracked
+
 - Runtime (seconds/minutes)
 - Iterations used
 - Files changed
@@ -183,6 +204,7 @@ python -m nova eval evals/repos.yaml --output evals/results
 - Performance (fixes per second)
 
 ### Evaluation Outputs
+
 - Per-repository success/failure status
 - Aggregate success rate
 - JSON reports with timestamps
@@ -191,11 +213,13 @@ python -m nova eval evals/repos.yaml --output evals/results
 ## 🔐 Security Considerations
 
 ### GitHub Token Permissions
+
 - Requires: `contents: write`, `checks: write`, `pull-requests: write`
 - Token should be stored as secret
 - Graceful degradation without token
 
 ### Safety Limits
+
 - Patch size restrictions enforced
 - File modification limits
 - Denied paths protection

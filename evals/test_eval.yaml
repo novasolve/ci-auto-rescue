@@ -7,16 +7,16 @@ runs:
     path: "../demo-repo"
     max_iters: 5
     timeout: 600
-    
+
   # Another local repository
   - name: "Demo Test Repo"
     path: "./demo_test_repo"
     max_iters: 3
     timeout: 300
-    
+
   # Simple string format for local path
   - "./demo_nova_test"
-  
+
   # URL format (commented out for testing)
   # - name: "Remote Sample"
   #   url: "https://github.com/example/test-repo.git"

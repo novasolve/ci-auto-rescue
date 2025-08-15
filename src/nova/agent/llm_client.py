@@ -3,6 +3,7 @@ Unified LLM client for Nova CI-Rescue supporting OpenAI and Anthropic.
 """
 
 import json
+import time
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
@@ -103,38 +104,68 @@ class LLMClient:
             raise ValueError(f"Unknown provider: {self.provider}")
     
     def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
-        """Complete using OpenAI API."""
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user}
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"OpenAI API error: {e}")
-            raise
+        """Complete using OpenAI API with retry on rate limits."""
+        for attempt in range(3):  # try up to 3 times
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                err_msg = str(e).lower()
+                # If rate limit encountered, backoff and retry
+                if "rate limit" in err_msg or "rate exceeded" in err_msg:
+                    if attempt < 2:  # not last attempt
+                        delay = 2 ** attempt  # exponential backoff: 1s, 2s, ...
+                        print(f"Warning: OpenAI rate limit hit (attempt {attempt+1}). Retrying in {delay}s...")
+                        time.sleep(delay)
+                        continue  # retry loop
+                    else:
+                        print("Error: OpenAI API rate limit exceeded after 3 attempts.")
+                        # Fall through to raise the exception on final attempt
+                # If authentication or credentials issue, provide clear message (caught upstream as well)
+                if "api key" in err_msg or "authentication" in err_msg:
+                    print("OpenAI API error: Authentication failed (invalid API key).")
+                # Re-raise the exception for any non-retried or final errors
+                raise
     
     def _complete_anthropic(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
-        """Complete using Anthropic API."""
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                system=system,
-                messages=[
-                    {"role": "user", "content": user}
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-            return response.content[0].text.strip()
-        except Exception as e:
-            print(f"Anthropic API error: {e}")
-            raise
+        """Complete using Anthropic API with retry on rate limits."""
+        for attempt in range(3):  # try up to 3 times
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    system=system,
+                    messages=[
+                        {"role": "user", "content": user}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                return response.content[0].text.strip()
+            except Exception as e:
+                err_msg = str(e).lower()
+                # If rate limit encountered, backoff and retry
+                if "rate limit" in err_msg or "rate exceeded" in err_msg:
+                    if attempt < 2:  # not last attempt
+                        delay = 2 ** attempt  # exponential backoff: 1s, 2s, ...
+                        print(f"Warning: Anthropic rate limit hit (attempt {attempt+1}). Retrying in {delay}s...")
+                        time.sleep(delay)
+                        continue  # retry loop
+                    else:
+                        print("Error: Anthropic API rate limit exceeded after retries.")
+                        # Fall through to raise the exception on final attempt
+                # If authentication or credentials issue, provide clear message (caught upstream as well)
+                if "api key" in err_msg or "authentication" in err_msg:
+                    print("Anthropic API error: Authentication failed (invalid API key).")
+                # Re-raise the exception for any non-retried or final errors
+                raise
 
 
 def parse_plan(response: str) -> Dict[str, Any]:

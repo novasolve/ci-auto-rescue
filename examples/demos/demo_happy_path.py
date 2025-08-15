@@ -11,7 +11,7 @@ from pathlib import Path
 # Add the src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from nova.agent.llm_agent_enhanced import EnhancedLLMAgent
+from nova.agent.llm_agent import LLMAgent
 from nova.agent.state import AgentState
 from nova.config import get_settings
 from nova.telemetry.logger import JSONLLogger
@@ -43,7 +43,7 @@ def main():
     try:
         # Initialize enhanced LLM agent
         console.print("\n[yellow]Initializing LLM Agent...[/yellow]")
-        llm_agent = EnhancedLLMAgent(repo_path)
+        llm_agent = LLMAgent(repo_path)
         console.print("[green]✓ LLM Agent initialized[/green]")
         
         # Initialize Git manager

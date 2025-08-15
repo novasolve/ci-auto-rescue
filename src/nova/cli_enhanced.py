@@ -210,14 +210,10 @@ def fix(
         
         # Initialize LLM agent
         try:
-            from nova.agent.llm_agent_enhanced import EnhancedLLMAgent
-            llm_agent = EnhancedLLMAgent(repo_path)
-            model_name = settings.default_llm_model
-            console.print(f"[dim]Using {model_name} for autonomous test fixing[/dim]")
-        except ImportError:
-            console.print("[yellow]Warning: Could not import enhanced LLM agent[/yellow]")
             from nova.agent.llm_agent import LLMAgent
             llm_agent = LLMAgent(repo_path)
+            model_name = settings.default_llm_model
+            console.print(f"[dim]Using {model_name} for autonomous test fixing[/dim]")
         except Exception as e:
             console.print(f"[yellow]Warning: Could not initialize LLM agent: {e}[/yellow]")
             from nova.agent.mock_llm import MockLLMAgent

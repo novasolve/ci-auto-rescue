@@ -388,8 +388,8 @@ def fix(
         
         # Initialize the LLM agent (enhanced version with full Planner/Actor/Critic)
         try:
-            from nova.agent.llm_agent_enhanced import EnhancedLLMAgent
-            llm_agent = EnhancedLLMAgent(repo_path)
+            from nova.agent.llm_agent import LLMAgent
+            llm_agent = LLMAgent(repo_path)
             
             # Determine which model we're using
             model_name = settings.default_llm_model

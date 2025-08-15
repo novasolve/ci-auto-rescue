@@ -1,0 +1,84 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Nova CI-Rescue",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#16A34A",
+    "light": "#07C983",
+    "dark": "#15803D",
+    "anchors": {
+      "from": "#16A34A",
+      "to": "#07C983"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/novasolve/ci-auto-rescue"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "https://github.com/novasolve/ci-auto-rescue"
+  },
+  "tabs": [
+    {
+      "name": "Documentation",
+      "url": "/"
+    },
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    }
+  ],
+  "anchors": [],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "docs/README",
+        "docs/06-quickstart-guide"
+      ]
+    },
+    {
+      "group": "Architecture",
+      "pages": [
+        "docs/01-happy-path-one-pager",
+        "docs/02-architecture-diagram",
+        "docs/03-task-dependency-graph"
+      ]
+    },
+    {
+      "group": "Development",
+      "pages": [
+        "docs/04-milestone-board",
+        "docs/05-proof-checklist-template",
+        "docs/github-action-setup"
+      ]
+    },
+    {
+      "group": "Safety & Security",
+      "pages": [
+        "docs/07-risks-and-guardrails",
+        "docs/safety-limits",
+        "docs/12-audit-security-features"
+      ]
+    },
+    {
+      "group": "Resources",
+      "pages": [
+        "docs/08-demo-script",
+        "docs/09-links-and-resources",
+        "docs/10-team-notes",
+        "docs/11-dr-audit-checklist"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/novasolve/ci-auto-rescue"
+  }
+}

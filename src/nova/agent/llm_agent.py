@@ -603,10 +603,27 @@ class LLMAgent:
                 max_tokens=500
             )
             
-            # Parse the plan from the LLM response
+            # Parse the LLM response into a plan dict
             plan = parse_plan(response)
             
-            # Attach iteration info
+            # Use LLM-prioritized tests if provided
+            priority_names = plan.get('priority_tests')
+            if priority_names:
+                target_tests = []
+                for name in priority_names:
+                    for test in failing_tests:
+                        # Match test by name or file substring
+                        if name in test.get('name', '') or name in test.get('file', ''):
+                            target_tests.append(test)
+                            break
+                if not target_tests:
+                    target_tests = failing_tests[:3] if len(failing_tests) > 3 else failing_tests
+                plan['target_tests'] = target_tests
+                plan.pop('priority_tests', None)  # remove after use
+            else:
+                plan['target_tests'] = failing_tests[:3] if len(failing_tests) > 3 else failing_tests
+            
+            # Attach iteration metadata and source file hints
             plan['iteration'] = iteration
             
             # Determine source files that likely need fixes (from test imports)
@@ -617,9 +634,6 @@ class LLMAgent:
                     source_files.update(self.find_source_files_from_test(test_path))
             
             plan['source_files'] = list(source_files)
-            
-            # Select a subset of failing tests to prioritize (first 3 or all if fewer)
-            plan['target_tests'] = failing_tests[:3] if len(failing_tests) > 3 else failing_tests
             
             return plan
             

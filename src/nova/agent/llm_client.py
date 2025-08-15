@@ -3,6 +3,7 @@ Unified LLM client for Nova CI-Rescue supporting OpenAI and Anthropic.
 """
 
 import json
+import re
 import time
 from typing import Dict, List, Optional, Any
 from pathlib import Path
@@ -178,41 +179,72 @@ def parse_plan(response: str) -> Dict[str, Any]:
     Returns:
         Structured plan dictionary
     """
-    # Try to extract JSON if present
+    # Try to parse as JSON first
     if "{" in response and "}" in response:
         try:
             start = response.find("{")
             end = response.rfind("}") + 1
             plan_json = json.loads(response[start:end])
+            # Clean any formatting artifacts in the JSON fields
+            if isinstance(plan_json, dict):
+                if "approach" in plan_json and isinstance(plan_json["approach"], str):
+                    plan_json["approach"] = re.sub(r'\*\*|\*|`', '', plan_json["approach"]).strip()
+                if "steps" in plan_json and isinstance(plan_json["steps"], list):
+                    plan_json["steps"] = [re.sub(r'\*\*|\*|`', '', str(s)).strip() for s in plan_json["steps"]]
+                if "priority_tests" in plan_json and isinstance(plan_json["priority_tests"], list):
+                    plan_json["priority_tests"] = [re.sub(r'\*\*|\*|`', '', str(t)).strip().strip('"\'`') for t in plan_json["priority_tests"]]
             return plan_json
-        except:
+        except Exception:
             pass
     
-    # Parse numbered list or bullets
+    # If JSON parse failed, fall back to parsing as text list
     lines = response.strip().split('\n')
-    steps = []
+    steps: List[str] = []
+    approach_text: Optional[str] = None
+    priority_list: List[str] = []
     
     for line in lines:
         line = line.strip()
-        # Remove numbering or bullets
-        if line and (line[0].isdigit() or line.startswith('-') or line.startswith('*')):
-            # Remove leading numbers, dots, dashes, etc.
-            import re
+        if not line:
+            continue
+        
+        # Extract approach if explicitly provided (e.g., "Approach: ...")
+        if re.match(r'(?i)^(approach|strategy)[:\\-\\s]', line):
+            approach_text = re.split(r'[:\\-]', line, 1)[1].strip()
+            approach_text = re.sub(r'\*\*|\*|`', '', approach_text).strip()
+            continue
+        
+        # Extract priority tests if mentioned (e.g., "Priority tests: ...")
+        if re.match(r'(?i)^.*(priority\s*tests?|tests?\s*to\s*prioritize)[:\\-\\s]', line):
+            # Get text after the separator (colon or hyphen)
+            prt = line.split(':', 1)[1] if ':' in line else line.split('-', 1)[1] if '-' in line else line
+            for item in re.split(r'[,\s]+', prt):
+                item_clean = item.strip().strip('`"\'')
+                if item_clean:
+                    priority_list.append(re.sub(r'\*\*|\*|`', '', item_clean))
+            continue
+        
+        # Identify step lines (numbered or bullet) and clean them
+        if line[0].isdigit() or line.startswith('-') or line.startswith('*'):
             cleaned = re.sub(r'^[\d\.\-\*\s]+', '', line).strip()
             if cleaned:
+                cleaned = re.sub(r'\*\*|\*|`', '', cleaned).strip()
                 steps.append(cleaned)
     
+    # Construct the plan dictionary
     if steps:
         return {
-            "approach": "Fix failing tests systematically",
-            "steps": steps
+            "approach": approach_text if approach_text else "Fix failing tests systematically",
+            "steps": steps,
+            **({"priority_tests": priority_list} if priority_list else {})
         }
     else:
-        # Return the whole response as the approach
-        return {
-            "approach": response.strip(),
-            "steps": []
-        }
+        # If no steps were parsed, treat the whole response as the approach
+        approach_full = re.sub(r'\*\*|\*|`', '', response.strip())
+        plan = {"approach": approach_full, "steps": []}
+        if priority_list:
+            plan["priority_tests"] = priority_list
+        return plan
 
 
 def build_planner_prompt(failing_tests: List[Dict[str, Any]], critic_feedback: Optional[str] = None) -> str:
@@ -257,12 +289,22 @@ def build_planner_prompt(failing_tests: List[Dict[str, Any]], critic_feedback: O
         prompt += f"\n... and {len(failing_tests) - 10} more failing tests\n"
     
     prompt += "\n"
-    prompt += "Provide a structured plan to fix these failures. Include:\n"
-    prompt += "1. A general approach/strategy\n"
-    prompt += "2. Specific steps to take\n"
-    prompt += "3. Which tests to prioritize\n"
-    prompt += "\n"
-    prompt += "Format your response as a numbered list of actionable steps."
+    prompt += "Provide a structured plan to fix these failures in JSON format with keys 'approach', 'steps', and 'priority_tests'.\n"
+    prompt += "Respond only with a JSON object containing:\n"
+    prompt += '- "approach": a brief overall strategy,\n'
+    prompt += '- "steps": an ordered list of specific fix steps,\n'
+    prompt += '- "priority_tests": a list of failing test names to focus on first.\n\n'
+    prompt += "Example format:\n"
+    prompt += "{\n"
+    prompt += '  "approach": "Brief strategy description",\n'
+    prompt += '  "steps": [\n'
+    prompt += '    "First concrete step",\n'
+    prompt += '    "Second concrete step",\n'
+    prompt += '    "..."\n'
+    prompt += "  ],\n"
+    prompt += '  "priority_tests": ["<test_name_1>", "<test_name_2>", "..."]\n'
+    prompt += "}\n"
+    prompt += "Only output valid JSON as described."
     
     return prompt
 

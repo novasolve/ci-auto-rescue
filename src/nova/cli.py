@@ -447,7 +447,16 @@ def fix(
             # Use LLM to create plan (with critic feedback if available)
             critic_feedback = getattr(state, 'critic_feedback', None) if iteration > 1 else None
             plan = llm_agent.create_plan(state.failing_tests, iteration, critic_feedback)
-            
+
+            # Enforce a maximum of 10 steps in the plan
+            try:
+                if isinstance(plan, dict) and isinstance(plan.get('steps'), list):
+                    if len(plan['steps']) > 10:
+                        plan['steps'] = plan['steps'][:10]
+            except Exception:
+                # If plan structure is unexpected, proceed without trimming
+                pass
+
             # Store plan in state for reference
             state.plan = plan
             
@@ -456,8 +465,8 @@ def fix(
                 console.print("[dim]Plan created:[/dim]")
                 console.print(f"  Approach: {plan.get('approach', 'Unknown')}")
                 if plan.get('steps'):
-                    console.print("  Steps:")
-                    for i, step in enumerate(plan['steps'][:3], 1):
+                    console.print("  Steps (max 10):")
+                    for i, step in enumerate(plan['steps'][:10], 1):
                         console.print(f"    {i}. {step}")
             
             # Log planner completion

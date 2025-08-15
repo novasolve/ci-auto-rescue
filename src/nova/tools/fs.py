@@ -410,6 +410,47 @@ def apply_patch_with_git(
     nova_dir = Path(repo_root) / ".nova"
     nova_dir.mkdir(exist_ok=True, parents=True)
     
+    # Check if we need to strip subdirectory prefix from patch paths
+    # This handles cases where Nova is run in a subdirectory of a larger repo
+    git_toplevel = None
+    if git_manager and isinstance(git_manager, GitBranchManager):
+        success_top, top_path = git_manager._run_git_command("rev-parse", "--show-toplevel")
+        if success_top:
+            git_toplevel = Path(top_path.strip()).resolve()
+    if not git_toplevel:
+        # Fallback: try running git rev-parse directly
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], cwd=repo_root, 
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            git_toplevel = Path(result.stdout.strip()).resolve()
+    
+    # If repo_root is a subdirectory, strip that prefix from patch paths
+    if git_toplevel and git_toplevel != repo_root.resolve():
+        try:
+            prefix_path = repo_root.resolve().relative_to(git_toplevel)
+            prefix_str = str(prefix_path).replace('\\', '/') + "/"
+            
+            # Strip the prefix from the patch file paths
+            lines = diff_text.splitlines(keepends=True)
+            fixed_lines = []
+            for line in lines:
+                if line.startswith("--- a/") and prefix_str in line:
+                    # Remove the subdirectory prefix from the source file path
+                    line = line.replace(f"--- a/{prefix_str}", "--- a/")
+                elif line.startswith("+++ b/") and prefix_str in line:
+                    # Remove the subdirectory prefix from the target file path  
+                    line = line.replace(f"+++ b/{prefix_str}", "+++ b/")
+                fixed_lines.append(line)
+            diff_text = ''.join(fixed_lines)
+            
+            if verbose:
+                print(f"Stripped prefix '{prefix_str}' from patch paths")
+        except ValueError:
+            # repo_root is not under git_toplevel, no prefix to strip
+            pass
+    
     # Write patch to a temporary file in .nova directory
     with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False, dir=nova_dir) as f:
         patch_file = Path(f.name)
@@ -536,12 +577,29 @@ def apply_patch_with_git(
             output = "\n".join([result1.stdout, result2.stdout, result3.stdout]).strip()
         
         if success and output:
-            # Filter out the temporary patch file and only include actual source files
-            changed_files = [
-                repo_root / line.strip() 
-                for line in output.strip().split('\n') 
-                if line.strip() and not line.endswith('.patch')
-            ]
+            # Determine changed files (excluding the temporary patch file)
+            changed_lines = [line.strip() for line in output.splitlines() 
+                           if line.strip() and not line.endswith('.patch')]
+            
+            # If repo_path is a subdirectory of a git repo, strip that prefix from paths
+            # Use the same git_toplevel detection as above
+            if git_toplevel and git_toplevel != repo_root.resolve():
+                try:
+                    prefix_parts = repo_root.resolve().relative_to(git_toplevel).parts
+                except ValueError:
+                    # repo_root is not under git_toplevel, no prefix to strip
+                    prefix_parts = ()
+            else:
+                prefix_parts = ()
+            
+            changed_files: List[Path] = []
+            for line in changed_lines:
+                p = Path(line)
+                if prefix_parts and len(p.parts) > len(prefix_parts) and p.parts[:len(prefix_parts)] == prefix_parts:
+                    # Strip the repo_path prefix (e.g., 'examples/demos/demo_math_ops')
+                    p = Path(*p.parts[len(prefix_parts)])
+                # Join with repo_root to get the correct absolute path
+                changed_files.append((repo_root / p).resolve())
             
             if verbose:
                 from rich.console import Console

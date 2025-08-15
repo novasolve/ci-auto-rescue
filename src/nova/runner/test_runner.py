@@ -148,10 +148,32 @@ class TestRunner:
                     test_name = Path(nodeid).stem
                 
                 # Normalize the file path to be relative to repo root
-                # Remove repo directory prefix if it's included in the path
-                repo_name = self.repo_path.name
-                if file_part.startswith(f"{repo_name}/"):
-                    file_part = file_part[len(repo_name)+1:]
+                file_path = Path(file_part)
+                try:
+                    # Try to make file_part relative to the repo root if possible
+                    # This handles absolute paths or paths that include the repo path
+                    if file_path.is_absolute():
+                        file_part = str(file_path.relative_to(self.repo_path))
+                    else:
+                        # For relative paths, check if they contain the full repo path
+                        # Convert to absolute for comparison
+                        abs_file = (self.repo_path / file_path).resolve()
+                        if abs_file.exists():
+                            file_part = str(abs_file.relative_to(self.repo_path))
+                except (ValueError, Exception):
+                    # If relative_to fails, try manual stripping
+                    # This handles cases like "examples/demos/demo_math_ops/test_math_ops.py"
+                    repo_name = self.repo_path.name
+                    
+                    # Find the repo name in the path and strip everything before it
+                    pos = str(file_path).find(f"{repo_name}/")
+                    if pos != -1:
+                        # Found repo name in path, extract everything after it
+                        file_part = str(file_path)[pos + len(repo_name) + 1:]
+                    elif file_part.startswith(f"{repo_name}/"):
+                        # Simple case: path starts with repo name
+                        file_part = file_part[len(repo_name)+1:]
+                    # else: leave file_part as-is if we can't normalize it
                 
                 # Get the traceback
                 call_info = test.get('call', {})

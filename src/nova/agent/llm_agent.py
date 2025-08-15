@@ -232,24 +232,24 @@ class LLMAgent:
             )
             
             user_prompt = f"""Review this patch that attempts to fix failing tests:
- 
- PATCH:
- ```diff
- {patch[:1500]}
- ```
- 
- FAILING TESTS IT SHOULD FIX:
- {json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:3]], indent=2)}
- 
- Evaluate if this patch:
- 1. Actually fixes the failing tests
- 2. Doesn't introduce new bugs or break existing functionality
- 3. Follows good coding practices
- 4. Is minimal and focused on the problem
- 5. Doesn't introduce duplicate function definitions (modifies existing functions rather than adding new ones)
- 
- Respond with JSON:
- {"approved": true/false, "reason": "brief explanation"}"""
+  
+  PATCH:
+  ```diff
+  {patch[:1500]}
+  ```
+  
+  FAILING TESTS IT SHOULD FIX:
+  {json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:3]], indent=2)}
+  
+  Evaluate if this patch:
+  1. Actually fixes the failing tests
+  2. Doesn't introduce new bugs or break existing functionality
+  3. Follows good coding practices
+  4. Is minimal and focused on the problem
+  5. Doesn't introduce duplicate function definitions (modifies existing functions rather than adding new ones)
+  
+  Respond with JSON:
+  {{"approved": true/false, "reason": "brief explanation"}}"""
             
             response = self.llm.complete(
                 system=system_prompt,

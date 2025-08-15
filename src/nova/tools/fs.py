@@ -474,6 +474,63 @@ def apply_patch_with_git(
         if not success:
             # Patch cannot be applied
             error_msg = f"Patch validation failed: {output}"
+            
+            # If file doesn't exist, try with -p1 to strip directory level
+            if "does not exist" in output.lower() or "no such file" in output.lower():
+                if verbose:
+                    print("File not found, attempting with -p1 to strip directory level...")
+                
+                # Try applying with -p1 to strip one directory level
+                if git_manager and isinstance(git_manager, GitBranchManager):
+                    success_p1, output_p1 = git_manager._run_git_command("apply", "--check", "-p1", "--whitespace=nowarn", str(patch_file))
+                else:
+                    result_p1 = subprocess.run(
+                        ["git", "apply", "--check", "-p1", "--whitespace=nowarn", str(patch_file)],
+                        cwd=repo_root,
+                        capture_output=True,
+                        text=True
+                    )
+                    success_p1 = result_p1.returncode == 0
+                    output_p1 = result_p1.stderr or result_p1.stdout
+                
+                if success_p1:
+                    # -p1 check succeeded, apply it for real
+                    if verbose:
+                        print("✓ Patch can be applied with -p1 (stripping directory level)")
+                    
+                    if git_manager and isinstance(git_manager, GitBranchManager):
+                        success_apply, output_apply = git_manager._run_git_command("apply", "-p1", "--whitespace=nowarn", str(patch_file))
+                    else:
+                        result_apply = subprocess.run(
+                            ["git", "apply", "-p1", "--whitespace=nowarn", str(patch_file)],
+                            cwd=repo_root,
+                            capture_output=True,
+                            text=True
+                        )
+                        success_apply = result_apply.returncode == 0
+                        output_apply = result_apply.stderr or result_apply.stdout
+                    
+                    if success_apply:
+                        # Successfully applied with -p1, now get the changed files
+                        if git_manager and isinstance(git_manager, GitBranchManager):
+                            # Get unstaged changes
+                            success1, unstaged = git_manager._run_git_command("diff", "--name-only")
+                            # Get staged changes
+                            success2, staged = git_manager._run_git_command("diff", "--name-only", "--cached")
+                            # Get untracked files
+                            success3, untracked = git_manager._run_git_command("ls-files", "--others", "--exclude-standard")
+                            output = "\n".join([unstaged, staged, untracked]).strip()
+                        else:
+                            # Get all changes
+                            result1 = subprocess.run(["git", "diff", "--name-only"], cwd=repo_root, capture_output=True, text=True)
+                            result2 = subprocess.run(["git", "diff", "--name-only", "--cached"], cwd=repo_root, capture_output=True, text=True)
+                            result3 = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], cwd=repo_root, capture_output=True, text=True)
+                            output = "\n".join([result1.stdout, result2.stdout, result3.stdout]).strip()
+                        
+                        changed_files = [Path(repo_root) / f.strip() for f in output.split('\n') if f.strip()]
+                        return changed_files
+            
+            # Original error handling continues if -p1 didn't work
             if verbose:
                 from rich.console import Console
                 console = Console()

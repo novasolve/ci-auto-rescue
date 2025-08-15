@@ -75,6 +75,18 @@ class LLMAgent:
                     # Find source files imported by this test
                     source_files.update(self.find_source_files_from_test(test_path))
         
+        # If no source files found via imports, try to find them in common locations
+        if not source_files:
+            # Look for Python files in common source directories
+            for src_dir in ["src", "lib", "app", "."]:
+                src_path = self.repo_path / src_dir
+                if src_path.exists() and src_path.is_dir():
+                    # Find all Python files in this directory (excluding tests and __pycache__)
+                    for py_file in src_path.glob("*.py"):
+                        if not py_file.name.startswith("test_") and not py_file.name.endswith("_test.py"):
+                            rel_path = py_file.relative_to(self.repo_path)
+                            source_files.add(str(rel_path))
+        
         # Read content of identified source files
         for source_file in source_files:
             source_path = self.repo_path / source_file

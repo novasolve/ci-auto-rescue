@@ -530,7 +530,128 @@ def apply_patch_with_git(
                         changed_files = [Path(repo_root) / f.strip() for f in output.split('\n') if f.strip()]
                         return changed_files
             
-            # Original error handling continues if -p1 didn't work
+            # Try dynamic path adjustment for missing files before giving up
+            if "does not exist" in output.lower() or "no such file" in output.lower():
+                if verbose:
+                    print("Attempting to dynamically locate missing files...")
+                
+                # Detect if project uses src/ layout
+                base_source_dir = None
+                pyproject = Path(repo_root) / "pyproject.toml"
+                if pyproject.exists():
+                    try:
+                        text = pyproject.read_text()
+                        # Look for common indications of src layout
+                        if 'from = "src"' in text or 'package-dir' in text and 'src' in text:
+                            base_source_dir = Path(repo_root) / "src"
+                    except:
+                        pass
+                
+                # Fallback: check if src/ directory exists
+                if base_source_dir is None and (Path(repo_root) / "src").is_dir():
+                    base_source_dir = Path(repo_root) / "src"
+                
+                # Try to adjust patch paths
+                if base_source_dir and base_source_dir.exists():
+                    import re
+                    missing_map = {}
+                    patch_lines = diff_text.splitlines()
+                    
+                    # Extract file paths from patch
+                    for line in patch_lines:
+                        if line.startswith("--- a/") or line.startswith("+++ b/"):
+                            # Extract the file path
+                            match = re.match(r'^(?:--- a/|+++ b/)(.*)', line)
+                            if match:
+                                rel_path = match.group(1)
+                                if rel_path and rel_path != "/dev/null":
+                                    file_path = Path(repo_root) / rel_path
+                                    if not file_path.exists():
+                                        # Try with src/ prefix
+                                        src_path = base_source_dir / rel_path
+                                        if src_path.exists():
+                                            missing_map[rel_path] = f"src/{rel_path}"
+                                        else:
+                                            # Try to find file by name
+                                            import os
+                                            filename = os.path.basename(rel_path)
+                                            matches = list(Path(repo_root).rglob(filename))
+                                            if len(matches) == 1:
+                                                try:
+                                                    found_rel = matches[0].relative_to(Path(repo_root))
+                                                    missing_map[rel_path] = str(found_rel).replace('\\', '/')
+                                                except:
+                                                    pass
+                    
+                    # If we found missing files, adjust the patch
+                    if missing_map:
+                        if verbose:
+                            print(f"Adjusting patch paths: {missing_map}")
+                        
+                        new_diff_lines = []
+                        for line in diff_text.splitlines(keepends=True):
+                            modified = False
+                            for old_path, new_path in missing_map.items():
+                                if line.startswith(f"--- a/{old_path}"):
+                                    line = f"--- a/{new_path}\n"
+                                    modified = True
+                                    break
+                                elif line.startswith(f"+++ b/{old_path}"):
+                                    line = f"+++ b/{new_path}\n"
+                                    modified = True
+                                    break
+                            new_diff_lines.append(line)
+                        
+                        # Write adjusted patch
+                        adjusted_diff = "".join(new_diff_lines)
+                        patch_file.write_text(adjusted_diff)
+                        
+                        # Retry with adjusted paths
+                        if git_manager and isinstance(git_manager, GitBranchManager):
+                            success_adj, output_adj = git_manager._run_git_command("apply", "--check", "--whitespace=nowarn", str(patch_file))
+                        else:
+                            result_adj = subprocess.run(
+                                ["git", "apply", "--check", "--whitespace=nowarn", str(patch_file)],
+                                cwd=repo_root,
+                                capture_output=True,
+                                text=True
+                            )
+                            success_adj = result_adj.returncode == 0
+                            output_adj = result_adj.stderr or result_adj.stdout
+                        
+                        if success_adj:
+                            # Apply the adjusted patch
+                            if verbose:
+                                print("✓ Adjusted patch can be applied")
+                            
+                            if git_manager and isinstance(git_manager, GitBranchManager):
+                                success_apply, output_apply = git_manager._run_git_command("apply", "--whitespace=nowarn", str(patch_file))
+                            else:
+                                result_apply = subprocess.run(
+                                    ["git", "apply", "--whitespace=nowarn", str(patch_file)],
+                                    cwd=repo_root,
+                                    capture_output=True,
+                                    text=True
+                                )
+                                success_apply = result_apply.returncode == 0
+                            
+                            if success_apply:
+                                # Get changed files
+                                if git_manager and isinstance(git_manager, GitBranchManager):
+                                    success1, unstaged = git_manager._run_git_command("diff", "--name-only")
+                                    success2, staged = git_manager._run_git_command("diff", "--name-only", "--cached")
+                                    success3, untracked = git_manager._run_git_command("ls-files", "--others", "--exclude-standard")
+                                    output = "\n".join([unstaged, staged, untracked]).strip()
+                                else:
+                                    result1 = subprocess.run(["git", "diff", "--name-only"], cwd=repo_root, capture_output=True, text=True)
+                                    result2 = subprocess.run(["git", "diff", "--name-only", "--cached"], cwd=repo_root, capture_output=True, text=True)
+                                    result3 = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], cwd=repo_root, capture_output=True, text=True)
+                                    output = "\n".join([result1.stdout, result2.stdout, result3.stdout]).strip()
+                                
+                                changed_files = [Path(repo_root) / f.strip() for f in output.split('\n') if f.strip()]
+                                return changed_files
+            
+            # Original error handling continues if dynamic adjustment didn't work
             if verbose:
                 from rich.console import Console
                 console = Console()

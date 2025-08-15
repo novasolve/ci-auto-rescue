@@ -694,19 +694,7 @@ def apply_patch_with_git(
                 patch_hash = hashlib.md5(diff_text.encode()).hexdigest()[:8]
                 telemetry.save_artifact(f"failed_patches/patch_{patch_hash}.diff", diff_text)
             
-            # Also try to fall back to the old method as a last resort
-            if verbose:
-                print("Attempting fallback to Python-based patch application...")
-            try:
-                changed_files = apply_unified_diff(repo_root, diff_text)
-                if changed_files:
-                    if verbose:
-                        print("Fallback successful!")
-                    return changed_files
-            except Exception as fallback_error:
-                if verbose:
-                    print(f"Fallback also failed: {fallback_error}")
-            
+            # Do NOT attempt Python fallback here – return empty result on failure
             return []
         
         # Apply the patch for real

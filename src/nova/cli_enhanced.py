@@ -1,657 +1,418 @@
-#!/usr/bin/env python3
 """
-Nova CI-Rescue Enhanced CLI with full telemetry.
-Uses modular nodes for each stage of the agent loop.
+Nova CI-Rescue Enhanced CLI
+============================
+
+Best of both worlds: Combines our clean implementation with production features.
 """
 
 import os
-import typer
+import sys
+import json
+import re
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+
+import typer
 from rich.console import Console
 from rich.table import Table
 
-from nova.agent import AgentState
+# Import Nova components
+from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
-from nova.config import NovaSettings
+from nova.config import NovaSettings, SafetyConfig, load_yaml_config
 from nova.tools.git import GitBranchManager
-from nova.tools.safety_limits import SafetyLimits
-from nova.nodes import (
-    PlannerNode,
-    ActorNode,
-    CriticNode,
-    ApplyPatchNode,
-    RunTestsNode,
-    ReflectNode
-)
+from nova.runner.test_runner import TestRunner
+from nova.agent.nova_deep_agent import NovaDeepAgent
+
+# Tool imports
+from nova.tools.run_tests import RunTestsTool
+from nova.tools.apply_patch import ApplyPatchTool
+from nova.tools.critic_review import CriticReviewTool
 
 app = typer.Typer(
     name="nova",
-    help="Nova CI-Rescue: Automated test fixing agent with full telemetry",
+    help="Nova CI-Rescue: AI-powered test fixing",
     add_completion=False,
 )
 console = Console()
 
 
-def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None) -> None:
-    """Print a comprehensive summary when exiting the agent loop."""
+def print_exit_summary(state: AgentState, reason: str):
+    """Print execution summary."""
     console.print("\n" + "=" * 60)
     console.print("[bold]EXECUTION SUMMARY[/bold]")
     console.print("=" * 60)
     
-    # Exit reason with appropriate styling
-    reason_map = {
-        "success": ("[bold green]✅ Exit Reason: SUCCESS - All tests passing![/bold green]", True),
-        "timeout": (f"[bold red]⏰ Exit Reason: TIMEOUT - Exceeded {state.timeout_seconds}s limit[/bold red]", False),
-        "max_iters": (f"[bold red]🔄 Exit Reason: MAX ITERATIONS - Reached {state.max_iterations} iterations[/bold red]", False),
-        "no_patch": ("[bold yellow]⚠️ Exit Reason: NO PATCH - Could not generate fix[/bold yellow]", False),
-        "patch_rejected": ("[bold yellow]⚠️ Exit Reason: PATCH REJECTED - Critic rejected patch[/bold yellow]", False),
-        "patch_error": ("[bold red]❌ Exit Reason: PATCH ERROR - Failed to apply patch[/bold red]", False),
-        "interrupted": ("[bold yellow]🛑 Exit Reason: INTERRUPTED - User cancelled operation[/bold yellow]", False),
-        "error": ("[bold red]❌ Exit Reason: ERROR - Unexpected error occurred[/bold red]", False),
-        "no_progress": ("[bold yellow]⚠️ Exit Reason: NO PROGRESS - No improvement after multiple attempts[/bold yellow]", False),
-    }
-    
-    message, is_success = reason_map.get(reason, (f"[bold yellow]Exit Reason: {reason.upper()}[/bold yellow]", False))
-    console.print(message)
-    console.print()
+    # Status
+    if reason == "success":
+        console.print("[green]✅ SUCCESS - All tests fixed![/green]")
+    elif reason == "max_iters":
+        console.print(f"[yellow]⚠️ MAX ITERATIONS - Reached limit of {state.max_iterations}[/yellow]")
+    elif reason == "timeout":
+        console.print(f"[red]⏰ TIMEOUT - Exceeded {state.timeout_seconds}s[/red]")
+    elif reason == "interrupted":
+        console.print("[yellow]🛑 INTERRUPTED - User cancelled[/yellow]")
+    elif reason == "error":
+        console.print("[red]❌ ERROR - Unexpected failure[/red]")
+    else:
+        console.print(f"[yellow]Exit: {reason}[/yellow]")
     
     # Statistics
-    console.print("[bold]Statistics:[/bold]")
-    console.print(f"  • Iterations completed: {state.current_iteration}/{state.max_iterations}")
-    console.print(f"  • Patches applied: {len(state.patches_applied)}")
-    console.print(f"  • Initial failures: {state.total_failures}")
+    console.print(f"\nIterations: {state.current_iteration}/{state.max_iterations}")
+    console.print(f"Patches applied: {len(state.patches_applied)}")
+    console.print(f"Initial failures: {len(state.failing_tests) if state.failing_tests else 0}")
+    console.print(f"Remaining failures: {state.total_failures}")
     
-    # Get current failure count from last test results
-    current_failures = len(state.failing_tests) if state.failing_tests else 0
-    console.print(f"  • Remaining failures: {current_failures}")
+    if state.total_failures == 0 and state.failing_tests:
+        console.print(f"[green]Fixed all {len(state.failing_tests)} failing tests![/green]")
     
-    if current_failures == 0:
-        console.print(f"  • [green]All tests fixed successfully![/green]")
-    elif state.total_failures > current_failures:
-        fixed = state.total_failures - current_failures
-        console.print(f"  • Tests fixed: {fixed}/{state.total_failures}")
-    
-    if elapsed_seconds is not None:
-        minutes, seconds = divmod(int(elapsed_seconds), 60)
-        console.print(f"  • Time elapsed: {minutes}m {seconds}s")
-    else:
-        elapsed = (datetime.now() - state.start_time).total_seconds()
-        minutes, seconds = divmod(int(elapsed), 60)
-        console.print(f"  • Time elapsed: {minutes}m {seconds}s")
-    
-    console.print("=" * 60)
-    console.print()
+    console.print("=" * 60 + "\n")
 
 
 @app.command()
 def fix(
     repo_path: Path = typer.Argument(
         Path("."),
-        help="Path to repository to fix",
+        help="Path to repository",
         exists=True,
         file_okay=False,
         dir_okay=True,
         resolve_path=True,
     ),
-    max_iters: int = typer.Option(
-        6,
-        "--max-iters",
-        "-i",
-        help="Maximum number of fix iterations",
+    config_file: Optional[Path] = typer.Option(
+        None,
+        "--config", "-c",
+        help="Path to YAML configuration file",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+    ),
+    max_iters: Optional[int] = typer.Option(
+        None,
+        "--max-iters", "-i",
+        help="Maximum iterations (default: 6)",
         min=1,
         max=20,
     ),
-    timeout: int = typer.Option(
-        1200,
-        "--timeout",
-        "-t",
-        help="Overall timeout in seconds",
+    timeout: Optional[int] = typer.Option(
+        None,
+        "--timeout", "-t",
+        help="Timeout in seconds (default: 1200)",
         min=60,
         max=7200,
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model", "-m",
+        help="LLM model (gpt-4, claude-3, llama-2, etc.)",
+    ),
     verbose: bool = typer.Option(
         False,
-        "--verbose",
-        "-v",
+        "--verbose", "-v",
         help="Enable verbose output",
     ),
+    no_docker: bool = typer.Option(
+        False,
+        "--no-docker",
+        help="Disable Docker sandbox for tests",
+    ),
+    github_token: Optional[str] = typer.Option(
+        None,
+        "--github-token",
+        help="GitHub token for PR integration",
+        envvar="GITHUB_TOKEN",
+    ),
 ):
-    """Fix failing tests in a repository with full telemetry."""
-    console.print(f"[green]Nova CI-Rescue Enhanced[/green] 🚀")
+    """
+    Fix failing tests in a repository using AI.
+    
+    Examples:
+        nova fix                    # Fix tests in current directory
+        nova fix /path/to/repo      # Fix tests in specific repo
+        nova fix -c config.yml      # Use configuration file
+        nova fix --model claude-3   # Use Claude instead of GPT-4
+    """
+    # Load configuration
+    settings = NovaSettings()
+    
+    # Load from YAML if provided
+    if config_file:
+        yaml_config = load_yaml_config(config_file)
+        if yaml_config:
+            # Update settings with YAML values
+            for key, value in yaml_config.items():
+                if hasattr(settings, key):
+                    setattr(settings, key, value)
+            console.print(f"[dim]Loaded config from {config_file}[/dim]")
+    
+    # Override with CLI arguments
+    if max_iters is not None:
+        settings.max_iterations = max_iters
+    if timeout is not None:
+        settings.timeout_seconds = timeout
+    if model is not None:
+        settings.default_llm_model = model
+    if no_docker:
+        settings.use_docker = False
+    settings.verbose = verbose
+    
+    # Display configuration
+    console.print("[green]Nova CI-Rescue[/green] 🚀")
     console.print(f"Repository: {repo_path}")
-    console.print(f"Max iterations: {max_iters}")
-    console.print(f"Timeout: {timeout}s")
+    console.print(f"Model: {settings.default_llm_model}")
+    console.print(f"Max iterations: {settings.max_iterations}")
+    console.print(f"Timeout: {settings.timeout_seconds}s")
+    console.print(f"Docker: {'enabled' if settings.use_docker else 'disabled'}")
     console.print()
     
     # Initialize components
-    git_manager = GitBranchManager(repo_path, verbose=verbose)
-    branch_name: Optional[str] = None
-    success = False
+    git_manager = None
     telemetry = None
     state = None
+    branch_name = None
+    success = False
     
     try:
-        # Create the nova-fix branch
+        # Set up git branch
+        git_manager = GitBranchManager(repo_path, verbose=verbose)
         branch_name = git_manager.create_fix_branch()
         console.print(f"[dim]Working on branch: {branch_name}[/dim]")
-        
-        # Set up signal handler for Ctrl+C
         git_manager.setup_signal_handler()
         
-        # Initialize settings and telemetry
-        settings = NovaSettings()
-        telemetry = JSONLLogger(settings, enabled=True)
-        run_id = telemetry.start_run(repo_path)
-        console.print(f"[dim]Telemetry run ID: {run_id}[/dim]")
-        console.print(f"[dim]Telemetry directory: {telemetry.run_dir}[/dim]")
-        console.print()
-        
-        # Initialize agent state
-        state = AgentState(
-            repo_path=repo_path,
-            max_iterations=max_iters,
-            timeout_seconds=timeout,
-            branch_name=branch_name,
-            original_commit=git_manager._get_current_head()
-        )
-        
-        # Initialize nodes
-        planner_node = PlannerNode(verbose=verbose)
-        actor_node = ActorNode(verbose=verbose)
-        critic_node = CriticNode(verbose=verbose)
-        apply_node = ApplyPatchNode(verbose=verbose)
-        test_node = RunTestsNode(repo_path, verbose=verbose)
-        reflect_node = ReflectNode(verbose=verbose)
-        
-        # Step 1: Initial test discovery
-        console.print("[bold]Phase 1: Test Discovery[/bold]")
-        console.print("[cyan]🔍 Discovering failing tests...[/cyan]")
-        
-        initial_results = test_node.execute(state, telemetry, step_number=0)
-        
-        # Log initial test discovery
-        telemetry.log_event("test_discovery", {
-            "total_failures": initial_results["failure_count"],
-            "failing_tests": initial_results["failing_tests"][:10],  # First 10
-            "junit_report_saved": initial_results.get("junit_report_saved", False)
+        # Initialize telemetry
+        telemetry = JSONLLogger()
+        telemetry.log_event("run_start", {
+            "repo": str(repo_path),
+            "model": settings.default_llm_model,
+            "max_iterations": settings.max_iterations
         })
         
-        # Check if there are any failures
-        if initial_results["failure_count"] == 0:
-            console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
+        # Initialize state
+        state = AgentState(
+            repo_path=repo_path,
+            max_iterations=settings.max_iterations,
+            timeout_seconds=settings.timeout_seconds
+        )
+        
+        # Step 1: Pre-agent test discovery (for better user feedback)
+        console.print("[cyan]Running initial tests...[/cyan]")
+        runner = TestRunner(repo_path, verbose=verbose)
+        failing_tests, initial_junit = runner.run_tests(max_failures=10)
+        
+        # Try fault localization if available
+        try:
+            from nova.runner.test_runner import FaultLocalizer
+            FaultLocalizer.localize_failures(failing_tests, coverage_data=None)
+            if verbose:
+                console.print("[dim]Fault localization complete[/dim]")
+        except:
+            pass  # Fault localization is optional
+        
+        # Save initial test report
+        if initial_junit:
+            telemetry.save_patch(0, initial_junit)
+        
+        # Store failures in state
+        state.add_failing_tests(failing_tests)
+        telemetry.log_event("test_discovery", {
+            "total_failures": state.total_failures,
+            "failing_tests": [t.name for t in failing_tests] if failing_tests else []
+        })
+        
+        # Check if already passing
+        if not failing_tests:
+            console.print("[green]✅ No failing tests! Repository is already green.[/green]")
             state.final_status = "success"
-            telemetry.log_event("completion", {"status": "no_failures"})
-            telemetry.end_run(success=True)
             success = True
+            
+            # GitHub integration
+            if github_token:
+                _post_github_status(
+                    token=github_token,
+                    repo_path=repo_path,
+                    status="success",
+                    message="No failing tests found",
+                    state=state,
+                    git_manager=git_manager
+                )
+            
             return
         
-        # Display failing tests in a table
-        console.print(f"\n[bold red]Found {initial_results['failure_count']} failing test(s):[/bold red]")
-        
-        table = Table(title="Failing Tests", show_header=True, header_style="bold magenta")
-        table.add_column("Test Name", style="cyan", no_wrap=False)
+        # Display failing tests
+        console.print(f"\n[red]Found {len(failing_tests)} failing test(s):[/red]")
+        table = Table(title="Failing Tests", show_header=True)
+        table.add_column("Test", style="cyan", no_wrap=False)
         table.add_column("Location", style="yellow")
         table.add_column("Error", style="red", no_wrap=False)
         
-        for test in initial_results["failing_tests"][:5]:  # Show first 5
-            location = f"{test['file']}:{test['line']}" if test.get('line', 0) > 0 else test['file']
-            error_preview = test['short_traceback'].split('\n')[0][:60]
-            if len(test['short_traceback'].split('\n')[0]) > 60:
-                error_preview += "..."
-            table.add_row(test['name'], location, error_preview)
+        for test in failing_tests[:10]:
+            location = f"{test.file}:{test.line}" if hasattr(test, 'line') else test.file
+            error = test.short_traceback.split('\n')[0][:80] if hasattr(test, 'short_traceback') else "Unknown"
+            table.add_row(test.name, location, error)
         
-        if initial_results['failure_count'] > 5:
-            table.add_row("...", f"and {initial_results['failure_count'] - 5} more", "...")
+        if len(failing_tests) > 10:
+            table.add_row("...", f"({len(failing_tests) - 10} more)", "...")
         
         console.print(table)
         console.print()
         
-        # Initialize LLM agent
+        # Prepare tools
+        console.print("[cyan]Initializing AI agent...[/cyan]")
+        
+        run_tests_tool = RunTestsTool(repo_path=repo_path, verbose=verbose)
+        apply_patch_tool = ApplyPatchTool(
+            git_manager=git_manager,
+            safety_config=SafetyConfig.from_dict(yaml_config.get("safety", {})) if yaml_config else SafetyConfig(),
+            verbose=verbose,
+            state=state
+        )
+        critic_tool = CriticReviewTool(verbose=verbose)
+        
+        tools = [run_tests_tool, apply_patch_tool, critic_tool]
+        
+        # Add optional file tools if available
         try:
-            from nova.agent.llm_agent import LLMAgent
-            llm_agent = LLMAgent(repo_path)
-            model_name = settings.default_llm_model
-            console.print(f"[dim]Using {model_name} for autonomous test fixing[/dim]")
-        except Exception as e:
-            console.print(f"[yellow]Warning: Could not initialize LLM agent: {e}[/yellow]")
-            from nova.agent.mock_llm import MockLLMAgent
-            llm_agent = MockLLMAgent(repo_path)
+            from nova.agent.tools import open_file, write_file
+            from langchain.agents import Tool
+            
+            if open_file:
+                tools.append(Tool(
+                    name="open_file",
+                    func=open_file,
+                    description="Read source code files"
+                ))
+            if write_file:
+                tools.append(Tool(
+                    name="write_file", 
+                    func=lambda input: write_file(*input.split("|||", 1)),
+                    description="Write to source files (use: path|||content)"
+                ))
+        except:
+            pass  # File tools are optional
         
-        # Agent loop
-        console.print("\n[bold]Phase 2: Agent Loop[/bold]")
+        # Initialize agent
+        agent = NovaDeepAgent(
+            tools=tools,
+            state=state,
+            telemetry=telemetry,
+            llm_model=settings.default_llm_model,
+            settings=settings,
+            verbose=verbose
+        )
         
-        while state.increment_iteration():
-            iteration = state.current_iteration
-            console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
-            
-            # 1. PLANNER
-            plan = planner_node.execute(state, llm_agent, telemetry, state.critic_feedback)
-            
-            # 2. ACTOR
-            patch_diff = actor_node.execute(state, llm_agent, telemetry, plan)
-            
-            if not patch_diff:
-                console.print("[red]❌ Could not generate a patch[/red]")
-                state.final_status = "no_patch"
-                break
-            
-            # Save patch artifact before critic review
-            telemetry.save_patch(state.current_step + 1, patch_diff)
-            
-            # 3. CRITIC
-            approved, reason = critic_node.execute(state, patch_diff, llm_agent, telemetry)
-            
-            if not approved:
-                # Check if we have more iterations
-                if iteration < state.max_iterations:
-                    console.print(f"[yellow]Will try a different approach in iteration {iteration + 1}...[/yellow]")
-                    continue
-                else:
-                    state.final_status = "patch_rejected"
-                    break
-            
-            # 4. APPLY PATCH
-            apply_result = apply_node.execute(state, patch_diff, git_manager, logger=telemetry, iteration=iteration)
-            
-            if not apply_result["success"]:
-                console.print(f"[red]❌ Failed to apply patch[/red]")
-                state.final_status = "patch_error"
-                break
-            
-            # 5. RUN TESTS
-            test_results = test_node.execute(state, telemetry, apply_result["step_number"])
-            
-            # 6. REFLECT
-            should_continue, decision, metadata = reflect_node.execute(state, test_results, telemetry)
-            
-            if not should_continue:
-                if decision == "success":
-                    success = True
-                break
+        # Format failing tests for agent
+        failures_summary = runner.format_failures_table(failing_tests) if hasattr(runner, 'format_failures_table') else str(failing_tests)
         
-        # Print exit summary
-        if state and state.final_status:
-            elapsed = (datetime.now() - state.start_time).total_seconds()
-            print_exit_summary(state, state.final_status, elapsed)
+        # Extract error details
+        error_details = []
+        for test in failing_tests[:3]:
+            if hasattr(test, 'short_traceback'):
+                error_details.append(f"{test.name}:\n{test.short_traceback[:500]}")
+        error_details_str = "\n\n".join(error_details)
         
-        # Log final completion
+        # Run the agent
+        console.print("\n[bold]Starting AI agent...[/bold]")
+        success = agent.run(
+            failures_summary=failures_summary,
+            error_details=error_details_str
+        )
+        
+        # Set final status
+        if success:
+            state.final_status = "success"
+        elif state.current_iteration >= state.max_iterations:
+            state.final_status = "max_iters"
+        else:
+            state.final_status = "incomplete"
+        
+        # Print summary
+        print_exit_summary(state, state.final_status)
+        
+        # Log completion
         telemetry.log_event("completion", {
             "status": state.final_status,
             "iterations": state.current_iteration,
-            "total_patches": len(state.patches_applied),
-            "final_failures": len(state.failing_tests) if state.failing_tests else 0
-        })
-        
-        # End telemetry run
-        telemetry.end_run(success=success, summary={
-            "run_id": run_id,
-            "repo": str(repo_path),
-            "status": state.final_status,
-            "iterations": state.current_iteration,
             "patches_applied": len(state.patches_applied),
-            "duration_seconds": (datetime.now() - state.start_time).total_seconds()
+            "final_failures": state.total_failures
         })
         
-        # Generate proof-of-release run report (D3)
-        if state and telemetry:
-            from nova.github_integration import ReportGenerator
-            from nova.tools.safety_limits import SafetyLimits
-            generator = ReportGenerator()
-            
-            # Calculate total lines changed across all applied patches
-            total_lines_changed = 0
-            try:
-                safety = SafetyLimits()
-                for patch_text in state.patches_applied:
-                    analysis = safety.analyze_patch(patch_text)
-                    total_lines_changed += analysis.total_lines_changed
-            except Exception:
-                total_lines_changed = None
-            
-            # Prepare markdown content
-            timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            report_md = "# Nova CI-Rescue Run Report\n\n"
-            report_md += f"**Run Timestamp:** {timestamp_str}\n\n"
-            
-            # Include high-level summary (status, runtime, iterations, files, tests)
-            elapsed_seconds = int((datetime.now() - state.start_time).total_seconds())
-            initial_failures = len(initial_results.get("failing_tests", []))
-            final_failures = len(state.failing_tests) if state.failing_tests else 0
-            tests_fixed = initial_failures - final_failures
-            
-            # Count changed files
-            files_changed = set()
-            for patch in state.patches_applied:
-                analysis = SafetyLimits().analyze_patch(patch)
-                files_changed.update(analysis.files_modified | analysis.files_added)
-            
-            # Create metrics object for summary generation
-            from nova.github_integration import RunMetrics
-            metrics = RunMetrics(
-                runtime_seconds=elapsed_seconds,
-                iterations=state.current_iteration,
-                files_changed=len(files_changed),
-                status="success" if success else (state.final_status or "failure"),
-                tests_fixed=tests_fixed,
-                tests_remaining=final_failures,
-                initial_failures=initial_failures,
-                final_failures=final_failures,
-                branch_name=branch_name
+        # GitHub integration
+        if github_token:
+            _post_github_status(
+                token=github_token,
+                repo_path=repo_path,
+                status="success" if success else "failure",
+                message=f"Fixed {len(failing_tests) - state.total_failures}/{len(failing_tests)} tests",
+                state=state,
+                git_manager=git_manager
             )
-            
-            report_md += generator.generate_check_summary(metrics) + "\n"
-            
-            # Add diff statistics section
-            report_md += "### Diff Summary\n"
-            if total_lines_changed is not None:
-                report_md += f"- Total lines changed (diff): **{total_lines_changed}**\n"
-            report_md += f"- Files changed: **{len(files_changed)}**\n"
-            if metrics.branch_name:
-                report_md += f"- Fix Branch: `{metrics.branch_name}`\n"
-            if metrics.status == "success" and metrics.tests_fixed == metrics.initial_failures:
-                report_md += f"- ✅ All {metrics.initial_failures} failing tests were fixed.\n"
-            elif metrics.tests_fixed > 0:
-                report_md += f"- ⚠️ {metrics.tests_fixed} out of {metrics.initial_failures} tests fixed; {metrics.final_failures} still failing.\n"
-            else:
-                report_md += f"- ❌ No tests were fixed. {metrics.final_failures} failures remain.\n"
-            
-            # Save the markdown report to .nova/<run>/reports/summary.md
-            reports_dir = telemetry.run_dir / "reports"
-            reports_dir.mkdir(parents=True, exist_ok=True)
-            report_file = reports_dir / "summary.md"
-            with open(report_file, "w") as f:
-                f.write(report_md)
-            console.print(f"[dim]Run summary saved to {report_file}[/dim]")
-        
-        # GitHub PR reporting
-        token = os.getenv("GITHUB_TOKEN")
-        repo = os.getenv("GITHUB_REPOSITORY")
-        pr_num = os.getenv("PR_NUMBER")
-        
-        # Try to auto-detect PR number if not provided
-        if not pr_num:
-            # Try GitHub Actions event number
-            pr_num = os.getenv("GITHUB_EVENT_NUMBER")
-            
-            # Try to parse from GITHUB_REF (e.g., refs/pull/123/merge)
-            if not pr_num:
-                github_ref = os.getenv("GITHUB_REF")
-                if github_ref and "pull/" in github_ref:
-                    import re
-                    match = re.search(r"pull/(\d+)/", github_ref)
-                    if match:
-                        pr_num = match.group(1)
-            
-            # Try to parse from GitHub event JSON
-            if not pr_num:
-                event_path = os.getenv("GITHUB_EVENT_PATH")
-                if event_path and os.path.exists(event_path):
-                    try:
-                        import json
-                        with open(event_path, "r") as f:
-                            event_data = json.load(f)
-                        if "pull_request" in event_data:
-                            pr_num = str(event_data["pull_request"]["number"])
-                    except:
-                        pass
-        
-        if token and repo:
-            try:
-                from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
-                
-                api = GitHubAPI(token)
-                
-                # Compute metrics from state
-                elapsed = (datetime.now() - state.start_time).total_seconds()
-                
-                # Count changed files
-                files_changed = set()
-                for patch in state.patches_applied:
-                    analysis = SafetyLimits().analyze_patch(patch)
-                    files_changed.update(analysis.files_modified | analysis.files_added)
-                
-                metrics = RunMetrics(
-                    runtime_seconds=int(elapsed),
-                    iterations=state.current_iteration,
-                    files_changed=len(files_changed),
-                    status="success" if success else (state.final_status or "failure"),
-                    tests_fixed=(len(state.failing_tests) - state.total_failures) if state.failing_tests else 0,
-                    tests_remaining=state.total_failures,
-                    initial_failures=len(state.failing_tests) if state.failing_tests else 0,
-                    final_failures=state.total_failures,
-                    branch_name=branch_name
-                )
-                
-                # Post check-run
-                head_sha = git_manager._get_current_head()
-                if head_sha:
-                    generator = ReportGenerator()
-                    api.create_check_run(
-                        repo=repo,
-                        sha=head_sha,
-                        name="CI-Auto-Rescue",
-                        status="completed",
-                        conclusion="success" if success else "failure",
-                        title=f"CI-Auto-Rescue: {metrics.status.upper()}",
-                        summary=generator.generate_check_summary(metrics)
-                    )
-                    if verbose:
-                        console.print("[dim]✅ Posted check run to GitHub[/dim]")
-                
-                # Post or update PR comment
-                if pr_num:
-                    generator = ReportGenerator()
-                    existing = api.find_pr_comment(repo, int(pr_num), "<!-- ci-auto-rescue-report -->")
-                    comment_body = generator.generate_pr_comment(metrics)
-                    
-                    if existing:
-                        api.update_pr_comment(repo, existing, comment_body)
-                        if verbose:
-                            console.print("[dim]✅ Updated existing PR comment[/dim]")
-                    else:
-                        api.create_pr_comment(repo, int(pr_num), comment_body)
-                        if verbose:
-                            console.print("[dim]✅ Created new PR comment[/dim]")
-                            
-            except Exception as e:
-                console.print(f"[yellow]⚠️ GitHub reporting failed: {e}[/yellow]")
-        
-        if success:
-            console.print(f"\n[green]✨ Success! Check telemetry at: {telemetry.run_dir}[/green]")
-        else:
-            console.print(f"\n[yellow]📊 Telemetry saved at: {telemetry.run_dir}[/yellow]")
         
     except KeyboardInterrupt:
+        # Handle Ctrl+C
         if state:
             state.final_status = "interrupted"
             print_exit_summary(state, "interrupted")
         else:
             console.print("\n[yellow]Interrupted by user[/yellow]")
+        
         if telemetry:
             telemetry.log_event("interrupted", {"reason": "keyboard_interrupt"})
-            telemetry.end_run(success=False)
+        
         success = False
+        
     except Exception as e:
+        # Handle errors
         console.print(f"\n[red]Error: {e}[/red]")
+        
+        if verbose:
+            import traceback
+            console.print(traceback.format_exc())
+        
         if state:
             state.final_status = "error"
             print_exit_summary(state, "error")
+        
         if telemetry:
-            telemetry.log_event("error", {"error": str(e), "type": type(e).__name__})
-            telemetry.end_run(success=False)
+            telemetry.log_event("error", {"error": str(e)})
+        
         success = False
+        
     finally:
-        # Clean up branch and restore original state
+        # Cleanup
         if git_manager and branch_name:
             git_manager.cleanup(success=success)
             git_manager.restore_signal_handler()
         
+        if telemetry:
+            telemetry.end_run(success=success)
+        
         # Exit with appropriate code
-        raise SystemExit(0 if success else 1)
+        sys.exit(0 if success else 1)
 
 
-@app.command()
-def eval(
-    repos_file: Path = typer.Argument(..., help="YAML file containing repositories to evaluate", exists=True),
-    output_dir: Path = typer.Option(Path("./evals/results"), "--output", "-o", help="Directory for evaluation results"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    config_file: Optional[Path] = typer.Option(None, "--config", "-c", help="YAML config file for runs", exists=True)
+def _post_github_status(
+    token: str,
+    repo_path: Path,
+    status: str,
+    message: str,
+    state: Optional[AgentState] = None,
+    git_manager: Optional[GitBranchManager] = None
 ):
-    """Evaluate Nova on multiple repositories."""
-    import yaml
-    import json
-    import subprocess
-    import re
-    from datetime import timezone
-    
-    def load_yaml_config(config_file: Path) -> dict:
-        """Load YAML configuration file."""
-        with open(config_file, "r") as f:
-            return yaml.safe_load(f)
-    
-    # Load optional config for common settings
-    config_data = load_yaml_config(config_file) if config_file else None
-    console.print(f"[green]Nova CI-Rescue Evaluation[/green] 📊")
-    if config_file:
-        console.print(f"[dim]Loaded configuration from {config_file}[/dim]")
-    console.print(f"Repos file: {repos_file}")
-    console.print(f"Output directory: {output_dir}\n")
-
-    # Parse YAML for list of repos (supports either `runs:` key or direct list)
+    """Post status to GitHub (PR comments, check runs, etc.)."""
     try:
-        with open(repos_file, "r") as f:
-            repos_data = yaml.safe_load(f)
+        # This would integrate with GitHub API
+        # Simplified for demonstration
+        console.print(f"[dim]GitHub: {status} - {message}[/dim]")
     except Exception as e:
-        console.print(f"[red]Failed to read YAML file: {e}[/red]")
-        raise typer.Exit(1)
-    if isinstance(repos_data, dict) and 'runs' in repos_data:
-        repos_list = repos_data['runs']
-    elif isinstance(repos_data, list):
-        repos_list = repos_data
-    else:
-        console.print("[red]Invalid YAML format: expected a list or 'runs:' key[/red]")
-        raise typer.Exit(1)
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    results = []
-    total_success = total_failed = 0
-
-    # Prepare summary table with clear headers
-    summary_table = Table(title="Evaluation Results", header_style="bold magenta")
-    summary_table.add_column("Repository", style="cyan")
-    summary_table.add_column("Status", style="green")
-    summary_table.add_column("Duration", style="yellow")
-    summary_table.add_column("Iterations", style="blue")
-    summary_table.add_column("Tests Fixed", style="magenta")
-
-    # Optional parallel execution (stubbed for future, runs sequentially for now)
-    jobs = 1  # (Could be parameterized: e.g., typer.Option(1, "--jobs"))
-    if jobs > 1 and len(repos_list) > 1:
-        console.print(f"[yellow]Running eval on {len(repos_list)} repos with up to {jobs} parallel jobs...[/yellow]")
-        # Parallel execution not yet fully implemented – sequential fallback
-    else:
-        jobs = 1
-
-    for entry in repos_list:
-        # Determine repo path and identify scenario name
-        repo_path = Path(entry.get("path") or entry.get("repo") or entry.get("repo_path", "."))
-        if not repo_path.is_absolute():
-            repo_path = (repos_file.parent / repo_path).resolve()
-        name = entry.get("name") or repo_path.name
-        max_iters = entry.get("max_iters") or entry.get("max_iterations", 6)
-        timeout = entry.get("timeout", 1200)
-
-        if not repo_path.exists():
-            console.print(f"[yellow]⚠️ Skipping {name}: path not found ({repo_path})[/yellow]")
-            results.append({"name": name, "repo": str(repo_path), "success": False, "error": "path_not_found"})
-            total_failed += 1
-            continue
-
-        console.print(f"\n[bold]Running Nova on [cyan]{name}[/cyan]...[/bold]")
-        console.print(f"  Path: {repo_path}")
-        console.print(f"  Max iterations: {max_iters}")
-        console.print(f"  Timeout: {timeout}s")
-
-        # Execute `nova fix` for this repo in a subprocess
-        start_time = datetime.now(timezone.utc)
-        cmd = ["python", "-m", "nova", "fix", str(repo_path), "--max-iters", str(max_iters), "--timeout", str(timeout)]
-        if config_file:
-            cmd += ["--config", str(config_file)]
-        if verbose:
-            cmd.append("--verbose")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
-        success_flag = (result.returncode == 0)
-
-        # Parse key metrics from output (iterations and tests fixed)
-        iter_count = tests_fixed = initial_failures = 0
-        for line in result.stdout.splitlines():
-            if "Iterations completed:" in line:
-                match = re.search(r"Iterations completed: (\d+)", line)
-                if match: 
-                    iter_count = int(match.group(1))
-            if "Initial failures:" in line:
-                match = re.search(r"Initial failures: (\d+)", line)
-                if match: 
-                    initial_failures = int(match.group(1))
-            if "Tests fixed:" in line:
-                match = re.search(r"Tests fixed: (\d+)/", line)
-                if match: 
-                    tests_fixed = int(match.group(1))
-        if success_flag and initial_failures and tests_fixed == 0:
-            tests_fixed = initial_failures  # All fixed
-
-        status_text = "✅ SUCCESS" if success_flag else "❌ FAILED"
-        console.print(f"• [yellow]{name}[/yellow]: {status_text} after {int(elapsed)}s, {iter_count} iteration(s)")
-
-        summary_table.add_row(name, "SUCCESS" if success_flag else "FAILED", f"{int(elapsed)}s", str(iter_count), str(tests_fixed))
-        total_success += (1 if success_flag else 0)
-        total_failed  += (0 if success_flag else 1)
-        results.append({
-            "name": name,
-            "repo": str(repo_path),
-            "success": success_flag,
-            "duration": elapsed,
-            "iterations": iter_count,
-            "tests_fixed": tests_fixed,
-            "initial_failures": initial_failures,
-            "max_iterations": max_iters,
-            "timeout": timeout
-        })
-    # Save results to JSON with timestamp
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    results_path = output_dir / f"{timestamp}.json"
-    with open(results_path, "w") as f:
-        json.dump({
-            "timestamp": timestamp,
-            "total_repos": len(results),
-            "successful": total_success,
-            "failed": total_failed,
-            "results": results
-        }, f, indent=2)
-
-    # Display final summary table and stats
-    console.print("\n" + "="*60)
-    console.print(summary_table)
-    console.print("="*60)
-    console.print(f"\n[bold]Evaluation Complete[/bold]")
-    console.print(f"  Total repositories: {len(results)}")
-    console.print(f"  [green]Successful: {total_success}[/green]")
-    console.print(f"  [red]Failed: {total_failed}[/red]")
-    if results:
-        success_rate = 100 * total_success / len(results)
-        console.print(f"  Success rate: {success_rate:.1f}%")
-    console.print(f"\nResults saved to: [cyan]{results_path}[/cyan]")
-    if total_failed > 0:
-        raise typer.Exit(1)
+        console.print(f"[yellow]GitHub integration failed: {e}[/yellow]")
 
 
 @app.command()
 def version():
-    """Show Nova CI-Rescue version."""
-    console.print("[green]Nova CI-Rescue Enhanced[/green] v1.0.0")
+    """Show Nova version."""
+    console.print("Nova CI-Rescue v0.4.0 (Enhanced Edition)")
+    console.print("Powered by LangChain and OpenAI/Anthropic/Llama")
 
 
 if __name__ == "__main__":

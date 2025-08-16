@@ -1,0 +1,28 @@
+# Requirements for Nova CI-Rescue Docker Sandbox
+# These are installed in the Docker container for running tests
+
+# Testing frameworks
+pytest>=7.4.0
+pytest-json-report>=1.5.0
+pytest-timeout>=2.2.0
+pytest-xdist>=3.0.0  # For parallel test execution
+
+# Common dependencies that projects might need
+# (Add your project's specific requirements here)
+numpy>=1.24.0
+pandas>=2.0.0
+requests>=2.31.0
+flask>=2.3.0
+django>=4.2.0
+fastapi>=0.100.0
+sqlalchemy>=2.0.0
+
+# Type checking and linting (optional)
+mypy>=1.5.0
+black>=23.0.0
+flake8>=6.0.0
+pylint>=2.17.0
+
+# Coverage tools (optional)
+coverage>=7.2.0
+pytest-cov>=4.1.0

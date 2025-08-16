@@ -1,9 +1,20 @@
 """
-Nova CI-Rescue agent nodes module.
+Nova CI-Rescue agent module.
 
-Note: Legacy node classes have been removed as of v0.3.0.
-All functionality is now handled by the Deep Agent architecture.
+Provides both the modern Deep Agent and legacy components for backward compatibility.
 """
 
-# This module is kept for backward compatibility but contains no exports
-__all__ = []
+from nova.agent.state import AgentState
+from nova.agent.deep_agent import NovaDeepAgent
+
+# Legacy imports for backward compatibility (deprecated)
+try:
+    from nova.agent.llm_agent import LLMAgent
+except ImportError:
+    LLMAgent = None
+
+__all__ = [
+    'AgentState',
+    'NovaDeepAgent',
+    'LLMAgent',  # Deprecated, will be removed in v2.0
+]

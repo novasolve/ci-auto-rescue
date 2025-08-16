@@ -45,7 +45,6 @@ Homepage = "https://github.com/novasolve/ci-auto-rescue"
 
 [project.scripts]
 nova = "nova.cli:app"
-nova-deep = "nova.cli:deep_agent_app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

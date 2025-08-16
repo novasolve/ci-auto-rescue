@@ -213,8 +213,13 @@ def fix(
         if config_data and config_data.model:
             settings.default_llm_model = config_data.model
         
-        telemetry = JSONLLogger(settings, enabled=True)
-        telemetry.start_run(repo_path)
+        telemetry = JSONLLogger()
+        telemetry.log_event("run_start", {
+            "repo": str(repo_path),
+            "model": settings.default_llm_model,
+            "max_iterations": final_max_iters,
+            "timeout": final_timeout
+        })
         
         # Initialize agent state
         state = AgentState(

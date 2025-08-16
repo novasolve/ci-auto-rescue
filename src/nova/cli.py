@@ -26,7 +26,7 @@ from nova.tools.git import GitBranchManager
 
 app = typer.Typer(
     name="nova",
-    help="Nova CI-Rescue: Automated test fixing agent",
+    help="Nova CI-Rescue: Automated test fixing with Deep Agent (AI-powered)",
     add_completion=False,
 )
 console = Console()
@@ -161,9 +161,17 @@ def fix(
         dir_okay=False,
         resolve_path=True,
     ),
+    legacy_agent: bool = typer.Option(
+        False,
+        "--legacy-agent",
+        help="Use the legacy LLM-based agent instead of Deep Agent (deprecated, will be removed in v2.0)",
+    ),
 ):
     """
-    Fix failing tests in a repository.
+    Fix failing tests in a repository using Nova's Deep Agent (default).
+    
+    By default, uses the intelligent Deep Agent with LangChain for better success rates.
+    Use --legacy-agent to fall back to the older multi-step pipeline (deprecated).
     """
     # Load configuration file if provided
     config_data = None
@@ -403,20 +411,31 @@ def fix(
         error_details = "\n\n".join(test.short_traceback for test in failing_tests[:3])
         code_snippets = ""  # (optional) could gather relevant code snippets if needed
         
-        # Initialize the Deep Agent
-        console.print("\n[bold]Initializing Nova Deep Agent...[/bold]")
-        from nova.agent.deep_agent import NovaDeepAgent
-        deep_agent = NovaDeepAgent(
+        # Initialize the agent based on user choice
+        from nova.agent.agent_factory import AgentFactory
+        
+        agent_type = "legacy" if legacy_agent else "deep"
+        agent_name = "Legacy Agent" if legacy_agent else "Deep Agent"
+        
+        if legacy_agent:
+            console.print("\n[yellow]⚠️  Using deprecated Legacy Agent. Consider using the default Deep Agent for better results.[/yellow]")
+        
+        console.print(f"\n[bold]Initializing Nova {agent_name}...[/bold]")
+        
+        agent = AgentFactory.create_agent(
+            agent_type=agent_type,
             state=state,
             telemetry=telemetry,
             git_manager=git_manager,
             verbose=verbose,
-            safety_config=safety_conf  # use SafetyConfig if any custom limits from config file
+            safety_config=safety_conf,  # use SafetyConfig if any custom limits from config file
+            max_iterations=state.max_iterations,
+            max_execution_time=state.timeout_seconds
         )
         
-        # Run the Deep Agent to fix tests
-        console.print("[cyan]🤖 Running Deep Agent to fix failing tests...[/cyan]")
-        success = deep_agent.run(
+        # Run the agent to fix tests
+        console.print(f"[cyan]🤖 Running {agent_name} to fix failing tests...[/cyan]")
+        success = agent.run(
             failures_summary=failures_summary,
             error_details=error_details,
             code_snippets=code_snippets

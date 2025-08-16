@@ -11,6 +11,7 @@ A single, consolidated Python script for testing Nova's Deep Agent performance.
 ## 🎯 Purpose
 
 Tests Nova's Deep Agent on synthetic test scenarios to validate:
+
 - Bug fixing capability
 - Success rate across different problem types
 - Performance metrics (time, iterations)
@@ -33,11 +34,12 @@ python nova_test_suite.py --verbose --timeout 600 --keep-files
 The suite creates 4 synthetic test scenarios:
 
 1. **Simple Math** - Arithmetic operations with bugs (easy)
-2. **String Operations** - Text manipulation errors (easy)  
+2. **String Operations** - Text manipulation errors (easy)
 3. **List Operations** - Array/list handling bugs (easy)
 4. **Edge Cases** - Special case handling (medium)
 
 Each scenario includes:
+
 - Buggy implementation code
 - Failing test cases
 - Expected difficulty level
@@ -107,12 +109,12 @@ Test Results
 
 ## 🔧 Command Line Options
 
-| Option | Description | Default |
-|--------|------------|---------|
-| `--verbose`, `-v` | Show detailed output and commands | False |
-| `--keep-files` | Don't clean up test files after completion | False |
-| `--timeout SECONDS` | Timeout for each Nova run | 300 |
-| `--workspace PATH` | Path to Nova workspace | Current directory |
+| Option              | Description                                | Default           |
+| ------------------- | ------------------------------------------ | ----------------- |
+| `--verbose`, `-v`   | Show detailed output and commands          | False             |
+| `--keep-files`      | Don't clean up test files after completion | False             |
+| `--timeout SECONDS` | Timeout for each Nova run                  | 300               |
+| `--workspace PATH`  | Path to Nova workspace                     | Current directory |
 
 ## 🔄 CI/CD Integration
 
@@ -143,21 +145,25 @@ test-deep-agent:
 ## 🧪 How It Works
 
 1. **Environment Setup**
+
    - Creates isolated virtual environment
    - Installs Nova from current directory
    - Sets up test directories
 
 2. **Scenario Generation**
+
    - Creates synthetic repositories with bugs
    - Each has failing pytest tests
    - Covers different difficulty levels
 
 3. **Test Execution**
+
    - Runs pytest to count initial failures
    - Executes Nova Deep Agent on each scenario
    - Measures success, iterations, and time
 
 4. **Report Generation**
+
    - Calculates success metrics
    - Generates Markdown and JSON reports
    - Determines pass/fail based on criteria
@@ -169,20 +175,25 @@ test-deep-agent:
 ## 🔍 Troubleshooting
 
 ### OPENAI_API_KEY not set
+
 ```bash
 export OPENAI_API_KEY='sk-...'
 ```
 
 ### Module not found
+
 Ensure you're in the Nova CI-Rescue directory when running the script.
 
 ### Permission denied
+
 ```bash
 chmod +x nova_test_suite.py
 ```
 
 ### Timeout issues
+
 Increase timeout for complex scenarios:
+
 ```bash
 python nova_test_suite.py --timeout 600
 ```

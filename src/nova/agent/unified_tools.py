@@ -69,14 +69,14 @@ BLOCKED_PATTERNS = [
 
 # --- Function-based Tools (Simple Operations) ---
 
-@tool("plan_todo", return_direct=True)
+@tool("plan_todo", return_direct=False)
 def plan_todo(todo: str) -> str:
     """Plan next steps. The agent uses this to outline a TODO list or strategy."""
     # This tool is a no-op that just records the plan in the agent's log.
     return f"Plan noted: {todo}"
 
 
-@tool("open_file", return_direct=True)
+@tool("open_file", return_direct=False)
 def open_file(path: str) -> str:
     """Read the contents of a file, with enhanced safety checks."""
     import fnmatch
@@ -112,7 +112,7 @@ def open_file(path: str) -> str:
         return f"ERROR: Could not read file {path}: {e}"
 
 
-@tool("write_file", return_direct=True)
+@tool("write_file", return_direct=False)
 def write_file(path: str, new_content: str) -> str:
     """Overwrite a file with the given content, with enhanced safety checks."""
     import fnmatch
@@ -759,16 +759,24 @@ def create_default_tools(
     llm: Optional[Any] = None
 ) -> List[BaseTool]:
     """
-    Create the default set of tools for the Deep Agent.
+    Create the default set of tools for the Deep Agent (v1.1).
+    
+    Provides all tools needed for the ReAct-style agent to fix failing tests:
+    - plan_todo: Record planning steps
+    - open_file: Read source files with safety checks
+    - write_file: Modify source files with safety checks
+    - run_tests: Execute tests in Docker sandbox
+    - apply_patch: Apply unified diff patches with validation
+    - critic_review: Review patches before application
     
     Args:
         repo_path: Repository path for tools that need it
         verbose: Enable verbose output
         safety_config: Safety configuration for patch application
-        llm: LLM instance for critic review
+        llm: LLM instance for critic review (optional)
     
     Returns:
-        List of tool instances ready for use
+        List of tool instances ready for use in LangChain agent
     """
     tools = []
     
@@ -776,19 +784,22 @@ def create_default_tools(
     tools.append(Tool(
         name="plan_todo",
         func=plan_todo,
-        description="Plan next steps (no-op tool that records the plan)"
+        description="Plan next steps. Use this to outline a TODO list or strategy before making changes.",
+        return_direct=False  # Allow agent to continue after planning
     ))
     
     tools.append(Tool(
         name="open_file",
         func=open_file,
-        description="Read the contents of a file"
+        description="Read the contents of a file from the repository. Provide the file path as a string.",
+        return_direct=False  # Allow agent to process file contents
     ))
     
     tools.append(Tool(
         name="write_file",
         func=write_file,
-        description="Overwrite a file with the given content"
+        description="Write or overwrite a file with new content. Provide path and new_content as arguments.",
+        return_direct=False  # Allow agent to continue after writing
     ))
     
     # Add class-based tools

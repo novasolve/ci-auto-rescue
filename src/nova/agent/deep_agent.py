@@ -68,22 +68,28 @@ class NovaDeepAgent:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
         # Choose LLM based on configuration (supports OpenAI GPT or Anthropic Claude)
         model_name = getattr(self.settings, 'default_llm_model', 'gpt-5')  # Default to GPT-5
+        use_react = False  # Track if we should use ReAct pattern
         
-        # Handle GPT-5 specifically with fallback to GPT-4 if not available
+        # Handle GPT-5 specifically with ReAct pattern support
         if model_name == "gpt-5":
             try:
                 llm = ChatOpenAI(model_name="gpt-5", temperature=0)
+                use_react = True  # GPT-5 may not support function calling, use ReAct
                 if self.verbose:
-                    print("🚀 Using GPT-5 model")
+                    print("🚀 Using GPT-5 model with ReAct pattern")
             except Exception as e:
                 if self.verbose:
                     print(f"⚠️ GPT-5 not available ({e}), falling back to GPT-4")
                 llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+                use_react = False  # GPT-4 supports function calling
         elif model_name.lower().startswith("gpt") or ChatAnthropic is None:
             llm = ChatOpenAI(model_name=model_name, temperature=0)
+            # GPT-4 and GPT-3.5 support function calling
+            use_react = False
         else:
             # Use Anthropic model if available and specified (e.g., "claude")
             llm = ChatAnthropic(model=model_name, temperature=0) if ChatAnthropic else ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+            use_react = True  # Claude models work better with ReAct
         # Define the comprehensive system message prompt with all safety rules
         system_message = (
             "You are Nova, an advanced AI software engineer specialized in automatically fixing failing tests.\n\n"
@@ -120,16 +126,67 @@ class NovaDeepAgent:
             repo_path=self.state.repo_path,
             verbose=self.verbose,
             safety_config=self.safety_config,
-            llm=None  # tools like CriticReviewTool will use default LLM if needed
+            llm=llm  # Pass LLM for critic review
         )
-        # Initialize the LangChain agent with tools and LLM (using OpenAI function-calling agent type for tool integration)
-        agent_executor = initialize_agent(
-            tools=tools,
-            llm=llm,
-            agent=AgentType.OPENAI_FUNCTIONS,
-            verbose=self.verbose,
-            agent_kwargs={"system_message": system_message}
-        )
+        
+        # Choose agent type based on model capabilities
+        if use_react:
+            # Use ReAct pattern for models that don't support function calling
+            from langchain.agents import AgentType
+            from langchain.prompts import PromptTemplate
+            
+            # Create ReAct prompt with tool descriptions
+            tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
+            
+            react_prompt = PromptTemplate(
+                template=system_message + """
+
+## Available Tools:
+{tool_descriptions}
+
+## ReAct Process:
+Use the following format for each step:
+
+Thought: [Your reasoning about what to do next]
+Action: [The action/tool to use, should be one of: {tool_names}]
+Action Input: [The input to the action]
+Observation: [The result of the action - this will be filled automatically]
+... (repeat Thought/Action/Observation as needed)
+Thought: [Final reasoning when problem is solved]
+Final Answer: [Summary of what was fixed]
+
+## Task:
+{input}
+
+## Begin ReAct Process:
+{agent_scratchpad}""",
+                input_variables=["input", "agent_scratchpad"],
+                partial_variables={
+                    "tool_descriptions": tool_descriptions,
+                    "tool_names": ", ".join([tool.name for tool in tools])
+                }
+            )
+            
+            # Initialize ReAct agent
+            agent_executor = initialize_agent(
+                tools=tools,
+                llm=llm,
+                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                verbose=self.verbose,
+                prompt=react_prompt,
+                max_iterations=15,  # More iterations for ReAct
+                handle_parsing_errors=True
+            )
+        else:
+            # Use function calling for models that support it (GPT-4, GPT-3.5)
+            agent_executor = initialize_agent(
+                tools=tools,
+                llm=llm,
+                agent=AgentType.OPENAI_FUNCTIONS,
+                verbose=self.verbose,
+                agent_kwargs={"system_message": system_message}
+            )
+        
         return agent_executor
 
     def run(self, failures_summary: str = "", error_details: str = "", code_snippets: str = "") -> bool:
@@ -145,24 +202,35 @@ class NovaDeepAgent:
             True if all tests were fixed (success), False otherwise.
         """
         success = False
-        # Prepare a single user prompt with failing test details and instructions
-        user_prompt = f"""The following tests are failing:
+        # Prepare a comprehensive user prompt with failing test details and structured instructions
+        user_prompt = f"""Fix the following failing tests:
+
+## FAILURES SUMMARY:
 {failures_summary}
 
-Stack traces and error snippets:
+## ERROR DETAILS (Stack traces and messages):
 {error_details}
 
-Relevant code snippets:
-{code_snippets}
+{f"## RELEVANT CODE SNIPPETS:\n{code_snippets}" if code_snippets else ""}
 
-Begin fixing the tests. Use the available tools to:
-1. Plan your approach using 'plan_todo'
-2. Read relevant files using 'open_file'
-3. Modify source code using 'write_file'
-4. Run tests using 'run_tests' to verify your fixes
+## YOUR TASK:
+Use the available tools to fix the failing tests. Follow this workflow:
 
-Remember: Do not modify test files. Keep changes minimal and focused on fixing the failures.
-Stop when all tests pass or when no further progress can be made."""
+1. **Plan your approach** using 'plan_todo' - Outline what needs to be fixed
+2. **Read relevant files** using 'open_file' - Understand the code structure
+3. **Modify source code** using 'write_file' - Apply minimal fixes
+4. **Run tests** using 'run_tests' - Verify your fixes work
+5. **(Optional) Review patches** using 'critic_review' - Validate changes before applying
+6. **(Optional) Apply patches** using 'apply_patch' - Commit validated changes
+
+## REMEMBER:
+- Do NOT modify test files (tests/, test_*.py, *_test.py)
+- Keep changes minimal and focused on fixing the failures
+- Only use the provided tools (no invented commands)
+- Follow all safety guidelines
+- Stop when tests are all green or you cannot fix the issue
+
+Begin fixing the tests now."""
         try:
             # Log the start of Deep Agent execution
             self.telemetry.log_event("deep_agent_start", {
@@ -178,19 +246,41 @@ Stop when all tests pass or when no further progress can be made."""
                 print(f"[DEBUG] Agent result (truncated): {str(result)[:500]}...")
             # After agent execution, run one final test suite to verify all tests
             import json
-            # Use the RunTestsTool directly to get final test results
+            # Use the RunTestsTool directly to get final test results (always returns JSON)
             final_test_output = None
             try:
                 from nova.agent.unified_tools import RunTestsTool
                 test_tool = RunTestsTool(repo_path=self.state.repo_path, verbose=self.verbose)
-                output_str = test_tool.run(max_failures=5)
+                output_str = test_tool._run(max_failures=10)  # Direct call to _run
                 final_test_output = json.loads(output_str)
-            except Exception:
+                
+                if self.verbose:
+                    print(f"[DEBUG] Final test results: {final_test_output}")
+                    
+            except json.JSONDecodeError as e:
+                if self.verbose:
+                    print(f"[DEBUG] JSON decode error: {e}")
+                # Malformed JSON, treat as failure
+                final_test_output = {"exit_code": 1, "error": "Invalid test output format"}
+            except Exception as e:
+                if self.verbose:
+                    print(f"[DEBUG] Test execution error: {e}")
                 # Fallback: direct runner if tool usage fails
-                from nova.runner import TestRunner
-                fallback_runner = TestRunner(self.state.repo_path, verbose=self.verbose)
-                output_xml = fallback_runner.run_tests()  # returns JUnit XML or similar
-                final_test_output = {"exit_code": 0 if output_xml and self.state.total_failures == 0 else 1}
+                try:
+                    from nova.runner import TestRunner
+                    fallback_runner = TestRunner(self.state.repo_path, verbose=self.verbose)
+                    failing_tests, summary = fallback_runner.run_tests()
+                    final_test_output = {
+                        "exit_code": 0 if not failing_tests else 1,
+                        "failures": len(failing_tests) if failing_tests else 0,
+                        "message": "Tests completed"
+                    }
+                except Exception as runner_error:
+                    if self.verbose:
+                        print(f"[DEBUG] Fallback runner error: {runner_error}")
+                    final_test_output = {"exit_code": 1, "error": str(runner_error)}
+            
+            # Check test results
             if final_test_output and final_test_output.get("exit_code") == 0:
                 # All tests passing
                 success = True
@@ -198,14 +288,17 @@ Stop when all tests pass or when no further progress can be made."""
                 self.state.total_failures = 0
                 self.telemetry.log_event("deep_agent_success", {
                     "iterations": self.state.current_iteration,
-                    "message": "All tests passing"
+                    "message": "All tests passing",
+                    "tests_passed": final_test_output.get("passed", "unknown")
                 })
             else:
                 # Tests still failing or result unknown
+                failures_count = final_test_output.get("failures", "unknown") if final_test_output else "unknown"
                 self.state.final_status = "max_iters" if self.state.current_iteration >= self.state.max_iterations else "incomplete"
                 self.telemetry.log_event("deep_agent_incomplete", {
                     "iterations": self.state.current_iteration,
-                    "remaining_failures": final_test_output.get("failures", "unknown") if final_test_output else "unknown"
+                    "remaining_failures": failures_count,
+                    "error": final_test_output.get("error") if final_test_output else None
                 })
         except Exception as e:
             import traceback

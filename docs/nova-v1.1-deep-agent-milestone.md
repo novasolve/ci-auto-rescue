@@ -31,7 +31,7 @@ flowchart TD
         B --> C[Initialize NovaDeepAgent]
         C --> D[DeepAgent.run()]
     end
-    
+
     subgraph NovaDeepAgent["NovaDeepAgent (LLM Agent + Tools)"]
         D --> |plan_todo tool| E["Plan next steps"]
         D --> |open_file tool| F["Read source file"]
@@ -40,7 +40,7 @@ flowchart TD
         D --> |critic_review tool| I["Review patch safety"]
         D --> |apply_patch tool| J["Apply patch & commit"]
     end
-    
+
     H --> K{{All tests passed?}}
     I --> |REJECTED| L["Abort or adjust patch"]
     I --> |APPROVED| J
@@ -55,6 +55,7 @@ flowchart TD
 The `NovaDeepAgent` is implemented as a wrapper around a LangChain `AgentExecutor` configured with our custom tools and a specialized prompt. The agent supports both OpenAI Functions agent type (for GPT-4/GPT-3.5) and ReAct pattern (for GPT-5 and other models), allowing flexible model compatibility. Key aspects:
 
 ### System Prompt
+
 Defines the agent's role and core rules. For example:
 
 ```python
@@ -85,6 +86,7 @@ system_message = (
 This prompt clearly tells the LLM what it can and cannot do, addressing the "no hallucinated tools" rule and emphasizing minimal, safe changes.
 
 ### User Prompt
+
 When `deep_agent.run()` is called, it constructs a user prompt with specific failing test names, error messages, and expected workflow:
 
 ```python
@@ -113,12 +115,13 @@ Remember: Do not modify test files. Keep changes minimal...
 This guides the agent's ReAct chain-of-thought, encouraging a structured approach.
 
 ### ReAct Loop via LangChain
+
 For models that don't support function calling (like GPT-5), we use the ReAct pattern with a structured prompt:
 
 ```python
 react_prompt = PromptTemplate(
     template=system_message + """
-    
+
 ## Available Tools:
 {tool_descriptions}
 
@@ -151,6 +154,7 @@ The agent handles iterations internally using LangChain's `AgentExecutor`, elimi
 Nova v1.1 defines a set of LangChain tools that the Deep Agent can use. Each tool has an explicit name, description, and safety checks. The core tools are:
 
 ### Planning Tool (plan_todo)
+
 A no-op tool used to record the agent's plan:
 
 ```python
@@ -161,6 +165,7 @@ def plan_todo(todo: str) -> str:
 ```
 
 ### File Read Tool (open_file)
+
 Allows the agent to safely read file contents:
 
 ```python
@@ -171,11 +176,11 @@ def open_file(path: str) -> str:
     for pattern in BLOCKED_PATTERNS:
         if fnmatch.fnmatch(path, pattern):
             return f"ERROR: Access to {path} is blocked by policy"
-    
+
     # Additional test file check
     if any(part.startswith('test') for part in Path(path).parts):
         return f"ERROR: Access to test file {path} is blocked by policy"
-    
+
     try:
         content = Path(path).read_text()
         if len(content) > 50000:  # Truncate large files
@@ -186,6 +191,7 @@ def open_file(path: str) -> str:
 ```
 
 ### File Write Tool (write_file)
+
 Allows the agent to modify code with safety checks:
 
 ```python
@@ -196,19 +202,20 @@ def write_file(path: str, new_content: str) -> str:
     # Check file size limit
     if len(new_content) > 100000:  # 100KB limit
         return f"ERROR: Content too large"
-    
+
     Path(path).write_text(new_content)
     return f"SUCCESS: File {path} updated successfully"
 ```
 
 ### Test Run Tool (run_tests)
+
 Executes tests in Docker sandbox and returns JSON:
 
 ```python
 class RunTestsTool(BaseTool):
     name = "run_tests"
     description = "Run the project's test suite inside a sandbox and get failing test info."
-    
+
     def _run(self, max_failures: int = 5) -> str:
         # Docker execution with resource limits
         cmd = [
@@ -218,7 +225,7 @@ class RunTestsTool(BaseTool):
             "--network", "none", "--pids-limit", "256",
             DOCKER_IMAGE, "python", "/usr/local/bin/run_python.py", "--pytest"
         ]
-        
+
         # Always return JSON formatted results
         if result.get("exit_code", 0) == 0:
             return json.dumps({
@@ -237,23 +244,24 @@ class RunTestsTool(BaseTool):
 ```
 
 ### Patch Application Tool (apply_patch)
+
 Applies unified diff patches with thorough safety checks:
 
 ```python
 class ApplyPatchTool(BaseTool):
     name = "apply_patch"
     description = "Apply an approved unified diff patch to the repository."
-    
+
     def _run(self, patch_diff: str) -> str:
         # 1. Safety checks on patch content
         is_safe, safe_msg = check_patch_safety(patch_text, config=self.safety_config)
         if not is_safe:
             return f"FAILED: Safety violation – {safe_msg}"
-        
+
         # 2. Preflight: ensure patch applies cleanly
         if git_apply_check_fails:
             return "FAILED: Patch could not be applied (context mismatch)"
-        
+
         # 3. Apply and commit
         subprocess.run(["git", "apply", patch_file])
         subprocess.run(["git", "commit", "-m", "Apply patch from Nova Deep Agent"])
@@ -261,19 +269,20 @@ class ApplyPatchTool(BaseTool):
 ```
 
 ### Critic Review Tool (critic_review)
+
 Performs multi-layer patch review:
 
 ```python
 class CriticReviewTool(BaseTool):
     name = "critic_review"
     description = "Review a patch diff to decide if it should be applied."
-    
+
     def _run(self, patch_diff: str, failing_tests: Optional[str] = None) -> str:
         # Safety checks (40+ forbidden patterns, size limits, suspicious code)
         safe, safety_reason = self._check_safety(patch_diff)
         if not safe:
             return f"REJECTED: {safety_reason}"
-        
+
         # LLM semantic review
         approved, llm_reason = self._llm_review(patch_diff, failing_tests)
         return f"APPROVED: {llm_reason}" if approved else f"REJECTED: {llm_reason}"
@@ -284,6 +293,7 @@ class CriticReviewTool(BaseTool):
 The CLI command `nova fix` orchestrates the high-level flow:
 
 ### Initial Test Discovery
+
 The CLI first runs tests to collect failing test details:
 
 ```python
@@ -295,6 +305,7 @@ error_details = extract_error_snippets(failing_tests)
 ```
 
 ### Agent Initialization
+
 Creates the Deep Agent with all necessary components:
 
 ```python
@@ -309,6 +320,7 @@ deep_agent = NovaDeepAgent(
 ```
 
 ### Running the Agent
+
 Invokes the agent with failing test information:
 
 ```python
@@ -320,12 +332,14 @@ success = deep_agent.run(
 ```
 
 The agent internally:
+
 1. Assembles the prompt (system + user)
 2. Invokes LangChain `AgentExecutor`
 3. Iterates through tools (plan → read → write → test)
 4. Stops when tests pass or no progress
 
 ### Post-Agent Verification
+
 After execution, verifies all tests pass:
 
 ```python
@@ -343,6 +357,7 @@ if final_result["exit_code"] == 0:
 Throughout v1.1, emphasis on structured outputs for reliability:
 
 ### JSON Test Results
+
 The `run_tests` tool always outputs JSON:
 
 ```json
@@ -356,12 +371,15 @@ The `run_tests` tool always outputs JSON:
 ```
 
 ### Patch Diff Format
+
 Enforces unified diff format with validation:
+
 - Strips markdown formatting (```diff blocks)
 - Validates with `git apply --check`
 - Ensures proper context lines
 
 ### Schema Validation via Pydantic
+
 Complex tool inputs use Pydantic models:
 
 ```python
@@ -373,7 +391,9 @@ class ApplyPatchInput(BaseModel):
 ```
 
 ### Safety Checks
+
 Multi-layer validation:
+
 - **File patterns**: 40+ blocked patterns
 - **Code patterns**: 20+ suspicious patterns
 - **Size limits**: Max 500 lines, 10 files
@@ -392,6 +412,7 @@ if model_name == "gpt-5":
 ```
 
 The system automatically:
+
 - Uses ReAct pattern for GPT-5
 - Falls back to GPT-4 if GPT-5 unavailable
 - Adapts agent type based on model capabilities
@@ -399,6 +420,7 @@ The system automatically:
 ## Usage Examples
 
 ### Basic CLI Usage
+
 ```bash
 # Fix tests in current repository
 nova fix --repo .
@@ -408,6 +430,7 @@ nova fix --repo /path/to/repo -v --max-iters 10
 ```
 
 ### Programmatic Use
+
 ```python
 from nova.agent.deep_agent import NovaDeepAgent
 from nova.agent.state import AgentState
@@ -423,6 +446,7 @@ print("Tests fixed?", success)
 ```
 
 ### Configuration via YAML
+
 ```yaml
 # nova.config.yml
 default_llm_model: gpt-5
@@ -448,21 +472,25 @@ Key changes for upgrading:
 ## Safety Features Summary
 
 ### Never Modify Tests
+
 - System prompt instruction
 - File pattern blocking (40+ patterns)
 - Critic validation
 
 ### Minimal Changes
+
 - 500 line limit
 - 10 file limit
 - No refactoring rule
 
 ### No Tool Hallucination
+
 - Function calling / ReAct pattern only
 - Limited tool set
 - Explicit tool definitions
 
 ### Docker Sandbox
+
 - CPU: 1.0 core
 - Memory: 1GB
 - Network: Disabled
@@ -472,6 +500,7 @@ Key changes for upgrading:
 ## Telemetry and Monitoring
 
 Events tracked:
+
 - `deep_agent_start`
 - `deep_agent_success`
 - `deep_agent_incomplete`
@@ -481,6 +510,7 @@ Events tracked:
 ## Next Steps
 
 With Deep Agent integration in v1.1, Nova CI-Rescue becomes more powerful and maintainable. Future enhancements:
+
 - Additional tools (linters, formatters)
 - Multi-language support
 - Custom rule engines
@@ -488,4 +518,4 @@ With Deep Agent integration in v1.1, Nova CI-Rescue becomes more powerful and ma
 
 ---
 
-*Nova CI-Rescue v1.1 - Deep Agent Integration Complete*
+_Nova CI-Rescue v1.1 - Deep Agent Integration Complete_

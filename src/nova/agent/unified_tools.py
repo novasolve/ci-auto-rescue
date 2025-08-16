@@ -356,18 +356,16 @@ class ApplyPatchTool(BaseTool):
     def __init__(
         self,
         repo_path: Optional[Path] = None,
-        safety_config: Optional[SafetyConfig] = None,
+        safety_config: Optional[Any] = None,
         verbose: bool = False,
         logger: Optional[JSONLLogger] = None,
         **kwargs
     ):
         """Initialize with safety configuration."""
+        # Set all fields in kwargs before super().__init__
         if repo_path is not None:
             kwargs['repo_path'] = Path(repo_path)
-        if safety_config is not None:
-            kwargs['safety_config'] = safety_config
-        else:
-            kwargs['safety_config'] = SafetyConfig()
+        kwargs['safety_config'] = safety_config or SafetyConfig()
         if verbose is not False:
             kwargs['verbose'] = verbose
         if logger is not None:
@@ -586,15 +584,21 @@ class CriticReviewTool(BaseTool):
         if verbose is not False:
             kwargs['verbose'] = verbose
         
-        # Initialize LLM if not provided
+        # Initialize LLM if not provided and API key is available
         if llm is not None:
             kwargs['llm'] = llm
         else:
-            try:
-                from langchain_openai import ChatOpenAI
-            except ImportError:
-                from langchain.chat_models import ChatOpenAI
-            kwargs['llm'] = ChatOpenAI(model="gpt-4", temperature=0.1)
+            # Only create LLM if API key is available
+            import os
+            if os.getenv("OPENAI_API_KEY"):
+                try:
+                    from langchain_openai import ChatOpenAI
+                except ImportError:
+                    from langchain.chat_models import ChatOpenAI
+                kwargs['llm'] = ChatOpenAI(model="gpt-4", temperature=0.1)
+            else:
+                # No LLM for critic review in mock mode
+                kwargs['llm'] = None
         
         super().__init__(**kwargs)
     

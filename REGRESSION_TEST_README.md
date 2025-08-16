@@ -14,6 +14,7 @@ A single Python script that comprehensively tests Nova's Deep Agent (v1.1) again
 ## How It Works
 
 The script uses the **same Nova codebase** for both v1.0 and v1.1:
+
 - **v1.0 (Legacy Agent)**: Runs `nova fix --legacy-agent`
 - **v1.1 (Deep Agent)**: Runs `nova fix` (default behavior)
 
@@ -57,6 +58,7 @@ The script creates several test repositories with intentional bugs:
 3. **List Operations** - Array/list handling with logic errors
 
 Each repository is tested with both agents to compare:
+
 - Success rate
 - Number of iterations needed
 - Time to fix
@@ -65,6 +67,7 @@ Each repository is tested with both agents to compare:
 ## Success Criteria
 
 The test suite validates:
+
 - ✅ Fix success rate ≥ 70%
 - ✅ No performance regression vs v1.0
 - ✅ Proper handling of edge cases
@@ -110,14 +113,17 @@ The script automatically cleans up all test files unless `--keep-files` is speci
 ## Troubleshooting
 
 ### OPENAI_API_KEY not set
+
 ```bash
 export OPENAI_API_KEY='sk-...'
 ```
 
 ### Module not found errors
+
 Ensure you're in the Nova CI-Rescue directory when running the script.
 
 ### Permission denied
+
 ```bash
 chmod +x nova_regression_test.py
 ```

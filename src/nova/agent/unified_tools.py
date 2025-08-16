@@ -40,10 +40,30 @@ MEM_LIMIT = "1g"    # 1 GB RAM
 TEST_TIMEOUT = 600  # 10 minutes
 PID_LIMIT = "256"   # Process spawn limit
 
-# Blocked file patterns for safety
+# Comprehensive blocked file patterns for enhanced safety
 BLOCKED_PATTERNS = [
-    "tests/*", ".env", ".git/*", "secrets/*", ".github/*", 
-    "*.pyc", "__pycache__/*", "*.min.js", "*.min.css"
+    # Test files and directories
+    "tests/*", "test/*", "test_*.py", "*_test.py", "**/tests/*", "**/test/*",
+    # Environment and secrets
+    ".env", ".env.*", "*.env", "secrets/*", "credentials/*", 
+    # Version control
+    ".git/*", ".gitignore", ".gitmodules",
+    # CI/CD configurations  
+    ".github/*", ".gitlab-ci.yml", ".travis.yml", "jenkins*", "Jenkinsfile",
+    # Build and dependency files
+    "*.pyc", "__pycache__/*", "*.pyo", "*.pyd", ".Python", "build/*", "dist/*",
+    "*.egg-info/*", "*.egg", "pip-log.txt", "pip-delete-this-directory.txt",
+    # Package managers and configs
+    "pyproject.toml", "setup.py", "setup.cfg", "requirements*.txt", 
+    "poetry.lock", "Pipfile", "Pipfile.lock", "package.json", "package-lock.json",
+    # IDE and editor files
+    ".vscode/*", ".idea/*", "*.swp", "*.swo", "*~", ".DS_Store",
+    # Minified and compiled files
+    "*.min.js", "*.min.css", "*.wasm", "*.so", "*.dll", "*.dylib",
+    # Documentation (unless explicitly needed)
+    "docs/*", "documentation/*", "*.md", "README*", "LICENSE*",
+    # Security-sensitive paths
+    "private/*", "config/*", "settings/*", ".ssh/*", "*.key", "*.pem", "*.crt"
 ]
 
 
@@ -58,13 +78,25 @@ def plan_todo(todo: str) -> str:
 
 @tool("open_file", return_direct=True)
 def open_file(path: str) -> str:
-    """Read the contents of a file, with safety checks."""
+    """Read the contents of a file, with enhanced safety checks."""
+    import fnmatch
     p = Path(path)
+    path_str = str(p)
     
-    # Block reading certain files
+    # Enhanced blocking with glob pattern matching
     for pattern in BLOCKED_PATTERNS:
-        if p.match(pattern):
-            return f"ERROR: Access to {path} is blocked by policy."
+        # Handle glob patterns properly
+        if '*' in pattern or '?' in pattern:
+            if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                return f"ERROR: Access to {path} is blocked by policy (pattern: {pattern})"
+        else:
+            # Direct path/name matching
+            if pattern in path_str or p.name == pattern:
+                return f"ERROR: Access to {path} is blocked by policy"
+    
+    # Additional check for test files specifically
+    if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
+        return f"ERROR: Access to test file {path} is blocked by policy"
     
     try:
         content = Path(path).read_text()
@@ -82,19 +114,35 @@ def open_file(path: str) -> str:
 
 @tool("write_file", return_direct=True)
 def write_file(path: str, new_content: str) -> str:
-    """Overwrite a file with the given content, with safety checks."""
+    """Overwrite a file with the given content, with enhanced safety checks."""
+    import fnmatch
     p = Path(path)
+    path_str = str(p)
     
-    # Block modifying certain files
+    # Enhanced blocking with glob pattern matching
     for pattern in BLOCKED_PATTERNS:
-        if p.match(pattern):
-            return f"ERROR: Modification of {path} is not allowed."
+        # Handle glob patterns properly
+        if '*' in pattern or '?' in pattern:
+            if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                return f"ERROR: Modification of {path} is not allowed (pattern: {pattern})"
+        else:
+            # Direct path/name matching
+            if pattern in path_str or p.name == pattern:
+                return f"ERROR: Modification of {path} is not allowed"
+    
+    # Additional check for test files specifically
+    if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
+        return f"ERROR: Modification of test file {path} is not allowed"
+    
+    # Check file size limit (prevent writing huge files)
+    if len(new_content) > 100000:  # 100KB limit for new content
+        return f"ERROR: Content too large ({len(new_content)} bytes). Max allowed: 100000 bytes"
     
     try:
         # Ensure parent directory exists
         p.parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(new_content)
-        return f"File {path} updated."
+        return f"SUCCESS: File {path} updated successfully"
     except PermissionError:
         return f"ERROR: Permission denied: {path}"
     except Exception as e:
@@ -133,7 +181,7 @@ class RunTestsTool(BaseTool):
         super().__init__(**kwargs)
 
     def _run(self, max_failures: int = 5) -> str:
-        """Execute tests and return a summary of results."""
+        """Execute tests and return a JSON summary of results."""
         # Ensure .nova directory for test artifacts exists
         nova_path = self.repo_path / ".nova"
         nova_path.mkdir(exist_ok=True)
@@ -142,7 +190,7 @@ class RunTestsTool(BaseTool):
         result = None
         docker_error = None
         
-        # Try Docker-based execution first
+        # Try Docker-based execution first (with enhanced security limits)
         if shutil.which("docker") is not None:
             # Prepare Docker command (sandboxed test run)
             cmd = [
@@ -187,29 +235,64 @@ class RunTestsTool(BaseTool):
                 failing_tests, summary = runner.run_tests(max_failures=max_failures)
                 
                 if not failing_tests:
-                    return "FAILURES: 0\nAll tests passed."
+                    # All tests passing, return JSON
+                    return json.dumps({
+                        "exit_code": 0,
+                        "failures": 0,
+                        "passed": summary.get("passed", 0) if summary else "unknown",
+                        "message": "All tests passed",
+                        "failing_tests": []
+                    })
                 
-                # Format local runner results
-                output_lines = [f"FAILURES: {len(failing_tests)}"]
-                for i, test in enumerate(failing_tests[:max_failures], 1):
-                    err_line = (test.short_traceback.split("\n")[0] 
-                               if hasattr(test, 'short_traceback') else "Unknown error")
-                    output_lines.append(f"{i}. {test.name}: {err_line[:100]}")
+                # Format local runner results as JSON
+                failures_json = []
+                for test in failing_tests[:max_failures]:
+                    failures_json.append({
+                        "name": test.name if hasattr(test, 'name') else "unknown",
+                        "error": (test.short_traceback.split("\n")[0][:500] 
+                                 if hasattr(test, 'short_traceback') else "Unknown error"),
+                        "traceback": (test.short_traceback[:1000] 
+                                     if hasattr(test, 'short_traceback') else "")
+                    })
                 
-                if len(failing_tests) > max_failures:
-                    output_lines.append(f"... and {len(failing_tests) - max_failures} more")
-                
-                return "\n".join(output_lines)
+                return json.dumps({
+                    "exit_code": 1,
+                    "failures": len(failing_tests),
+                    "passed": summary.get("passed", 0) if summary else 0,
+                    "message": f"{len(failing_tests)} test(s) failed",
+                    "failing_tests": failures_json
+                })
                 
             except Exception as e:
-                return f"ERROR: Test execution failed: {e}"
+                # Return error as JSON
+                return json.dumps({
+                    "exit_code": 1,
+                    "error": f"Test execution failed: {e}",
+                    "failures": 0,
+                    "passed": 0,
+                    "stderr": str(e)
+                })
         
-        # Process Docker result if available
+        # Always return JSON formatted results for consistent parsing
         if result is None:
-            return f"ERROR: {docker_error or 'Unknown test error'}"
+            # Docker execution failed, return error as JSON
+            return json.dumps({
+                "exit_code": 1,
+                "error": docker_error or "Unknown test error",
+                "failures": 0,
+                "passed": 0,
+                "stderr": docker_error
+            })
         
         if result.get("exit_code", 0) == 0:
-            return "FAILURES: 0\nAll tests passed."
+            # All tests passing
+            return json.dumps({
+                "exit_code": 0,
+                "failures": 0,
+                "passed": result.get("test_summary", {}).get("passed", "unknown"),
+                "message": "All tests passed",
+                "failing_tests": []
+            })
         
         # Extract failures from Docker result
         failures = []
@@ -217,23 +300,31 @@ class RunTestsTool(BaseTool):
             for test in result["failing_tests"]:
                 name = test.get("nodeid") or test.get("name") or "unknown"
                 message = test.get("message") or test.get("error", "")
-                failures.append(f"{name}: {message[:200]}")
+                failures.append({
+                    "name": name,
+                    "error": message[:500],  # Truncate long errors
+                    "traceback": test.get("traceback", "")[:1000] if test.get("traceback") else ""
+                })
         elif "test_summary" in result:
             # Use summary if detailed fails not available
             summ = result["test_summary"]
-            failed = summ.get("failed", 0)
-            passed = summ.get("passed", 0)
-            return f"FAILURES: {failed}\nPassed: {passed}\nSkipped: {summ.get('skipped', 0)}"
+            return json.dumps({
+                "exit_code": result.get("exit_code", 1),
+                "failures": summ.get("failed", 0),
+                "passed": summ.get("passed", 0),
+                "skipped": summ.get("skipped", 0),
+                "message": f"Tests failed: {summ.get('failed', 0)}",
+                "failing_tests": []
+            })
         
-        # Build output string
-        output_lines = [f"FAILURES: {len(failures)}"]
-        for i, info in enumerate(failures[:max_failures], 1):
-            output_lines.append(f"{i}. {info}")
-        
-        if len(failures) > max_failures:
-            output_lines.append(f"... and {len(failures) - max_failures} more")
-        
-        return "\n".join(output_lines)
+        # Return JSON with failure details
+        return json.dumps({
+            "exit_code": result.get("exit_code", 1),
+            "failures": len(failures),
+            "passed": result.get("test_summary", {}).get("passed", 0) if result.get("test_summary") else 0,
+            "message": f"{len(failures)} test(s) failed",
+            "failing_tests": failures[:max_failures]
+        })
 
     async def _arun(self, max_failures: int = 5) -> str:
         """Async version not implemented."""
@@ -400,15 +491,94 @@ class CriticReviewTool(BaseTool):
     verbose: bool = Field(default=False)
     llm: Optional[Any] = Field(default=None)
     
-    # Safety patterns (class constant, not instance attribute)
+    # Comprehensive safety patterns for patch review
     FORBIDDEN_PATTERNS: ClassVar[List[str]] = [
-        r"test_.*\.py",  # Test files
-        r".*_test\.py",  # Test files
-        r"/tests?/",     # Test directories
-        r"\.github/",    # GitHub workflows
-        r"setup\.py",    # Setup files
+        # Test files and directories (high priority)
+        r"test_.*\.py",  # Test files starting with test_
+        r".*_test\.py",  # Test files ending with _test.py
+        r".*\/tests?\/",  # Test directories
+        r"spec_.*\.py",  # Spec files
+        r".*_spec\.py",  # Spec files
+        r".*\/spec\/",  # Spec directories
+        
+        # CI/CD and automation (critical)
+        r"\.github\/",  # GitHub workflows
+        r"\.gitlab.*",  # GitLab CI
+        r"\.travis\.yml",  # Travis CI
+        r"jenkins.*",  # Jenkins files
+        r"\.circleci\/",  # CircleCI
+        r"azure-pipelines.*",  # Azure DevOps
+        
+        # Package and dependency management (high risk)
+        r"setup\.py",  # Setup files
+        r"setup\.cfg",  # Setup config
         r"pyproject\.toml",  # Project config
         r"requirements.*\.txt",  # Dependencies
+        r"Pipfile.*",  # Pipenv files
+        r"poetry\.lock",  # Poetry lock
+        r"package.*\.json",  # Node packages
+        r"Gemfile.*",  # Ruby gems
+        r"go\.mod",  # Go modules
+        r"Cargo\.toml",  # Rust cargo
+        
+        # Security and secrets (critical)
+        r"\.env.*",  # Environment files
+        r".*\.key",  # Key files
+        r".*\.pem",  # Certificate files
+        r".*\.crt",  # Certificate files
+        r".*secrets.*",  # Secret files
+        r".*credentials.*",  # Credential files
+        r".*token.*",  # Token files
+        r".*password.*",  # Password files
+        
+        # Version control (protected)
+        r"\.git\/",  # Git directory
+        r"\.gitignore",  # Gitignore
+        r"\.gitmodules",  # Git submodules
+    ]
+    
+    # Enhanced suspicious code patterns
+    SUSPICIOUS_CODE_PATTERNS: ClassVar[List[str]] = [
+        # Code execution (dangerous)
+        r"exec\s*\(",
+        r"eval\s*\(",
+        r"compile\s*\(",
+        r"__import__",
+        
+        # System commands (dangerous)
+        r"os\.system\s*\(",
+        r"subprocess\.(call|run|Popen)\s*\(",
+        r"shell\s*=\s*True",
+        
+        # File system operations (risky)
+        r"shutil\.rmtree",
+        r"os\.remove",
+        r"os\.unlink",
+        r"rm\s+-rf",
+        r"del\s+\/",
+        
+        # Network operations (suspicious)
+        r"urllib.*urlopen",
+        r"requests\.(get|post|put|delete)",
+        r"socket\.",
+        
+        # Database operations (careful)
+        r"DROP\s+(TABLE|DATABASE)",
+        r"DELETE\s+FROM",
+        r"TRUNCATE",
+        
+        # Dangerous Python operations
+        r"globals\s*\(\)",
+        r"locals\s*\(\)",
+        r"setattr\s*\(",
+        r"delattr\s*\(",
+        r"__dict__",
+        
+        # Crypto mining patterns
+        r"bitcoin",
+        r"ethereum",
+        r"monero",
+        r"crypto.*mine",
     ]
     
     def __init__(self, verbose: bool = False, llm: Optional[Any] = None, **kwargs):
@@ -430,14 +600,19 @@ class CriticReviewTool(BaseTool):
     
     def _check_safety(self, patch_diff: str) -> tuple[bool, str]:
         """
-        Perform safety checks on the patch.
+        Perform comprehensive safety checks on the patch.
         
         Returns:
             Tuple of (is_safe, reason)
         """
         lines = patch_diff.split("\n")
         
-        # Check for test file modifications
+        # Track statistics for comprehensive analysis
+        files_modified = set()
+        added_lines = 0
+        removed_lines = 0
+        
+        # Check for forbidden file modifications
         for line in lines:
             if line.startswith("+++") or line.startswith("---"):
                 # Extract file path
@@ -449,35 +624,57 @@ class CriticReviewTool(BaseTool):
                     elif file_path.startswith("b/"):
                         file_path = file_path[2:]
                     
+                    files_modified.add(file_path)
+                    
                     # Check against forbidden patterns
                     for pattern in self.FORBIDDEN_PATTERNS:
-                        if re.search(pattern, file_path):
-                            return False, f"Modifies forbidden path: {file_path}"
+                        if re.search(pattern, file_path, re.IGNORECASE):
+                            return False, f"Modifies forbidden file: {file_path} (matches pattern: {pattern})"
+            
+            # Count additions and deletions
+            elif line.startswith("+") and not line.startswith("+++"):
+                added_lines += 1
+            elif line.startswith("-") and not line.startswith("---"):
+                removed_lines += 1
         
-        # Check patch size
-        added = sum(1 for line in lines if line.startswith("+") and not line.startswith("+++"))
-        removed = sum(1 for line in lines if line.startswith("-") and not line.startswith("---"))
+        # Check number of files modified
+        if len(files_modified) > 10:
+            return False, f"Too many files modified: {len(files_modified)} (max: 10)"
         
-        if added + removed > 500:
-            return False, f"Patch too large: {added} additions, {removed} deletions"
+        # Check patch size limits
+        total_changes = added_lines + removed_lines
+        if total_changes > 500:
+            return False, f"Patch too large: {added_lines} additions, {removed_lines} deletions (total: {total_changes}, max: 500)"
         
-        # Check for suspicious patterns in additions
-        suspicious = [
-            r"exec\(",
-            r"eval\(",
-            r"__import__",
-            r"os\.system",
-            r"subprocess\.call\(",
-            r"rm\s+-rf",
-        ]
+        if added_lines > 300:
+            return False, f"Too many additions: {added_lines} (max: 300)"
         
+        if removed_lines > 300:
+            return False, f"Too many deletions: {removed_lines} (max: 300)"
+        
+        # Check for suspicious code patterns in additions
         for line in lines:
-            if line.startswith("+"):
-                for pattern in suspicious:
+            if line.startswith("+") and not line.startswith("+++"):
+                # Check each suspicious pattern
+                for pattern in self.SUSPICIOUS_CODE_PATTERNS:
                     if re.search(pattern, line, re.IGNORECASE):
-                        return False, f"Suspicious pattern detected: {pattern}"
+                        # Extract context for better error message
+                        code_snippet = line[1:].strip()[:50]  # First 50 chars after +
+                        return False, f"Suspicious code pattern detected: '{pattern}' in line: {code_snippet}..."
         
-        return True, "Safety checks passed"
+        # Additional checks for specific dangerous operations
+        patch_text = "\n".join(lines)
+        
+        # Check for attempts to disable safety features
+        if re.search(r"BLOCKED_PATTERNS\s*=\s*\[\]", patch_text):
+            return False, "Attempt to disable safety patterns detected"
+        
+        # Check for environment variable access that might leak secrets
+        if re.search(r"os\.environ\.get\(['\"].*KEY.*['\"]", patch_text, re.IGNORECASE):
+            return False, "Potential secret key access detected"
+        
+        # All checks passed
+        return True, f"Safety checks passed ({len(files_modified)} files, {added_lines} additions, {removed_lines} deletions)"
     
     def _llm_review(self, patch_diff: str, failing_tests: Optional[str] = None) -> tuple[bool, str]:
         """

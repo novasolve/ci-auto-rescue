@@ -67,18 +67,53 @@ class NovaDeepAgent:
     def _build_agent(self) -> AgentExecutor:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
         # Choose LLM based on configuration (supports OpenAI GPT or Anthropic Claude)
-        model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
-        if model_name.lower().startswith("gpt") or ChatAnthropic is None:
+        model_name = getattr(self.settings, 'default_llm_model', 'gpt-5')  # Default to GPT-5
+        
+        # Handle GPT-5 specifically with fallback to GPT-4 if not available
+        if model_name == "gpt-5":
+            try:
+                llm = ChatOpenAI(model_name="gpt-5", temperature=0)
+                if self.verbose:
+                    print("🚀 Using GPT-5 model")
+            except Exception as e:
+                if self.verbose:
+                    print(f"⚠️ GPT-5 not available ({e}), falling back to GPT-4")
+                llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+        elif model_name.lower().startswith("gpt") or ChatAnthropic is None:
             llm = ChatOpenAI(model_name=model_name, temperature=0)
         else:
             # Use Anthropic model if available and specified (e.g., "claude")
             llm = ChatAnthropic(model=model_name, temperature=0) if ChatAnthropic else ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
-        # Define the system message prompt for the agent
+        # Define the comprehensive system message prompt with all safety rules
         system_message = (
-            "You are an AI software developer tasked with fixing failing unit tests in a codebase. "
-            "You have access to the repository files and a test runner. Plan your approach, make code edits, "
-            "and run tests until all tests pass. Do not modify tests themselves. Keep changes minimal and safe. "
-            "Use the available tools when necessary, and stop when the tests are all green or you can't fix the issue."
+            "You are Nova, an advanced AI software engineer specialized in automatically fixing failing tests.\n\n"
+            "## CRITICAL RULES - NEVER VIOLATE THESE:\n"
+            "1. **NEVER MODIFY TEST FILES**: You must NEVER edit any file in tests/, test_*.py, or *_test.py\n"
+            "   - If a test is wrong, document it but DO NOT change it\n"
+            "   - Only fix source code to make tests pass\n\n"
+            "2. **MINIMIZE DIFF SIZE**: Keep changes as small as possible\n"
+            "   - Fix only what's necessary for tests to pass\n"
+            "   - Don't refactor or improve unrelated code\n"
+            "   - Each change should have a clear purpose\n\n"
+            "3. **NO HALLUCINATING TOOLS**: Only use tools that actually exist\n"
+            "   - Available tools: plan_todo, open_file, write_file, run_tests, apply_patch, critic_review\n"
+            "   - Never invent or reference non-existent tools\n\n"
+            "4. **SAFETY GUARDRAILS**: Respect all safety limits\n"
+            "   - Max patch size: 500 lines\n"
+            "   - Max files per patch: 10\n"
+            "   - Never modify: .env, .git/, secrets/, .github/, CI/CD configs\n\n"
+            "5. **VALID PATCHES ONLY**: Ensure all patches are syntactically valid\n"
+            "   - Preserve indentation (spaces vs tabs)\n"
+            "   - Maintain code style consistency\n"
+            "   - Ensure no syntax errors introduced\n\n"
+            "## YOUR WORKFLOW:\n"
+            "1. ANALYZE: Understand the failing tests and their error messages\n"
+            "2. INVESTIGATE: Read relevant source files to understand the code\n"
+            "3. PLAN: Create a minimal fix strategy\n"
+            "4. IMPLEMENT: Make targeted changes to fix the issues\n"
+            "5. VERIFY: Run tests to confirm fixes work\n"
+            "6. ITERATE: If tests still fail, analyze and adjust\n\n"
+            "Remember: Your goal is to make ALL tests pass with MINIMAL, SAFE changes."
         )
         # Create the tool set (unified tools with safety and testing integrated)
         tools = create_default_tools(

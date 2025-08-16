@@ -28,8 +28,8 @@ except ImportError:
 
 from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
-from nova.agent.llm_agent import LLMAgent  # for fallback critic review LLM logic
 from nova.tools.git import GitBranchManager
+from nova.config import get_settings
 
 # Import unified tools
 from nova.agent.unified_tools import create_default_tools
@@ -65,8 +65,8 @@ class NovaDeepAgent:
         self.verbose = verbose
         self.safety_config = safety_config
         
-        # Initialize a legacy LLMAgent for critic review and (optionally) fallback patch generation
-        self.legacy_agent = LLMAgent(state.repo_path)
+        # Get settings for model configuration
+        self.settings = get_settings()
         
         # Set up the LangChain agent
         self.agent = self._build_agent()
@@ -74,7 +74,7 @@ class NovaDeepAgent:
     def _build_agent(self) -> AgentExecutor:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
         # Choose an LLM based on configuration (support OpenAI GPT or Anthropic Claude)
-        model_name = getattr(self.legacy_agent.settings, 'default_llm_model', 'gpt-4') if hasattr(self.legacy_agent, 'settings') else 'gpt-4'
+        model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
         
         if model_name.lower().startswith("gpt") or ChatAnthropic is None:
             llm = ChatOpenAI(model_name=model_name, temperature=0)

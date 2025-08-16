@@ -1,25 +1,9 @@
 """
-Nova CI-Rescue agent nodes for the workflow.
+Nova CI-Rescue agent nodes module.
+
+Note: Legacy node classes have been removed as of v0.3.0.
+All functionality is now handled by the Deep Agent architecture.
 """
 
-from .apply_patch import ApplyPatchNode, apply_patch
-from .planner import PlannerNode, create_plan
-from .actor import ActorNode, generate_patch
-from .critic import CriticNode, review_patch
-from .run_tests import RunTestsNode, run_tests
-from .reflect import ReflectNode, reflect
-
-__all__ = [
-    "ApplyPatchNode",
-    "apply_patch",
-    "PlannerNode", 
-    "create_plan",
-    "ActorNode",
-    "generate_patch",
-    "CriticNode",
-    "review_patch",
-    "RunTestsNode",
-    "run_tests",
-    "ReflectNode",
-    "reflect",
-]
+# This module is kept for backward compatibility but contains no exports
+__all__ = []

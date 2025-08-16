@@ -513,7 +513,8 @@ def fibonacci(n):
         
         report.append("\n## Summary Statistics")
         report.append(f"- **Success Rate:** {successful}/{total_scenarios} scenarios ({successful/total_scenarios*100:.1f}%)")
-        report.append(f"- **Tests Fixed:** {tests_fixed}/{total_tests} ({tests_fixed/total_tests*100:.1f}% if total_tests else 0})")
+        fix_rate = (tests_fixed/total_tests*100) if total_tests else 0
+        report.append(f"- **Tests Fixed:** {tests_fixed}/{total_tests} ({fix_rate:.1f}%)")
         report.append(f"- **Average Time:** {avg_time:.1f} seconds")
         report.append(f"- **Average Iterations:** {avg_iterations:.1f}")
         

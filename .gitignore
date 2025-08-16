@@ -162,3 +162,11 @@ initial_tests.xml
 # Nova specific
 nova_demo_workspace/
 IMPROVEMENTS_APPLIED.md
+
+# Regression test artifacts
+regression_tests/venvs/
+regression_tests/regression_results/
+regression_tests/test_repos/
+regression_tests/__pycache__/
+regression_tests/*.log
+

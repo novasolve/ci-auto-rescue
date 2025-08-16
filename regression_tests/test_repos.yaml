@@ -1,0 +1,156 @@
+# Nova CI-Rescue v1.1 Regression Test Configuration
+# This file defines all test repositories and scenarios for regression testing
+
+# Nova command paths - using real Nova CLI through wrapper scripts
+nova_v1_0_cmd: "./nova_v1_0"  # Nova v1.0 wrapper script
+nova_v1_1_cmd: "./nova_v1_1"  # Nova v1.1 wrapper script
+
+# Global settings
+use_eval_mode: false  # Set to true if both versions support eval mode
+verbose: true
+global_timeout: 7200  # 2 hours max for entire suite
+
+# Test repository configurations
+runs:
+  # ========================================
+  # Real-World Repository Tests
+  # ========================================
+  
+  - name: "simple_math_fixes"
+    path: "./test_repos/simple_math"
+    max_iters: 6
+    timeout: 600
+    description: "Simple mathematical operations with basic test failures"
+    expected_failures: 2
+    
+  - name: "string_operations"
+    path: "./test_repos/string_ops"
+    max_iters: 6
+    timeout: 600
+    description: "String manipulation library with encoding issues"
+    expected_failures: 3
+    
+  - name: "file_parser"
+    path: "./test_repos/file_parser"
+    max_iters: 6
+    timeout: 600
+    description: "File parsing library with edge cases"
+    expected_failures: 4
+    
+  - name: "import_issues"
+    path: "./test_repos/import_issues"
+    max_iters: 6
+    timeout: 600
+    description: "Import and module resolution issues"
+    expected_failures: 3
+    
+  - name: "type_hints"
+    path: "./test_repos/type_hints"
+    max_iters: 6
+    timeout: 600
+    description: "Type hint related test failures"
+    expected_failures: 2
+    
+  - name: "exception_handling"
+    path: "./test_repos/exceptions"
+    max_iters: 6
+    timeout: 600
+    description: "Exception handling and error propagation"
+    expected_failures: 4
+    
+  # ========================================
+  # Edge Case Scenarios
+  # ========================================
+  
+  - name: "edge_no_failures"
+    path: "./test_repos/all_passing"
+    max_iters: 1
+    timeout: 300
+    description: "Repository with no failing tests (should no-op)"
+    expected_failures: 0
+    edge_case: "no_failures"
+    
+  - name: "edge_patch_conflict"
+    path: "./test_repos/patch_conflict"
+    max_iters: 6
+    timeout: 600
+    description: "Repository designed to cause patch application failures"
+    expected_failures: 2
+    edge_case: "patch_conflict"
+    
+  - name: "edge_max_iterations"
+    path: "./test_repos/complex_refactor"
+    max_iters: 2  # Intentionally low to trigger max iteration limit
+    timeout: 600
+    description: "Complex fix requiring more iterations than allowed"
+    expected_failures: 3
+    edge_case: "max_iterations"
+    
+  - name: "edge_timeout"
+    path: "./test_repos/slow_tests"
+    max_iters: 6
+    timeout: 60  # Very short timeout to trigger timeout condition
+    description: "Tests that run longer than timeout"
+    expected_failures: 1
+    edge_case: "timeout"
+    
+  # ========================================
+  # Fix Complexity Tests
+  # ========================================
+  
+  - name: "complexity_one_line"
+    path: "./test_repos/one_line_fix"
+    max_iters: 6
+    timeout: 300
+    description: "Simple one-line fix (off-by-one error)"
+    expected_failures: 1
+    complexity: "simple"
+    
+  - name: "complexity_multi_file"
+    path: "./test_repos/multi_file_fix"
+    max_iters: 10
+    timeout: 1200
+    description: "Fix requiring changes across multiple files"
+    expected_failures: 4
+    complexity: "complex"
+    
+  - name: "complexity_refactor"
+    path: "./test_repos/needs_refactor"
+    max_iters: 12
+    timeout: 1800
+    description: "Major refactoring needed to fix tests"
+    expected_failures: 6
+    complexity: "very_complex"
+
+# Test validation criteria
+validation:
+  min_success_rate: 70  # Minimum success rate required (%)
+  max_regressions: 0    # Maximum allowed regressions
+  required_edge_cases:  # Edge cases that must pass
+    - "no_failures"
+    - "patch_conflict"
+    - "timeout"
+    
+# Environment configurations for different Nova versions
+environments:
+  v1_0:
+    python_version: "3.9"
+    venv_path: "./venvs/nova_v1_0"
+    env_vars:
+      NOVA_VERSION: "1.0.0"
+      NOVA_LOG_LEVEL: "DEBUG"
+      
+  v1_1:
+    python_version: "3.9"
+    venv_path: "./venvs/nova_v1_1"
+    env_vars:
+      NOVA_VERSION: "1.1.0"
+      NOVA_LOG_LEVEL: "DEBUG"
+      NOVA_USE_DEEP_AGENT: "true"
+
+# LLM Configuration (ensure both versions use same model)
+llm_config:
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 4000
+  api_key_env: "OPENAI_API_KEY"  # Environment variable containing API key

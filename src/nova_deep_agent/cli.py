@@ -3,13 +3,25 @@ Nova Deep Agent CLI
 ====================
 
 Command-line interface for the Nova CI-Rescue Deep Agent.
+
+⚠️  DEPRECATED: This CLI is deprecated and will be removed in v2.0.
+Please use 'nova fix' instead of 'nova-deep fix'.
 """
 
 import os
 import sys
 import json
+import warnings
 from pathlib import Path
 from typing import Optional
+
+# Show deprecation warning when this module is imported
+warnings.warn(
+    "The nova-deep CLI is deprecated and will be removed in v2.0. "
+    "Please use 'nova fix' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import typer
 from rich.console import Console

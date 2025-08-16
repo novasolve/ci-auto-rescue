@@ -2,6 +2,11 @@
 LangChain Tool Definitions for Nova CI-Rescue Deep Agent
 ==========================================================
 
+DEPRECATED: This file is being replaced by nova.agent.unified_tools.
+Please use the unified tools module instead for all tool definitions.
+
+This file is kept for backward compatibility but will be removed in a future version.
+
 The Deep Agent uses four tools wrapped with LangChain's @tool decorator:
 - plan_todo: Planning no-op tool (records the plan in agent's log)
 - open_file: File read tool with safety checks

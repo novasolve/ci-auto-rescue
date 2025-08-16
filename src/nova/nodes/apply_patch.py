@@ -299,6 +299,8 @@ def apply_patch(
     """
     Convenience function to apply a patch using the ApplyPatchNode.
     
+    DEPRECATED: This is a compatibility shim. Use nova.agent.unified_tools.ApplyPatchTool directly.
+    
     Args:
         state: Current agent state
         patch_text: The unified diff text to apply
@@ -310,5 +312,38 @@ def apply_patch(
     Returns:
         Dictionary with results including success status and changed files
     """
-    node = ApplyPatchNode(verbose=verbose, safety_config=safety_config)
-    return node.execute(state, patch_text, git_manager, skip_safety_check=skip_safety_check)
+    import warnings
+    warnings.warn(
+        "apply_patch from nova.nodes.apply_patch is deprecated. "
+        "Use ApplyPatchTool from nova.agent.unified_tools directly.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+    # For backward compatibility, still use the node if skip_safety_check is True
+    # (since unified tool doesn't have this parameter)
+    if skip_safety_check:
+        node = ApplyPatchNode(verbose=verbose, safety_config=safety_config)
+        return node.execute(state, patch_text, git_manager, skip_safety_check=skip_safety_check)
+    
+    # Use the unified ApplyPatchTool
+    from nova.agent.unified_tools import ApplyPatchTool
+    
+    tool = ApplyPatchTool(
+        repo_path=state.repo_path if state else Path("."),
+        safety_config=safety_config,
+        verbose=verbose
+    )
+    
+    result = tool._run(patch_text)
+    
+    # Convert to legacy format
+    success = result.startswith("SUCCESS")
+    return {
+        "success": success,
+        "message": result,
+        "safety_violation": "Safety violation" in result,
+        "preflight_failed": "context mismatch" in result,
+        "error": result if not success else None,
+        "changed_files": []  # Legacy compatibility - we don't track this in unified tool
+    }

@@ -31,8 +31,8 @@ from nova.telemetry.logger import JSONLLogger
 from nova.agent.llm_agent import LLMAgent  # for fallback critic review LLM logic
 from nova.tools.git import GitBranchManager
 
-# Import the tool functions
-from nova.agent.tools import plan_todo, open_file, write_file, run_tests
+# Import unified tools
+from nova.agent.unified_tools import create_default_tools
 
 
 class NovaDeepAgent:
@@ -89,8 +89,13 @@ class NovaDeepAgent:
             "Do not modify tests themselves. Keep changes minimal and safe. Use the available tools when necessary, and stop when the tests are all green or you can't fix the issue."
         )
         
-        # Define tools for the agent
-        tools = [plan_todo, open_file, write_file, run_tests]
+        # Create tools using unified module
+        tools = create_default_tools(
+            repo_path=self.state.repo_path,
+            verbose=self.verbose,
+            safety_config=self.safety_config,
+            llm=None  # Will use default GPT-4 in CriticReviewTool
+        )
         
         # Initialize the agent with tools and LLM (using OpenAI function-calling agent type for tool integration)
         agent = initialize_agent(

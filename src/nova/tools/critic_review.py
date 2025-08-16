@@ -1,8 +1,11 @@
-z"""
+"""
 Critic Review Tool for Nova Deep Agent
 =======================================
 
-Tool to review patches using LLM and safety checks.
+DEPRECATED: This file is being replaced by nova.agent.unified_tools.
+Please use CriticReviewTool from the unified tools module instead.
+
+This file is kept for backward compatibility but will be removed in a future version.
 """
 
 from typing import Optional, Type, List, Dict, Any

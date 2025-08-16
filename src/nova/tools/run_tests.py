@@ -2,8 +2,10 @@
 Run Tests Tool for Nova Deep Agent
 ====================================
 
-Class-based tool that combines the best of both implementations.
-Uses Nova's TestRunner and Docker sandbox for safe test execution.
+DEPRECATED: This file is being replaced by nova.agent.unified_tools.
+Please use RunTestsTool from the unified tools module instead.
+
+This file is kept for backward compatibility but will be removed in a future version.
 """
 
 from typing import Optional, Dict, Any, Type
@@ -15,7 +17,45 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from nova.runner.test_runner import TestRunner
-from nova.agent.tools import run_tests as run_tests_func
+# DEPRECATED: This file is replaced by nova.agent.unified_tools
+# Import the Docker-based test runner directly instead of from old tools
+import subprocess
+import json
+import shutil
+from pathlib import Path
+
+DOCKER_IMAGE = "nova-ci-rescue-sandbox:latest"
+TEST_TIMEOUT = 600
+
+def run_tests_func() -> str:
+    """Docker-based test runner (backward compatibility)."""
+    if shutil.which("docker") is None:
+        return json.dumps({"error": "Docker is not available on this system.", "exit_code": 127})
+    
+    repo_path = Path(".").resolve()
+    nova_path = repo_path / ".nova"
+    nova_path.mkdir(exist_ok=True)
+    
+    cmd = [
+        "docker", "run", "--rm",
+        "-v", f"{repo_path}:/workspace:ro",
+        "-v", f"{nova_path}:/workspace/.nova:rw",
+        "--memory", "1g", "--cpus", "1.0",
+        "--network", "none", "--pids-limit", "256",
+        DOCKER_IMAGE,
+        "python", "/usr/local/bin/run_python.py", "--pytest"
+    ]
+    
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=TEST_TIMEOUT)
+        stdout = proc.stdout.strip()
+        if not stdout:
+            return json.dumps({"exit_code": proc.returncode, "error": "No output from test run"})
+        return stdout
+    except subprocess.TimeoutExpired:
+        return json.dumps({"exit_code": 124, "error": "Test execution timed out"})
+    except Exception as e:
+        return json.dumps({"exit_code": 1, "error": f"Failed to run Docker container: {e}"})
 
 
 class RunTestsInput(BaseModel):

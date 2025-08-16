@@ -26,9 +26,8 @@ from nova.runner.test_runner import TestRunner
 from nova.agent.nova_deep_agent import NovaDeepAgent
 
 # Tool imports
-from nova.tools.run_tests import RunTestsTool
-from nova.tools.apply_patch import ApplyPatchTool
-from nova.tools.critic_review import CriticReviewTool
+# Import unified tools
+from nova.agent.unified_tools import RunTestsTool, ApplyPatchTool, CriticReviewTool
 
 app = typer.Typer(
     name="nova",
@@ -273,7 +272,7 @@ def fix(
         
         # Add optional file tools if available
         try:
-            from nova.agent.tools import open_file, write_file
+            from nova.agent.unified_tools import open_file, write_file
             from langchain.agents import Tool
             
             if open_file:

@@ -2,7 +2,10 @@
 Apply Patch Tool for Nova Deep Agent
 =====================================
 
-Class-based tool for applying unified diff patches with safety checks.
+DEPRECATED: This file is being replaced by nova.agent.unified_tools.
+Please use ApplyPatchTool from the unified tools module instead.
+
+This file is kept for backward compatibility but will be removed in a future version.
 """
 
 from typing import Optional, Type, Any

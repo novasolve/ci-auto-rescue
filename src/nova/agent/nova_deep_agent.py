@@ -140,53 +140,26 @@ You have {max_iterations} iterations to fix all tests."""
     
     def _create_default_tools(self) -> List[Tool]:
         """Create default tool set if none provided."""
-        tools = []
+        # Import unified tools module
+        from nova.agent.unified_tools import create_default_tools
+        from nova.tools.safety_limits import SafetyConfig
         
-        # Import and create tools
-        try:
-            from nova.tools.run_tests import RunTestsTool
-            from nova.tools.apply_patch import ApplyPatchTool
-            from nova.tools.critic_review import CriticReviewTool
-            
-            # Create class-based tools
-            if self.state:
-                repo_path = self.state.repo_path
-            else:
-                repo_path = Path(".")
-            
-            run_tests = RunTestsTool(repo_path=repo_path, verbose=self.verbose)
-            apply_patch = ApplyPatchTool(
-                state=self.state,
-                verbose=self.verbose,
-                safety_config=SafetyConfig()
-            )
-            critic = CriticReviewTool(verbose=self.verbose)
-            
-            # Convert to Tool instances
-            tools.extend(self._normalize_tools([run_tests, apply_patch, critic]))
-            
-        except ImportError:
-            # Fallback to function-based tools
-            from nova.agent.tools import (
-                plan_todo, open_file, write_file, run_tests
-            )
-            
-            tools = [
-                Tool(name="plan_todo", func=plan_todo, 
-                     description="Plan approach to fix tests"),
-                Tool(name="run_tests", func=run_tests,
-                     description="Run test suite"),
-            ]
-            
-            # Add file tools if available
-            if open_file:
-                tools.append(Tool(name="open_file", func=open_file,
-                                description="Read source files"))
-            if write_file:
-                tools.append(Tool(name="write_file", func=write_file,
-                                description="Modify source files"))
+        # Determine repository path
+        if self.state:
+            repo_path = self.state.repo_path
+        else:
+            repo_path = Path(".")
         
-        return tools
+        # Create tools using unified module
+        tools = create_default_tools(
+            repo_path=repo_path,
+            verbose=self.verbose,
+            safety_config=SafetyConfig(),
+            llm=None  # Will use default GPT-4 in CriticReviewTool
+        )
+        
+        # Convert to Tool instances if needed
+        return self._normalize_tools(tools)
     
     def _create_llm(self):
         """Create the appropriate LLM based on model name."""

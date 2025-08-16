@@ -173,7 +173,7 @@ class NovaOrchestrator:
     def gather_failing_tests(self) -> List[Dict[str, Any]]:
         """Gather information about currently failing tests."""
         # Run tests and parse results
-        from nova.agent.tools import run_tests
+        from nova.agent.unified_tools import run_tests
         test_result_str = run_tests()
         test_result = json.loads(test_result_str)
         
@@ -312,7 +312,7 @@ Respond with either "APPROVE" or "REJECT" followed by a brief reason.
     
     def run_tests_in_sandbox(self) -> Dict[str, Any]:
         """Run tests and check if all pass."""
-        from nova.agent.tools import run_tests
+        from nova.agent.unified_tools import run_tests
         test_result_str = run_tests()
         test_result = json.loads(test_result_str)
         

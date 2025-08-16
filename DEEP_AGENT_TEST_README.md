@@ -5,12 +5,14 @@ A streamlined test suite for validating Nova's Deep Agent performance - no legac
 ## Key Differences from Previous Approaches
 
 ### Their Code (Complex)
+
 - Assumes separate `nova_v1_0` and `nova_v1_1` installations
 - Requires YAML config with real repositories
 - Complex metrics and regression detection
 - Focuses on v1.0 vs v1.1 comparison
 
 ### Our Code (Simple)
+
 - **Single Nova installation** - just the latest version
 - **No legacy agent** - only tests Deep Agent
 - **Self-contained** - creates test scenarios on the fly
@@ -21,7 +23,7 @@ A streamlined test suite for validating Nova's Deep Agent performance - no legac
 The Deep Agent is tested on various synthetic scenarios:
 
 1. **Simple Math** - Basic arithmetic bugs
-2. **String Operations** - Text manipulation errors  
+2. **String Operations** - Text manipulation errors
 3. **List Operations** - Array handling issues
 4. **Edge Cases** - Error handling and special cases
 

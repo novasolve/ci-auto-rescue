@@ -149,7 +149,12 @@ Stop when all tests pass or when no further progress can be made."""
             })
             
             # Run the agent until completion (or max iterations reached)
+            if self.verbose:
+                print(f"\n[DEBUG] Invoking agent with prompt length: {len(user_prompt)} chars")
             result = self.agent.invoke({"input": user_prompt})
+            if self.verbose:
+                print(f"[DEBUG] Agent result type: {type(result)}")
+                print(f"[DEBUG] Agent result: {str(result)[:500]}...")
             
             # Check if tests are passing after agent execution
             # Run final test check

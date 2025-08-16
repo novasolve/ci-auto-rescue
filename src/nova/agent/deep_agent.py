@@ -149,7 +149,7 @@ Stop when all tests pass or when no further progress can be made."""
             })
             
             # Run the agent until completion (or max iterations reached)
-            result = self.agent.run(user_prompt)
+            result = self.agent.invoke({"input": user_prompt})
             
             # Check if tests are passing after agent execution
             # Run final test check

@@ -95,6 +95,51 @@ The Deep Agent replaces the previous multi-node pipeline with a unified, intelli
 - 65-75% on complex multi-file issues
 - 50-60% on architectural problems requiring major refactoring
 
+## How Nova CI-Rescue Works
+
+Nova CI-Rescue uses an AI agent to automatically fix failing tests in your repository. By default, Nova employs the **Deep Agent** – a LangChain-powered agent that iteratively plans fixes, applies code patches, and runs tests until all tests pass or limits are reached. 
+
+On each iteration, the Deep Agent will:
+1. **Plan** an approach to fix the failures (using the `plan_todo` tool to outline steps).
+2. **Open Files** to inspect code as needed (using the `open_file` tool, with safety checks).
+3. **Write Changes** to the code to implement a fix (using the `write_file` tool, with safety checks to avoid dangerous modifications).
+4. **Run Tests** to verify if the fix succeeded (using the `run_tests` tool in an isolated sandbox).
+5. Optionally, **Critique the Patch** before applying it (the agent internally uses a critic review step to reject unsafe or irrelevant patches).
+6. Repeat until tests are passing or a configured limit is reached.
+
+### Running the Fixer
+
+To run Nova on a repository with failing tests:
+```bash
+nova fix /path/to/repo
+```
+
+This will create a git branch (e.g., `nova-fix-<timestamp>`) and start the Deep Agent. Nova will output each iteration's result and a summary when done.
+
+**Customizing runs**: You can adjust the maximum iterations or timeout:
+```bash
+nova fix . --max-iters 5 --timeout 1800 --verbose
+```
+
+Use `--verbose` for detailed logs of each step.
+
+### Legacy Agent Mode (Deprecated)
+
+If you need to use the older v1.0 agent behavior, Nova provides a fallback:
+```bash
+nova fix . --legacy-agent
+```
+
+This flag runs the legacy LLM-based agent, which uses the previous Planner/Actor/Critic loop. In legacy mode, the agent generates a patch with GPT, uses a critic AI to review it, then applies it if approved and reruns tests. This mode is deprecated and will be removed in a future version, so it's recommended to use the default Deep Agent in most cases.
+
+### What's New in v1.1
+
+- **Deep Agent Default**: Nova now defaults to a single-step Deep Agent powered by LangChain, offering better tool integration and more robust planning.
+- **Unified Tools**: Patch application and test execution are handled by built-in tools with safety checks (e.g., blocked paths, change limits).
+- **Legacy Pipeline Removed**: The old multi-step agent (planner → actor → critic nodes) is no longer used by default. (It remains accessible via `--legacy-agent` for compatibility.)
+- **Improved Safety**: The Deep Agent respects `nova.config.yml` safety settings (max lines/files changed, protected paths) automatically.
+- **Telemetry and GitHub Integration**: The output and JSONL logs now reflect the new agent's flow (e.g., events like `deep_agent_start`, `deep_agent_success`), and GitHub PR comments/checks are updated accordingly.
+
 ---
 
 ## 🚀 Installation

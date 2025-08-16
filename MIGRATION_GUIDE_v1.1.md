@@ -1,247 +1,81 @@
-# Migration Guide: Nova CI-Rescue v1.0 → v1.1
+# Nova CI-Rescue v1.1 Migration Guide
 
-## Overview
+Nova CI-Rescue v1.1 introduces a new Deep Agent architecture that replaces the legacy multi-step agent from v1.0. This guide summarizes the breaking changes, removals, and how to adapt to the new system.
 
-Nova CI-Rescue v1.1 introduces the **Deep Agent Architecture**, a complete reimplementation of the test-fixing engine using LangChain and ReAct-style reasoning. While the internal architecture has been completely replaced, the user interface remains unchanged for a seamless transition.
+## Overview of Changes
 
-## Key Changes
+- **Deep Agent as Default:** The `nova fix` CLI command now uses the LangChain-powered **NovaDeepAgent** by default. This agent encapsulates the entire fix loop internally using tools (planning, file read/write, test run, patch review).
+- **Legacy Agent Deprecated:** The old Planner/Actor/Critic pipeline is removed from the default code path. If necessary, you can invoke it using the `--legacy-agent` flag (for this release only). This legacy mode uses the v1.0 LLM-based approach and is meant as a fallback during transition.
+- **Unified Tools Integration:** Safety and test execution are now handled by unified tools:
+  - `ApplyPatchTool` – Applies patches with safety checks (max lines/files, blocked paths).
+  - `RunTestsTool` – Runs tests in an isolated Docker sandbox (or falls back to local runner) and returns structured results.
+  - `CriticReviewTool` – Uses an LLM to review a proposed patch and decide on approval.
+  These tools are seamlessly used by NovaDeepAgent, replacing the need for separate nodes or manual checks.
+- **Removed Modules:** The following legacy modules and classes have been removed or moved to a legacy archive:
+  - `nova/agent/llm_agent.py` (Legacy LLM agent class)
+  - `nova/agent/mock_llm.py` (Mock agent used in tests/dev)
+  - `nova/orchestrator.py` (Orchestration logic now handled by NovaDeepAgent or CLI)
+  - `nova/nodes/planner.py`, `nova/nodes/actor.py`, `nova/nodes/critic.py` (Planner/Actor/Critic node implementations)
+  - Other helper nodes (e.g., `reflect.py`, deprecated safety checks) that were part of the v1.0 loop.
+  > **Note:** These legacy components are no longer invoked by default. The code remains accessible for the `--legacy-agent` mode in v1.1, but will be fully removed in a future release.
+- **CLI Interface Changes:** All existing CLI options (`--max-iters`, `--timeout`, etc.) remain the same. A new flag `--legacy-agent` has been added to `nova fix` to explicitly run the old agent. The prior internal flags or toggles used in v1.0 (such as any environment variables to disable critic or alternate paths) are discontinued since there is now a single primary execution path.
+- **Behavioral Changes:** In v1.0, each iteration's steps (planning, patching, critic, etc.) were logged separately. In v1.1, the Deep Agent still logs similar events (e.g., patch applied, tests run), but they are managed within the LangChain agent loop. Users will notice fewer console prints about "Planner/Actor/Critic" phases; instead, Nova outputs iteration summaries and relies on the unified tool feedback (e.g., errors from `open_file` or `write_file` are shown directly if the agent tries to violate safety rules).
+- **Telemetry Events:** JSONL telemetry now records new event types: `"deep_agent_start"`, `"deep_agent_success"`, `"deep_agent_error"`, etc. The old events for planner/actor/critic (`"planner_start"`, `"actor_complete"`, `"critic_approved"`, etc.) will not appear unless using `--legacy-agent`. If you have any tooling that parses Nova's log output or telemetry, update it to handle the new event names.
 
-### ✅ What Stays the Same
+## Adapting Your Workflow
 
-- **CLI Commands**: All commands work exactly as before
-- **Configuration Files**: Your existing `nova.config.yml` files are fully compatible
-- **API Keys**: Same environment variables (OPENAI_API_KEY, ANTHROPIC_API_KEY)
-- **Output Format**: Same progress indicators and result reporting
-- **Git Integration**: Same branch creation and commit behavior
-
-### 🔄 What's Different
-
-| Component | v1.0 | v1.1 |
-|-----------|------|------|
-| **Architecture** | Multi-node pipeline (Planner→Actor→Critic→Reflect) | Unified Deep Agent with LangChain |
-| **Execution Model** | Sequential node execution | ReAct agent with tool selection |
-| **Decision Making** | Fixed pipeline logic | Intelligent reasoning and adaptation |
-| **Error Recovery** | Limited retry logic | Self-correcting agent iterations |
-| **Context Awareness** | Node-specific context | Full context throughout execution |
-
-## Migration Steps
-
-### For Users
-
-1. **Update Nova CI-Rescue**:
-   ```bash
-   pip install --upgrade nova-ci-rescue
-   ```
-
-2. **Verify Installation**:
-   ```bash
-   nova --version
-   # Should show: nova-ci-rescue v1.1.0
-   ```
-
-3. **Continue Using as Normal**:
-   ```bash
-   # Your existing commands work unchanged
-   nova fix
-   nova fix --max-iters 5 --verbose
-   nova fix --config my-config.yml
-   ```
-
-That's it! No other changes needed for users.
-
-### For CI/CD Pipelines
-
-No changes required! Your existing CI/CD configurations will work without modification:
-
-```yaml
-# GitHub Actions example - works with both v1.0 and v1.1
-- name: Fix failing tests
-  run: nova fix
-  env:
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-```
-
-### For Python API Users
-
-⚠️ **Breaking Changes** for those using Nova as a Python library:
-
-#### v1.0 Code (No Longer Works)
+**Using NovaDeepAgent in Code:** If you previously used `LLMAgent` or `NovaOrchestrator` in your Python code, switch to `NovaDeepAgent`. For example:
 ```python
-from nova.nodes import PlannerNode, ActorNode, CriticNode
-from nova.agent.llm_agent import LLMAgent
+# v1.0 (old way)
+# from nova.agent.llm_agent import LLMAgent
+# agent = LLMAgent(repo_path=".", model="gpt-4")
+# ... (manual loop or orchestrator)
 
-# This will fail in v1.1
-planner = PlannerNode()
-actor = ActorNode()
-agent = LLMAgent(repo_path)
-```
-
-#### v1.1 Code (New Approach)
-```python
+# v1.1 (new way)
 from nova.agent.deep_agent import NovaDeepAgent
 from nova.agent.state import AgentState
+from nova.telemetry.logger import JSONLLogger
 
-# Create state and agent
-state = AgentState(repo_path=Path("."))
-agent = NovaDeepAgent(state=state, telemetry=logger)
-
-# Run the agent
-success = agent.run(
-    failures_summary="test failures here",
-    error_details="error details here"
-)
+state = AgentState(repo_path=".")
+telemetry = JSONLLogger()
+agent = NovaDeepAgent(state=state, telemetry=telemetry, verbose=True)
+success = agent.run(failures_summary="...", error_details="...", code_snippets="")
 ```
 
-## Performance Improvements
+The `NovaDeepAgent.run()` method encapsulates the full loop and returns a boolean indicating success. It automatically uses the tools and adheres to safety limits defined in `NovaSettings` or config files.
 
-### Success Rate Improvements
-
-| Test Type | v1.0 Success Rate | v1.1 Success Rate | Improvement |
-|-----------|------------------|-------------------|-------------|
-| Simple single-file fixes | 70-85% | 85-95% | **+15%** |
-| Multi-file fixes | 40-50% | 65-75% | **+25%** |
-| Complex refactoring | 20-30% | 50-60% | **+30%** |
-
-### Speed Improvements
-
-- **Average fix time**: 30-60 seconds (vs 45-90 seconds in v1.0)
-- **Iterations needed**: 2-3 (vs 3-5 in v1.0)
-- **Time to first patch**: 10-15 seconds (vs 20-30 seconds in v1.0)
-
-## Removed Components
-
-The following components have been removed in v1.1:
-
-### Removed Classes
-- `nova.nodes.PlannerNode`
-- `nova.nodes.ActorNode`
-- `nova.nodes.CriticNode`
-- `nova.nodes.ReflectNode`
-- `nova.nodes.ApplyPatchNode`
-- `nova.nodes.RunTestsNode`
-- `nova.agent.llm_agent.LLMAgent`
-- `nova.agent.mock_llm.MockLLMAgent`
-- `nova.orchestrator.NovaOrchestrator`
-
-### Removed CLI Entry Points
-- `nova-deep` command (consolidated into `nova`)
-- `nova-enhanced` command (removed)
-- Legacy CLI scripts
-
-### Removed Files
-- `src/nova/cli_backup.py`
-- `src/nova/cli_enhanced.py`
-- `src/nova/cli_integration.py`
-- `src/nova/cli_migration_helper.py`
-
-## New Features in v1.1
-
-### Deep Agent Capabilities
-
-1. **Intelligent Reasoning**: The agent thinks through problems step-by-step
-2. **Tool Selection**: Dynamically chooses which tools to use based on context
-3. **Self-Correction**: Automatically adjusts approach when initial attempts fail
-4. **Context Persistence**: Maintains full context throughout the fixing process
-5. **Enhanced Safety**: Built-in safety guards at every step
-
-### Improved Tools
-
-The Deep Agent uses a unified tool system:
-- **File Operations**: Read, write, and explore code intelligently
-- **Test Execution**: Run tests and analyze results
-- **Patch Management**: Generate, review, and apply patches safely
-- **Safety Validation**: Check patches before application
-
-## Configuration Changes
-
-### Deprecated Options
-
-These configuration options are no longer used:
-```yaml
-# v1.0 options that are ignored in v1.1
-enable_orchestrator: true  # No longer relevant
-use_legacy_pipeline: false # Pipeline removed
-node_timeout: 30           # Nodes don't exist
-```
-
-### New Options
-
-New configuration options for v1.1:
-```yaml
-# v1.1 Deep Agent options
-agent_temperature: 0.1     # LLM temperature for agent
-agent_max_steps: 50        # Maximum agent steps per iteration
-tool_timeout: 30           # Timeout for individual tools
-```
-
-## Troubleshooting Migration Issues
-
-### Issue: "Module 'nova.nodes' not found"
-
-**Solution**: Update your imports to use the Deep Agent:
-```python
-# Old
-from nova.nodes import PlannerNode
-
-# New
-from nova.agent.deep_agent import NovaDeepAgent
-```
-
-### Issue: "LLMAgent class not found"
-
-**Solution**: The LLMAgent has been removed. Use NovaDeepAgent instead:
-```python
-# Old
-from nova.agent.llm_agent import LLMAgent
-
-# New
-from nova.agent.deep_agent import NovaDeepAgent
-```
-
-### Issue: Tests taking longer than expected
-
-**Solution**: The Deep Agent may be exploring more thoroughly. This often leads to better fixes. If needed, adjust timeout:
+**Legacy Mode (if needed):** For this release, you can still trigger the old behavior via CLI flag or by calling the legacy functions:
 ```bash
-nova fix --timeout 1800  # 30 minutes for complex fixes
+nova fix . --legacy-agent
 ```
 
-### Issue: Different patch generation behavior
+This will perform the iterative loop using the deprecated code. This is intended for verification or in case of unexpected issues with the new agent. Going forward, the legacy path will be removed, so migrate any custom integrations to use the new Deep Agent.
 
-**Solution**: The Deep Agent generates patches differently (often better). If you need to limit changes:
-```yaml
-# nova.config.yml
-max_patch_lines: 200      # Limit patch size
-max_affected_files: 5     # Limit scope
-```
+**Configuration Files:** No changes in format. The same `NovaSettings` fields (like `max_iterations`, `timeout_seconds`, `default_llm_model`) apply. New safety-related fields (if any were introduced for v1.1, e.g., `blocked_paths`, `max_changed_lines/files`) should be documented in the README; ensure your config includes them if you need to override defaults. The Deep Agent reads these settings via `get_settings()` internally.
 
-## Rollback Instructions
+## Removed and Deprecated APIs
 
-If you need to rollback to v1.0:
+If you have import statements or references to the following, you'll need to update:
 
-```bash
-# Downgrade to v1.0
-pip install nova-ci-rescue==1.0.0
+- **`nova.orchestrator.NovaOrchestrator`** – Removed. No longer needed; use `NovaDeepAgent` directly via CLI or code.
+- **`nova.agent.llm_agent.LLMAgent`** – Removed. (Available internally only for legacy mode.) Replace with `NovaDeepAgent` usage.
+- **`nova.nodes.planner_node/actor_node/critic_node`** – Removed. No direct replacements; the Deep Agent handles these steps internally. You can assume the new agent performs planning and critique automatically. If you need to mimic their functionality, consider using the unified tools or the LangChain agent prompt directly.
+- **`nova.agent.mock_llm.MockLLMAgent`** – Removed. (This was for testing with a dummy LLM; you may simulate Deep Agent behavior with your own stub if needed.)
+- **Telemetry event names for legacy steps** (e.g., `"planner_plan_generated"`) – No longer emitted. Use new event names or parse output differently if automating analysis.
 
-# Verify downgrade
-nova --version
-```
+## Testing and Validation
 
-Note: We strongly recommend staying on v1.1 for the improved performance and reliability.
+It's highly recommended to test Nova v1.1 on a sample failing repository:
 
-## Getting Help
+1. Run `nova fix` without flags and observe that it completes using the Deep Agent. All functionality (like applying multiple patches, honoring iteration limits, posting GitHub comments, etc.) should work as before or better.
+2. Run `nova fix --legacy-agent` on the same scenario and compare outcomes. The legacy mode should behave as v1.0 did, allowing you to verify that the Deep Agent is producing equivalent or improved results.
+3. All existing CLI options (`--max-iters`, `--config`, etc.) continue to work in both modes. The `--legacy-agent` flag can be combined with these options as well.
+4. The test suite (if you maintain one for Nova) should be updated to include at least one run in legacy mode to ensure the fallback path remains functional in this release.
 
-- **Documentation**: See the updated [README.md](README.md)
-- **Issues**: Report problems at [GitHub Issues](https://github.com/nova-solve/ci-auto-rescue/issues)
-- **Support**: Contact support@nova-solve.com
+## Documentation
+
+Refer to the updated [README](README.md) for details on usage and to the Quickstart Guide for an example of running Nova v1.1. The documentation has been updated to reflect the new one-agent workflow (the previous "Happy Path" with separate nodes is obsolete). If you maintained any internal docs or runbooks referencing the old agent, update them to remove references to Planner/Actor/Critic nodes and instead describe the Deep Agent behavior.
 
 ## Summary
 
-The migration to v1.1 is designed to be seamless for users while providing significant improvements under the hood. The Deep Agent architecture brings:
-
-- ✅ **Better success rates** (+15-25% improvement)
-- ✅ **Faster fixes** (30-60s vs 45-90s)
-- ✅ **Smarter problem-solving** with reasoning
-- ✅ **Enhanced safety** with built-in guards
-- ✅ **No user-facing changes** for easy adoption
-
-Simply upgrade and enjoy the improved performance!
+Nova CI-Rescue v1.1 simplifies the architecture by consolidating to a single Deep Agent and modern tool-based approach. This yields a more maintainable codebase and sets the stage for future enhancements (v1.2 and beyond). While a compatibility layer (`--legacy-agent`) exists, it's meant as a temporary bridge. Users and developers are encouraged to embrace the new Deep Agent for all use cases moving forward.

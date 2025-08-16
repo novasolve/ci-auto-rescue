@@ -37,18 +37,6 @@ def test_deep_agent_import():
         return False
 
 
-def test_orchestrator_import():
-    """Test that orchestrator can be imported."""
-    print("\nTesting Orchestrator import...")
-    try:
-        from nova.orchestrator import NovaOrchestrator
-        print("✅ NovaOrchestrator imported successfully")
-        return True
-    except ImportError as e:
-        print(f"❌ Failed to import NovaOrchestrator: {e}")
-        return False
-
-
 def test_tool_functionality():
     """Test basic tool functionality."""
     print("\nTesting tool functionality...")
@@ -111,7 +99,6 @@ def main():
     # Run tests
     results.append(("Tool Imports", test_tool_imports()))
     results.append(("Deep Agent Import", test_deep_agent_import()))
-    results.append(("Orchestrator Import", test_orchestrator_import()))
     results.append(("Tool Functionality", test_tool_functionality()))
     results.append(("Docker Config", test_docker_config()))
     

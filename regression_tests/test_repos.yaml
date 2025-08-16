@@ -1,9 +1,9 @@
 # Nova CI-Rescue v1.1 Regression Test Configuration
 # This file defines all test repositories and scenarios for regression testing
 
-# Nova command paths - using mock implementation for testing
-nova_v1_0_cmd: "python mock_nova.py"  # Mock v1.0 for demo
-nova_v1_1_cmd: "python mock_nova.py"  # Mock v1.1 for demo
+# Nova command paths - using real Nova CLI through wrapper scripts
+nova_v1_0_cmd: "./nova_v1_0"  # Nova v1.0 wrapper script
+nova_v1_1_cmd: "./nova_v1_1"  # Nova v1.1 wrapper script
 
 # Global settings
 use_eval_mode: false  # Set to true if both versions support eval mode

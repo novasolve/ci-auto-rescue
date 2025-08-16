@@ -1,0 +1,52 @@
+{
+  "dependencies": {
+    "langchain": true,
+    "langchain_openai": true,
+    "langchain_anthropic": true,
+    "openai": true,
+    "anthropic": true,
+    "pydantic": true,
+    "unidiff": true,
+    "docker": false
+  },
+  "files": {
+    "src/nova/agent/deep_agent.py": true,
+    "src/nova/agent/llm_agent.py": true,
+    "src/nova/agent/state.py": true,
+    "src/nova/agent/tools.py": true,
+    "src/nova/nodes/apply_patch.py": true,
+    "src/nova/nodes/critic.py": true,
+    "src/nova/tools/patch_fixer.py": true,
+    "docker/Dockerfile": true,
+    "docker/run_python.py": true
+  },
+  "deep_agent_analysis": {
+    "uses_langchain": true,
+    "has_agent_executor": true,
+    "has_tools": true,
+    "has_react_pattern": true,
+    "has_critic": true,
+    "has_patch_application": true,
+    "uses_openai_functions": true,
+    "has_run_tests": true
+  },
+  "comparison": {
+    "architecture_match": false,
+    "tool_strategy_match": false,
+    "patch_format_match": false,
+    "critic_integration_match": false,
+    "langchain_present": true
+  },
+  "linear_tasks": {
+    "OS-1005": {
+      "title": "Add LangChain & OpenAI Dependencies",
+      "expected": "Draft/In Progress",
+      "actual": "\u2705 COMPLETED"
+    },
+    "OS-1006": {
+      "title": "Prepare Docker Test Sandbox",
+      "expected": "Backlog",
+      "actual": "\u2705 COMPLETED"
+    }
+  }
+}

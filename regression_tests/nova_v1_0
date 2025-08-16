@@ -1,7 +1,11 @@
 #!/bin/bash
 # Wrapper script for Nova v1.0 (Legacy Agent)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/venvs/nova_v1_0/bin/activate"
 export NOVA_VERSION="v1_0"
-export NOVA_LOG_LEVEL="INFO"
-python -m nova "$@"
+
+# Check if the command is "fix" and add --legacy-agent flag
+if [ "$1" = "fix" ]; then
+    "$SCRIPT_DIR/venvs/nova_v1_0/bin/python" -m nova fix "${@:2}" --legacy-agent
+else
+    "$SCRIPT_DIR/venvs/nova_v1_0/bin/python" -m nova "$@"
+fi

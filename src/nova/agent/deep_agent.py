@@ -180,9 +180,18 @@ Stop when all tests pass or when no further progress can be made."""
                 
         except Exception as e:
             # Catch exceptions (could be max iteration or other errors)
+            import traceback
             err_msg = str(e)
+            err_trace = traceback.format_exc()
+            
+            # Print the actual error for debugging
+            if self.verbose:
+                print(f"\n[DEBUG] Deep Agent Error: {err_msg}")
+                print(f"[DEBUG] Traceback:\n{err_trace}")
+            
             self.telemetry.log_event("deep_agent_error", {
                 "error": err_msg,
+                "traceback": err_trace[:500],
                 "iteration": self.state.current_iteration
             })
             

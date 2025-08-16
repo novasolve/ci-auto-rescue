@@ -30,6 +30,11 @@ class NovaSettings:
     timeout_seconds: int = 1200
     verbose: bool = False
     
+    # Backward compatibility aliases
+    max_iters: int = 6
+    run_timeout_sec: int = 1200
+    test_timeout_sec: int = 300
+    
     # Safety Configuration
     max_patch_lines: int = 500
     max_affected_files: int = 10

@@ -398,338 +398,61 @@ def fix(
             if custom_limits:
                 safety_conf = safety_conf_obj
         
-        # Initialize the LLM agent (enhanced version with full Planner/Actor/Critic)
-        try:
-            from nova.agent.llm_agent import LLMAgent
-            llm_agent = LLMAgent(repo_path)
-            
-            # Determine which model we're using
-            model_name = settings.default_llm_model
-            if "gpt" in model_name.lower():
-                console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing[/dim]")
-            elif "claude" in model_name.lower():
-                console.print(f"[dim]Using Anthropic {model_name} for autonomous test fixing[/dim]")
-            else:
-                console.print(f"[dim]Using {model_name} for autonomous test fixing[/dim]")
-                
-        except ImportError as e:
-            console.print(f"[yellow]Warning: Could not import enhanced LLM agent: {e}[/yellow]")
-            console.print("[yellow]Falling back to basic LLM agent[/yellow]")
-            try:
-                from nova.agent.llm_agent import LLMAgent
-                llm_agent = LLMAgent(repo_path)
-            except Exception as e2:
-                console.print(f"[yellow]Warning: Could not initialize LLM agent: {e2}[/yellow]")
-                console.print("[yellow]Falling back to mock agent for demo[/yellow]")
-                from nova.agent.mock_llm import MockLLMAgent
-                llm_agent = MockLLMAgent(repo_path)
-        except Exception as e:
-            console.print(f"[yellow]Warning: Could not initialize enhanced LLM agent: {e}[/yellow]")
-            console.print("[yellow]Falling back to mock agent for demo[/yellow]")
-            from nova.agent.mock_llm import MockLLMAgent
-            llm_agent = MockLLMAgent(repo_path)
+        # Prepare context strings for the agent prompt
+        failures_summary = runner.format_failures_table(failing_tests)  # table of failing tests
+        error_details = "\n\n".join(test.short_traceback for test in failing_tests[:3])
+        code_snippets = ""  # (optional) could gather relevant code snippets if needed
         
-        # Agent loop: iterate until tests are fixed or limits reached
-        console.print("\n[bold]Starting agent loop...[/bold]")
+        # Initialize the Deep Agent
+        console.print("\n[bold]Initializing Nova Deep Agent...[/bold]")
+        from nova.agent.deep_agent import NovaDeepAgent
+        deep_agent = NovaDeepAgent(
+            state=state,
+            telemetry=telemetry,
+            git_manager=git_manager,
+            verbose=verbose,
+            safety_config=safety_conf  # use SafetyConfig if any custom limits from config file
+        )
         
-        while state.increment_iteration():
-            iteration = state.current_iteration
-            console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
+        # Run the Deep Agent to fix tests
+        console.print("[cyan]🤖 Running Deep Agent to fix failing tests...[/cyan]")
+        success = deep_agent.run(
+            failures_summary=failures_summary,
+            error_details=error_details,
+            code_snippets=code_snippets
+        )
+        
+        # Handle completion and exit
+        if success:
+            console.print("\n[green bold]✅ SUCCESS - All tests fixed![/green bold]")
+            state.final_status = "success"
+        else:
+            console.print("\n[red bold]❌ FAILED - Some tests could not be fixed.[/red bold]")
+            if state.final_status == "max_iters":
+                console.print(f"[yellow]Reached maximum iterations ({state.max_iterations}) without full success.[/yellow]")
+            elif state.final_status == "error":
+                console.print("[yellow]Agent encountered an error during execution.[/yellow]")
+        
+        # Legacy loop removed - Deep Agent handles iterations internally
+        
+        # Note: The entire while loop has been removed since Deep Agent handles
+        # iterations internally using LangChain's AgentExecutor
 
-            # Ensure a clean working tree before generating a new patch
-            try:
-                if git_manager:
-                    git_manager._run_git_command("reset", "--hard", "HEAD")
-                    git_manager._run_git_command("clean", "-fd")
-                    if verbose:
-                        console.print("[dim]Working tree reset to HEAD and cleaned[/dim]")
-            except Exception as e:
-                if verbose:
-                    console.print(f"[yellow]Warning: pre-iteration reset failed: {e}[/yellow]")
-            
-            # 1. PLANNER: Generate a plan based on failing tests
-            console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
-            
-            # Log planner start
-            telemetry.log_event("planner_start", {
-                "iteration": iteration,
-                "failing_tests": state.total_failures
-            })
-            
-            # Use LLM to create plan (with critic feedback if available)
-            critic_feedback = getattr(state, 'critic_feedback', None) if iteration > 1 else None
-            plan = llm_agent.create_plan(state.failing_tests, iteration, critic_feedback)
 
-            # Enforce a maximum of 10 steps in the plan
-            try:
-                if isinstance(plan, dict) and isinstance(plan.get('steps'), list):
-                    if len(plan['steps']) > 10:
-                        plan['steps'] = plan['steps'][:10]
-            except Exception:
-                # If plan structure is unexpected, proceed without trimming
-                pass
-
-            # Store plan in state for reference
-            state.plan = plan
-            
-            # Display plan summary
-            if verbose:
-                console.print("[dim]Plan created:[/dim]")
-                console.print(f"  Approach: {plan.get('approach', 'Unknown')}")
-                if plan.get('steps'):
-                    console.print("  Steps (max 10):")
-                    for i, step in enumerate(plan['steps'][:10], 1):
-                        console.print(f"    {i}. {step}")
-            
-            # Log planner completion
-            telemetry.log_event("planner_complete", {
-                "iteration": iteration,
-                "plan": plan,
-                "failing_tests": state.total_failures
-            })
-            
-            # 2. ACTOR: Generate a patch diff based on the plan
-            console.print(f"[cyan]🎭 Generating patch based on plan...[/cyan]")
-            
-            # Log actor start
-            telemetry.log_event("actor_start", {"iteration": iteration})
-            
-            # Generate patch with plan context and critic feedback if available
-            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan, critic_feedback=critic_feedback)
-            
-            if not patch_diff:
-                console.print("[red]❌ Could not generate a patch[/red]")
-                state.final_status = "no_patch"
-                telemetry.log_event("actor_failed", {"iteration": iteration})
-                break
-            
-            # Display patch info
-            patch_lines = patch_diff.split('\n')
-            if verbose:
-                console.print(f"[dim]Generated patch: {len(patch_lines)} lines[/dim]")
-            
-            # Log actor completion
-            telemetry.log_event("actor_complete", {
-                "iteration": iteration,
-                "patch_size": len(patch_lines)
-            })
-            # Save patch artifact (before apply, so we have it even if apply fails)
-            telemetry.save_patch(state.current_step + 1, patch_diff)
-            
-            # 3. CRITIC: Review and approve/reject the patch
-            console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
-            
-            # Log critic start
-            telemetry.log_event("critic_start", {"iteration": iteration})
-            
-            # Use LLM to review patch
-            patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
-            
-            if verbose:
-                console.print(f"[dim]Review result: {review_reason}[/dim]")
-            
-            if not patch_approved:
-                console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
-                # If the same feedback occurs consecutively, assume stagnation and alter strategy
-                if iteration > 1 and critic_feedback and critic_feedback.strip() == review_reason.strip():
-                    console.print("[yellow]⚠️ Repeated critic feedback detected – switching strategy.[/yellow]")
-                    # Reduce scope: focus on a single failing test in the next iteration
-                    if len(state.failing_tests) > 1:
-                        state.failing_tests = state.failing_tests[:1]
-                        state.total_failures = len(state.failing_tests)
-                        console.print("[yellow]↳ Focusing on one failing test to narrow the problem scope.[/yellow]")
-                # Store critic feedback for next iteration
-                state.critic_feedback = review_reason
-                telemetry.log_event("critic_rejected", {
-                    "iteration": iteration,
-                    "reason": review_reason
-                })
-                
-                # Check if we have more iterations available
-                if iteration < state.max_iterations:
-                    console.print(f"[yellow]Will try a different approach in iteration {iteration + 1}...[/yellow]")
-                    continue  # Try again with critic feedback
-                else:
-                    # Only set final status if we're out of iterations
-                    state.final_status = "patch_rejected"
-                    break
-            
-            console.print("[green]✓ Patch approved by critic[/green]")
-            
-            # Clear critic feedback since patch was approved
-            state.critic_feedback = None
-            
-            # Log critic approval
-            telemetry.log_event("critic_approved", {
-                "iteration": iteration,
-                "reason": review_reason
-            })
-            
-            # 4. APPLY PATCH: Apply the approved patch and commit
-            console.print(f"[cyan]📝 Applying patch...[/cyan]")
-            
-            # Use our ApplyPatchNode to apply and commit the patch
-            result = apply_patch(state, patch_diff, git_manager, verbose=verbose, safety_config=safety_conf)
-            
-            if not result["success"]:
-                if result.get("safety_violation"):
-                    console.print(f"[red]🛡️ Patch rejected due to safety limits[/red]")
-                    state.final_status = "safety_violation"
-                    telemetry.log_event("safety_violation", {
-                        "iteration": iteration,
-                        "step": result.get("step_number", 0),
-                        "message": result.get("safety_message", "")
-                    })
-                else:
-                    console.print(f"[red]❌ Failed to apply patch[/red]")
-                    telemetry.log_event("patch_error", {
-                        "iteration": iteration,
-                        "step": result.get("step_number", 0)
-                    })
-                    # Retry logic on patch application failure (including preflight failure)
-                    if iteration < state.max_iterations:
-                        console.print("[yellow]Patch apply failed – resetting state and retrying...[/yellow]")
-                        try:
-                            if git_manager:
-                                git_manager._run_git_command("reset", "--hard", "HEAD")
-                                git_manager._run_git_command("clean", "-fd")
-                        except Exception as e:
-                            if verbose:
-                                console.print(f"[red]Failed to reset state after patch error: {e}[/red]")
-                        # Provide feedback to next iteration
-                        state.critic_feedback = "Patch application failed (possible context mismatch)."
-                        # Continue to next iteration
-                        continue
-                    else:
-                        state.final_status = "patch_error"
-                break
-            else:
-                # Log successful patch application (only if not already done by fallback)
-                console.print(f"[green]✓ Patch applied and committed (step {result['step_number']})[/green]")
-            telemetry.log_event("patch_applied", {
-                "iteration": iteration,
-                "step": result["step_number"],
-                "files_changed": result["changed_files"],
-                "commit": git_manager._get_current_head()
-            })
-            
-            # Save patch artifact for auditing
-            # The patch was already saved before apply, no need to save again
-            
-            # 5. RUN TESTS: Check if the patch fixed the failures
-            console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
-            new_failures, junit_xml = runner.run_tests(max_failures=5)
-            
-            # Save test report artifact
-            if junit_xml:
-                telemetry.save_test_report(result['step_number'], junit_xml, report_type="junit")
-            
-            # Update state with new test results
-            previous_failures = state.total_failures
-            try:
-                from nova.runner.test_runner import FaultLocalizer
-                FaultLocalizer.localize_failures(new_failures, coverage_data=None)
-            except Exception:
-                pass
-            state.add_failing_tests(new_failures)
-            state.test_results.append({
-                "iteration": iteration,
-                "failures_before": previous_failures,
-                "failures_after": state.total_failures
-            })
-            
-            telemetry.log_event("test_results", {
-                "iteration": iteration,
-                "failures_before": previous_failures,
-                "failures_after": state.total_failures,
-                "fixed": previous_failures - state.total_failures
-            })
-            
-            # 6. REFLECT: Check if we should continue or stop
-            telemetry.log_event("reflect_start", {
-                "iteration": iteration,
-                "failures_before": previous_failures,
-                "failures_after": state.total_failures
-            })
-            
-            if state.total_failures == 0:
-                # All tests passed - success!
-                console.print(f"\n[bold green]✅ All tests passing! Fixed in {iteration} iteration(s).[/bold green]")
-                state.final_status = "success"
-                success = True
-                telemetry.log_event("reflect_complete", {
-                    "iteration": iteration,
-                    "decision": "success",
-                    "reason": "all_tests_passing"
-                })
-                break
-            
-            # Check if we made progress
-            if state.total_failures < previous_failures:
-                fixed_count = previous_failures - state.total_failures
-                console.print(f"[green]✓ Progress: Fixed {fixed_count} test(s), {state.total_failures} remaining[/green]")
-            else:
-                console.print(f"[yellow]⚠ No progress: {state.total_failures} test(s) still failing[/yellow]")
-                
-                # Reset state if no progress was made (prevent accumulating bad changes)
-                if state.patches_applied and git_manager:
-                    console.print("[yellow]↩️ Rolling back last patch to reset state...[/yellow]")
-                    try:
-                        # Reset to previous commit
-                        git_manager._run_git_command("reset", "--hard", "HEAD~1")
-                        # Remove the last patch from history
-                        if state.patches_applied:
-                            state.patches_applied.pop()
-                        console.print("[dim]State reset to clean baseline[/dim]")
-                        telemetry.log_event("state_reset", {
-                            "iteration": iteration,
-                            "reason": "no_progress",
-                            "failures": state.total_failures
-                        })
-                    except Exception as e:
-                        console.print(f"[red]Failed to reset state: {e}[/red]")
-            
-            # Check timeout
-            if state.check_timeout():
-                console.print(f"[red]⏰ Timeout reached ({state.timeout_seconds}s)[/red]")
-                state.final_status = "timeout"
-                telemetry.log_event("reflect_complete", {
-                    "iteration": iteration,
-                    "decision": "stop",
-                    "reason": "timeout"
-                })
-                break
-            
-            # Check if we're at max iterations
-            if iteration >= state.max_iterations:
-                console.print(f"[red]🔄 Maximum iterations reached ({state.max_iterations})[/red]")
-                state.final_status = "max_iters"
-                telemetry.log_event("reflect_complete", {
-                    "iteration": iteration,
-                    "decision": "stop",
-                    "reason": "max_iterations"
-                })
-                break
-            
-            # Continue to next iteration
-            console.print(f"[dim]Continuing to iteration {iteration + 1}...[/dim]")
-            telemetry.log_event("reflect_complete", {
-                "iteration": iteration,
-                "decision": "continue",
-                "reason": "more_failures_to_fix"
-            })
         
-        # Print exit summary
-        if state and state.final_status:
-            print_exit_summary(state, state.final_status)
-        
-        # Log final completion status
+        # Log final completion status (moved from inside loop)
         telemetry.log_event("completion", {
             "status": state.final_status,
             "iterations": state.current_iteration,
             "total_patches": len(state.patches_applied),
             "final_failures": state.total_failures
         })
+        
+        # Print exit summary
+        if state and state.final_status:
+            print_exit_summary(state, state.final_status)
+        
+
         telemetry.end_run(success=success)
         
         # Post to GitHub if environment variables are set

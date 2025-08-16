@@ -217,7 +217,11 @@ class RegressionTestOrchestrator:
                 continue
                 
             # Build command
-            cmd = [nova_cmd, "fix", str(repo_path)]
+            # Handle command properly
+            if isinstance(nova_cmd, str) and ' ' in nova_cmd:
+                cmd = nova_cmd.split() + ["fix", str(repo_path)]
+            else:
+                cmd = [nova_cmd, "fix", str(repo_path)]
             
             # Add optional parameters
             if 'max_iters' in run_config:

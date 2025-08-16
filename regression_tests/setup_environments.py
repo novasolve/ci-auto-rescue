@@ -142,22 +142,28 @@ numpy>=1.21.0
             
         # Upgrade pip
         print("Upgrading pip...")
-        subprocess.run([str(python_path), "-m", "pip", "install", "--upgrade", "pip"], 
-                      capture_output=True)
+        result = subprocess.run([str(python_path), "-m", "pip", "install", "--upgrade", "pip"], 
+                              capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Warning: Failed to upgrade pip: {result.stderr}")
         
-        # Install requirements
+        # Install requirements - use python -m pip instead of pip directly
         req_file = self.requirements_dir / requirements_file
         if req_file.exists():
             print(f"Installing requirements from {requirements_file}...")
-            subprocess.run([str(pip_path), "install", "-r", str(req_file)], 
-                          capture_output=True)
+            result = subprocess.run([str(python_path), "-m", "pip", "install", "-r", str(req_file)], 
+                                  capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Warning: Some requirements failed to install: {result.stderr}")
         
         # Install Nova source
         nova_source = self._find_nova_source(version)
         if nova_source:
             print(f"Installing Nova from {nova_source}")
-            subprocess.run([str(pip_path), "install", "-e", str(nova_source)], 
-                          capture_output=True)
+            result = subprocess.run([str(python_path), "-m", "pip", "install", "-e", str(nova_source)], 
+                                  capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Warning: Failed to install Nova: {result.stderr}")
         else:
             print(f"⚠️ Warning: Nova {version} source not found")
             

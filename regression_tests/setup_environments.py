@@ -279,9 +279,11 @@ else
     exit 1
 fi
 """
-            run_script.chmod(0o755)
             
         run_script.write_text(run_content)
+        
+        if not self.is_windows:
+            run_script.chmod(0o755)
         
         # Create Python run script for cross-platform
         py_run_script = self.base_dir / "run_tests.py"

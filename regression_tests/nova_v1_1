@@ -1,0 +1,6 @@
+#!/bin/bash
+source "/Users/seb/GPT5/working/ci-auto-rescue/regression_tests/venvs/nova_v1_1/bin/activate"
+export NOVA_VERSION="v1_1"
+export NOVA_LOG_LEVEL="INFO"
+export NOVA_USE_DEEP_AGENT="true"
+python -m nova "$@"

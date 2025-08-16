@@ -58,12 +58,14 @@ regression_tests/
 ### 1. Setup Environment
 
 #### Option A: Python Setup (Cross-platform)
+
 ```bash
 cd regression_tests
 python setup_environments.py
 ```
 
 #### Option B: Shell Setup (Unix/Linux/Mac)
+
 ```bash
 cd regression_tests
 chmod +x setup_environments.sh
@@ -131,12 +133,14 @@ python validate_results.py regression_results/<timestamp>/regression_results.jso
 ### test_repos.yaml
 
 The main configuration file defines:
+
 - Nova command paths for each version
 - Test repository specifications
 - Timeout and iteration limits
 - Expected failures for each test
 
 Example:
+
 ```yaml
 nova_v1_0_cmd: "python -m nova_v1_0"
 nova_v1_1_cmd: "python -m nova"
@@ -175,10 +179,12 @@ For each test run, we collect:
 ## 📝 Reports Generated
 
 ### 1. JSON Results
+
 - `regression_results.json` - Complete test data
 - Individual test results in JSON format
 
 ### 2. Markdown Report
+
 - Executive summary with pass/fail status
 - Detailed test-by-test comparison
 - Edge case analysis
@@ -186,6 +192,7 @@ For each test run, we collect:
 - Recommendations
 
 ### 3. Visual Charts
+
 - Success rate comparison bar chart
 - Test outcome distribution pie chart
 - Performance comparison graphs
@@ -227,20 +234,24 @@ To run in CI/CD pipelines:
 ### Common Issues
 
 1. **API Key Not Set**
+
    ```bash
    export OPENAI_API_KEY="your-key"
    ```
 
 2. **Python Version**
+
    - Requires Python 3.8+
    - Check with: `python --version`
 
 3. **Missing Dependencies**
+
    ```bash
    pip install -r requirements/nova_v1_1.txt
    ```
 
 4. **Test Repository Generation Failed**
+
    ```bash
    python edge_case_generator.py
    ```
@@ -297,6 +308,7 @@ python validate_results.py results.json --compare-deepagents
 ```
 
 This helps decide whether to:
+
 - Continue with our in-house Deep Agent
 - Adopt techniques from deepagents
 - Switch to the deepagents framework

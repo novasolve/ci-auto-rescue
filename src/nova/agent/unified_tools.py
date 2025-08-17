@@ -281,7 +281,8 @@ class RunTestsTool(BaseTool):
     name: str = "run_tests"
     description: str = (
         "Run the project's test suite inside a sandbox and get failing test info. "
-        "Returns a summary with test names and error messages."
+        "Returns a summary with test names and error messages. "
+        "Input: (empty string or leave blank) - no input required."
     )
     args_schema: Type[BaseModel] = RunTestsInput
     repo_path: Path = Field(default_factory=lambda: Path("."))

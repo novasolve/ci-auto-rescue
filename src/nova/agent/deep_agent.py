@@ -129,18 +129,36 @@ class NovaDeepAgent:
             llm=llm  # Pass LLM for critic review
         )
         
-        # Always use OpenAI function-calling agent for reliable multi-input tool support
+        # Choose agent type based on model capabilities
         from langchain.agents import AgentType
         
-        agent_executor = initialize_agent(
-            tools=tools,
-            llm=llm,
-            agent=AgentType.OPENAI_FUNCTIONS,
-            verbose=self.verbose,
-            agent_kwargs={"system_message": system_message},
-            handle_parsing_errors=True,
-            max_iterations=15
-        )
+        if use_react:
+            # For GPT-5 and other models that don't support function calling
+            # Use ReAct pattern with description-based tool selection
+            agent_executor = initialize_agent(
+                tools=tools,
+                llm=llm,
+                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                verbose=self.verbose,
+                handle_parsing_errors=True,
+                max_iterations=15,
+                early_stopping_method="generate",
+                agent_kwargs={
+                    "prefix": system_message + "\n\nYou have access to the following tools:",
+                    "format_instructions": "Use the following format:\n\nThought: I need to [describe what you need to do]\nAction: [the action/tool to take, should be one of the available tools]\nAction Input: [the input to the action]\nObservation: [the result of the action]\n... (this Thought/Action/Action Input/Observation can repeat N times)\nThought: I now know the final answer\nFinal Answer: [your final response]\n\nBegin!"
+                }
+            )
+        else:
+            # For GPT-4 and other models that support function calling
+            agent_executor = initialize_agent(
+                tools=tools,
+                llm=llm,
+                agent=AgentType.OPENAI_FUNCTIONS,
+                verbose=self.verbose,
+                agent_kwargs={"system_message": system_message},
+                handle_parsing_errors=True,
+                max_iterations=15
+            )
         
         return agent_executor
 

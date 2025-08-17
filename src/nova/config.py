@@ -17,7 +17,7 @@ class NovaSettings:
     """Main settings for Nova CI-Rescue."""
     
     # LLM Configuration
-    default_llm_model: str = "gpt-5"  # Updated to GPT-5 as default
+    default_llm_model: str = "gpt-4"  # Default to GPT-4 (GPT-5 requires explicit configuration)
     temperature: float = 0.1
     max_tokens: Optional[int] = None
     

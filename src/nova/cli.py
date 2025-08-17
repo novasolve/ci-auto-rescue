@@ -214,8 +214,21 @@ def fix(
 
         # Initialize settings and telemetry
         settings = NovaSettings()
+        
+        # Check for model configuration in order of precedence:
+        # 1. Config file
+        # 2. Environment variable
+        # 3. Default from settings
         if config_data and config_data.model:
             settings.default_llm_model = config_data.model
+        else:
+            # Check environment variables for model configuration
+            import os
+            env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_LLM_MODEL") or os.getenv("MODEL")
+            if env_model:
+                settings.default_llm_model = env_model
+                if verbose:
+                    print(f"Using model from environment: {env_model}")
         telemetry = JSONLLogger()
         telemetry.log_event("run_start", {
             "repo": str(repo_path),

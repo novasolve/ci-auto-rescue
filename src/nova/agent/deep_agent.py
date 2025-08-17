@@ -23,6 +23,17 @@ except ImportError:
     except ImportError:
         ChatAnthropic = None  # Anthropic support optional
 
+# Custom wrapper for GPT-5 that removes unsupported parameters
+class GPT5ChatOpenAI(ChatOpenAI):
+    """Custom ChatOpenAI wrapper for GPT-5 that filters out unsupported parameters."""
+    
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        """Override to remove stop parameter for GPT-5."""
+        # GPT-5 doesn't support stop sequences, so remove them
+        if stop is not None:
+            kwargs.pop('stop', None)
+        return super()._generate(messages, stop=None, run_manager=run_manager, **kwargs)
+
 from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
 from nova.tools.git import GitBranchManager
@@ -121,14 +132,14 @@ class NovaDeepAgent:
         
         use_react = False
         
-        # Check if this is GPT-5 (which doesn't support function calling)
+        # Check if this is GPT-5 (which doesn't support function calling or stop sequences)
         if model_name.lower().startswith("gpt-5"):
-            # GPT-5 must use ReAct mode (no function calling)
+            # GPT-5 must use ReAct mode (no function calling) and custom wrapper
             try:
-                llm = ChatOpenAI(model_name=mapped_model, temperature=0)
+                llm = GPT5ChatOpenAI(model_name=mapped_model, temperature=0)
                 use_react = True  # Force ReAct for GPT-5
                 if self.verbose:
-                    print(f"🚀 Using model '{mapped_model}' with ReAct agent (GPT-5 mode)")
+                    print(f"🚀 Using model '{mapped_model}' with ReAct agent (GPT-5 mode, no stop sequences)")
             except Exception as e:
                 # Fallback to GPT-4 with function calling
                 fallback_model = "gpt-4-0613"

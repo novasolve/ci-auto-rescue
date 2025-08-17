@@ -393,13 +393,15 @@ class NovaDeepAgent:
             "4. IMPLEMENT: Make targeted changes to fix the issues\n"
             "5. VERIFY: Run tests to confirm fixes work\n"
             "6. ITERATE: If tests still fail, analyze and adjust\n\n"
-            "IMPORTANT: After using plan_todo, you MUST continue with another action.\n"
-            "Never treat planning as the final step.\n"
-            "Always follow planning with:\n"
-            "1. Opening relevant files (open_file)\n"
-            "2. Making code changes (write_file/apply_patch)\n"
-            "3. Running tests (run_tests)\n"
-            "Only provide a Final Answer after all steps are done.\n\n"
+            "IMPORTANT: After running tests, you MUST try to fix the failures:\n"
+            "- NEVER give 'Final Answer' without attempting to open and fix source files\n"
+            "- After seeing test failures, IMMEDIATELY try 'open_file' on the source\n"
+            "- Only give 'Final Answer' after you've:\n"
+            "  1. Run tests and seen failures\n"
+            "  2. Opened the source file (trying multiple paths if needed)\n"
+            "  3. Fixed the code\n"
+            "  4. Run tests again to verify\n"
+            "- If you haven't tried opening files yet, you're NOT done!\n\n"
             "Remember: Your goal is to make ALL tests pass with MINIMAL, SAFE changes."
         )
         # Create the tool set (unified tools with safety and testing integrated)
@@ -648,31 +650,32 @@ class NovaDeepAgent:
 {f"## RELEVANT CODE SNIPPETS:\n{code_snippets}" if code_snippets else ""}
 {hint_content}
 ## YOUR TASK:
-Use the available tools to fix the failing tests. Follow this workflow:
+Use the available tools to fix the failing tests. You MUST follow these steps IN ORDER:
 
-1. **Analyze the error messages above** to identify:
-   - Function names that are failing (e.g., divide_numbers, calculate_average)
-   - Module names from the traceback (look for "from X import" in the errors)
-   
-2. **Open the SOURCE file** containing these functions:
-   - Based on the test file path, look for the implementation file
-   - If you see "from broken import ...", try opening: broken.py, then src/broken.py
-   - NEVER try to open test files - they will return "ERROR: Access blocked"
-   - If you get "Access blocked", DO NOT hallucinate the content - move on
+STEP 1: Look at the test file path (e.g., test_broken.py) and identify the likely source file
+   - If test is "test_broken.py", source is likely "broken.py" 
+   - Use the hint above if provided
 
-3. **Fix the functions** based on the error messages:
-   - Use 'write_file' or 'apply_patch' to make minimal fixes
-   - Focus only on making tests pass
+STEP 2: IMMEDIATELY try to open the source file with 'open_file'
+   - First try: broken.py (if that's the module name)
+   - If "File not found", it will suggest alternatives like src/broken.py
+   - Follow the suggestions and try again
 
-4. **Run tests** to verify your fixes work
+STEP 3: Once you find and open the source file:
+   - Identify the failing functions from the error messages
+   - Fix them based on the test expectations
+   - Use 'write_file' or 'apply_patch'
+
+STEP 4: Run tests again to verify
 
 ## CRITICAL RULES:
-- When you see "ERROR: Access to ... is blocked", DO NOT make up file contents
-- Use ONLY the error messages and stack traces provided above to understand failures
-- Test files are BLOCKED - you cannot read them, only fix source files
-- Common source locations: module.py, src/module.py, lib/module.py
+- DO NOT give up after running tests - you MUST try to open source files
+- DO NOT say "I need access to files" - just try to open them!
+- When you see "ERROR: Access blocked", that means it's a test file - try the source file instead
+- The source files ARE accessible, you just need to find the right path
+- Common patterns: module.py, src/module.py, lib/module.py
 
-Begin fixing the tests now."""
+Start NOW by trying to open the source file. DO NOT just run tests again!"""
         try:
             # Log the start of Deep Agent execution
             self.telemetry.log_event("deep_agent_start", {

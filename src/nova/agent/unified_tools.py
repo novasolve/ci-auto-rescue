@@ -468,6 +468,7 @@ class ApplyPatchTool(BaseTool):
     safety_config: Optional[SafetyConfig] = Field(default=None)
     verbose: bool = Field(default=False)
     logger: Optional[JSONLLogger] = Field(default=None)
+    state: Optional[Any] = Field(default=None)
 
     def __init__(
         self,
@@ -487,9 +488,8 @@ class ApplyPatchTool(BaseTool):
             kwargs['verbose'] = verbose
         if logger is not None:
             kwargs['logger'] = logger
-        
-        # Store state as instance attribute
-        self.state = state
+        if state is not None:
+            kwargs['state'] = state
         
         super().__init__(**kwargs)
 

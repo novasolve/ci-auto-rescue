@@ -389,7 +389,8 @@ def fix(
                 telemetry=telemetry,
                 git_manager=git_manager,
                 verbose=verbose,
-                safety_config=safety_conf
+                safety_config=safety_conf,
+                settings=settings
             )
             console.print("[cyan]🤖 Running Deep Agent to fix failing tests...[/cyan]")
             failures_summary = runner.format_failures_table(failing_tests)

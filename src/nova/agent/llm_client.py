@@ -25,47 +25,72 @@ from nova.tools.http import AllowedHTTPClient
 class LLMClient:
     """Unified LLM client that supports OpenAI and Anthropic models."""
     
-    def __init__(self):
-        self.settings = get_settings()
+    def __init__(self, settings=None):
+        self.settings = settings or get_settings()
         self.client = None
         self.provider = None
         
         # Determine which provider to use based on model name and available API keys
         model_name = self.settings.default_llm_model.lower()
+        openai_key = self.settings.openai_api_key
+        anthropic_key = self.settings.anthropic_api_key
         
-        if "claude" in model_name and self.settings.anthropic_api_key:
-            # Use Anthropic
+        # Smart provider selection
+        if "claude" in model_name and anthropic_key:
+            # Claude model requested and key available
             if anthropic is None:
                 raise ImportError("anthropic package not installed. Run: pip install anthropic")
-            self.client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
+            self.client = anthropic.Anthropic(api_key=anthropic_key)
             self.provider = "anthropic"
             self.model = self._get_anthropic_model_name()
-        elif self.settings.openai_api_key:
-            # Use OpenAI
+        elif "claude" in model_name and not anthropic_key and openai_key:
+            # Claude requested but only OpenAI key available - fallback to GPT
+            print(f"Warning: Claude model '{self.settings.default_llm_model}' requested but no Anthropic key found. Using OpenAI instead.")
             if OpenAI is None:
                 raise ImportError("openai package not installed. Run: pip install openai")
-            self.client = OpenAI(api_key=self.settings.openai_api_key)
+            self.client = OpenAI(api_key=openai_key)
+            self.provider = "openai"
+            self.model = "gpt-4"  # Fallback to GPT-4
+        elif openai_key:
+            # OpenAI model or default
+            if OpenAI is None:
+                raise ImportError("openai package not installed. Run: pip install openai")
+            self.client = OpenAI(api_key=openai_key)
             self.provider = "openai"
             self.model = self._get_openai_model_name()
+        elif anthropic_key:
+            # Only Anthropic key available, use Claude even if not explicitly requested
+            print(f"Note: Using Claude model (only Anthropic key available)")
+            if anthropic is None:
+                raise ImportError("anthropic package not installed. Run: pip install anthropic")
+            self.client = anthropic.Anthropic(api_key=anthropic_key)
+            self.provider = "anthropic"
+            self.model = self._get_anthropic_model_name()
         else:
             raise ValueError("No valid API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
     
     def _get_openai_model_name(self) -> str:
         """Get the OpenAI model name to use."""
         model = self.settings.default_llm_model
+        model_lower = model.lower()
         
-        # Map special names to actual models
-        if model == "gpt-5-chat-latest":
-            # GPT-5 not available yet, fallback to GPT-4
-            return "gpt-4o"
-        elif "gpt-5" in model.lower():
-            # Fallback to GPT-4 for any GPT-5 variant
-            return "gpt-4o"
-        elif model in ["gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]:
+        # Map known aliases and variations to valid OpenAI models
+        if "gpt-5" in model_lower:
+            # Return GPT-5 as-is (Deep Agent will handle it specially)
             return model
+        elif "gpt-4.1" in model_lower:
+            # Handle GPT-4.1 variations (including "gpt-4.1alias")
+            return "gpt-4"
+        elif model in ["gpt-4", "gpt-4-turbo", "gpt-4-0613", "gpt-4-32k", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]:
+            # Known valid OpenAI models
+            return model
+        elif model_lower == "gpt-4o" or model_lower == "gpt-4o-mini":
+            # Map internal aliases to valid models
+            return "gpt-4"
         else:
-            # Default to GPT-4o
-            return "gpt-4o"
+            # Default to GPT-4 for any unknown model
+            print(f"Warning: Unknown model '{model}', falling back to gpt-4")
+            return "gpt-4"
     
     def _get_anthropic_model_name(self) -> str:
         """Get the Anthropic model name to use."""
@@ -105,7 +130,8 @@ class LLMClient:
             raise ValueError(f"Unknown provider: {self.provider}")
     
     def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
-        """Complete using OpenAI API with retry on rate limits."""
+        """Complete using OpenAI API with retry on rate limits and model fallback."""
+        original_model = self.model
         for attempt in range(3):  # try up to 3 times
             try:
                 response = self.client.chat.completions.create(
@@ -120,8 +146,14 @@ class LLMClient:
                 return response.choices[0].message.content.strip()
             except Exception as e:
                 err_msg = str(e).lower()
+                # If model not found, try fallback
+                if ("model" in err_msg and "not found" in err_msg) or "model_not_found" in err_msg:
+                    if self.model != "gpt-4" and attempt == 0:  # First attempt with invalid model
+                        print(f"Warning: Model '{self.model}' not found, falling back to gpt-4")
+                        self.model = "gpt-4"
+                        continue  # retry with gpt-4
                 # If rate limit encountered, backoff and retry
-                if "rate limit" in err_msg or "rate exceeded" in err_msg:
+                elif "rate limit" in err_msg or "rate exceeded" in err_msg:
                     if attempt < 2:  # not last attempt
                         delay = 2 ** attempt  # exponential backoff: 1s, 2s, ...
                         print(f"Warning: OpenAI rate limit hit (attempt {attempt+1}). Retrying in {delay}s...")
@@ -131,7 +163,7 @@ class LLMClient:
                         print("Error: OpenAI API rate limit exceeded after 3 attempts.")
                         # Fall through to raise the exception on final attempt
                 # If authentication or credentials issue, provide clear message (caught upstream as well)
-                if "api key" in err_msg or "authentication" in err_msg:
+                elif "api key" in err_msg or "authentication" in err_msg:
                     print("OpenAI API error: Authentication failed (invalid API key).")
                 # Re-raise the exception for any non-retried or final errors
                 raise

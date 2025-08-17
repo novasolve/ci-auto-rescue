@@ -1,0 +1,74 @@
+# Nova CI-Rescue Configuration File
+# ==================================
+# Copy to nova.config.yml and customize
+
+# LLM Configuration
+model: gpt-5
+default_llm_model: gpt-5
+temperature: 0.1
+max_tokens: 4000
+
+# Execution Settings
+max_iterations: 6
+timeout_seconds: 1200
+verbose: false
+
+# Safety Configuration
+safety:
+  max_lines_changed: 500
+  max_files_modified: 10
+  max_additions: 300
+  max_deletions: 300
+
+  # Additional paths to block (on top of defaults)
+  denied_paths:
+    - "*.min.js"
+    - "vendor/*"
+    - "node_modules/*"
+    - "migrations/*"
+
+  # Additional suspicious patterns to flag
+  suspicious_patterns:
+    - "DROP TABLE"
+    - "DELETE FROM"
+    - "TRUNCATE"
+
+# Docker Configuration
+docker_image: nova-ci-rescue-sandbox:latest
+use_docker: true
+
+# Telemetry
+telemetry_enabled: true
+telemetry_dir: .nova/telemetry
+
+# GitHub Integration (optional)
+github:
+  create_check_runs: true
+  post_pr_comments: true
+
+# Model-specific settings (optional)
+models:
+  gpt-5:
+    temperature: 0.1
+    max_tokens: 4000
+
+  claude-3:
+    temperature: 0.2
+    max_tokens: 3000
+
+  llama-2:
+    temperature: 0.3
+    max_tokens: 2000
+
+# Test Runner Configuration
+test_runner:
+  max_failures: 10
+  timeout_per_test: 60
+  coverage_enabled: false
+
+# Advanced Settings
+advanced:
+  fault_localization: true
+  pre_agent_discovery: true
+  auto_commit: false
+  branch_prefix: "nova-fix/"

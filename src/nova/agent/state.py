@@ -26,6 +26,11 @@ class AgentState:
     plan: Optional[Dict[str, Any]] = None
     critic_feedback: Optional[str] = None  # Feedback from previous critic rejection
     
+    # Critic review state
+    last_review_approved: bool = False  # Whether the last critic review approved a patch
+    last_reviewed_patch: Optional[str] = None  # The patch that was last reviewed
+    pending_patch: Optional[str] = None  # The patch waiting to be applied
+    
     # Execution state
     current_iteration: int = 0
     max_iterations: int = 6
@@ -37,6 +42,7 @@ class AgentState:
     patches_applied: List[str] = field(default_factory=list)
     test_results: List[Dict[str, Any]] = field(default_factory=list)
     final_status: Optional[str] = None  # 'success', 'timeout', 'max_iters', 'error'
+    error_message: Optional[str] = None  # Detailed error message when status is 'error'
     
     def add_failing_tests(self, tests: List[Any]) -> None:
         """Add failing tests to the state."""

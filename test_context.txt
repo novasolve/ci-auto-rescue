@@ -1,0 +1,9 @@
+FAILING TESTS:
+
+test_calculate_sum_with_none:
+    AssertionError: Expected calculate_sum(None, 5) to return 0, but got TypeError
+    
+test_calculate_sum_none_both:
+    AssertionError: Expected calculate_sum(None, None) to return 0, but got TypeError
+
+The function should handle None values gracefully by returning 0.

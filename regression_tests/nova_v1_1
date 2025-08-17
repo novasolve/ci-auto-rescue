@@ -1,8 +1,4 @@
 #!/bin/bash
-# Wrapper script for Nova v1.1 (Deep Agent - default)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export NOVA_VERSION="v1_1"
 export NOVA_USE_DEEP_AGENT="true"
-
-# Deep Agent is default, no special flag needed
-"$SCRIPT_DIR/venvs/nova_v1_1/bin/python" -m nova "$@"
+"venvs/nova_v1_1/bin/python" -m nova "$@"

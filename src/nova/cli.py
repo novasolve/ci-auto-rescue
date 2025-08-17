@@ -159,6 +159,12 @@ def fix(
         dir_okay=False,
         resolve_path=True,
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="LLM model to use (e.g., gpt-4, gpt-3.5-turbo, claude-3-sonnet)",
+    ),
     legacy_agent: bool = typer.Option(
         False,
         "--legacy-agent",
@@ -212,10 +218,25 @@ def fix(
         # Set up Ctrl+C signal handler for clean abort
         git_manager.setup_signal_handler()
 
-        # Initialize settings and telemetry
-        settings = NovaSettings()
-        if config_data and config_data.model:
-            settings.default_llm_model = config_data.model
+        # Initialize settings (load .env and env vars) and telemetry
+        settings = NovaSettings.from_env()
+        
+        # Override with config file values if provided
+        if config_data:
+            if hasattr(config_data, 'model') and config_data.model:
+                settings.default_llm_model = config_data.model
+                if verbose:
+                    print(f"Using model from config file: {config_data.model}")
+            elif hasattr(config_data, 'default_llm_model') and config_data.default_llm_model:
+                settings.default_llm_model = config_data.default_llm_model
+                if verbose:
+                    print(f"Using model from config file: {config_data.default_llm_model}")
+        
+        # CLI --model option takes highest precedence
+        if model:
+            settings.default_llm_model = model
+            if verbose:
+                print(f"Using model from CLI: {model}")
         telemetry = JSONLLogger()
         telemetry.log_event("run_start", {
             "repo": str(repo_path),
@@ -371,7 +392,8 @@ def fix(
                 telemetry=telemetry,
                 git_manager=git_manager,
                 verbose=verbose,
-                safety_config=safety_conf
+                safety_config=safety_conf,
+                settings=settings
             )
             console.print("[cyan]🤖 Running Deep Agent to fix failing tests...[/cyan]")
             failures_summary = runner.format_failures_table(failing_tests)
@@ -387,11 +409,60 @@ def fix(
                 console.print("\n[green bold]✅ SUCCESS - All tests fixed![/green bold]")
                 state.final_status = "success"
             else:
-                console.print("\n[red bold]❌ FAILED - Some tests could not be fixed.[/red bold]")
+                # Detailed failure report
+                console.print(f"\n[bold red]❌ Nova could not resolve all issues.[/bold red]\n")
+                
+                # Explain the reason for failure
                 if state.final_status == "max_iters":
-                    console.print(f"[yellow]Reached maximum iterations ({state.max_iterations}) without full success.[/yellow]")
+                    console.print(f"[red]Reason:[/red] Reached the maximum allowed iterations ({state.max_iterations}) without fixing all tests.")
+                elif state.final_status == "timeout":
+                    console.print(f"[red]Reason:[/red] Timed out after {state.timeout_seconds}s without resolving all failures.")
+                elif state.final_status == "no_patch":
+                    console.print(f"[red]Reason:[/red] The agent could not generate a valid patch for the failing tests.")
+                elif state.final_status == "patch_error":
+                    console.print(f"[red]Reason:[/red] A patch was generated but failed to apply to the code (possible merge/context issue).")
+                elif state.final_status == "patch_rejected":
+                    console.print(f"[red]Reason:[/red] The agent's patch proposals were rejected by the critic and not applied.")
                 elif state.final_status == "error":
-                    console.print("[yellow]Agent encountered an error during execution.[/yellow]")
+                    err_detail = getattr(state, "error_message", "Unknown error")
+                    console.print(f"[red]Reason:[/red] An unexpected error occurred: {err_detail}")
+                else:
+                    console.print(f"[red]Reason:[/red] {state.final_status}")
+                console.print("")
+                
+                # Summarize what was tried
+                patches = len(state.patches_applied)
+                initial = len(state.failing_tests) if state.failing_tests else 0
+                remaining = state.total_failures
+                iter_count = state.current_iteration or patches
+                
+                console.print("[bold blue]What the agent tried:[/bold blue]")
+                if patches > 0:
+                    console.print(f"  • Applied {patches} patch{'es' if patches > 1 else ''} across {iter_count} iteration{'s' if iter_count > 1 else ''}")
+                    if remaining is not None and remaining > 0:
+                        console.print(f"  • {remaining} test{'s' if remaining > 1 else ''} are still failing after these attempts")
+                else:
+                    console.print("  • No patches were applied (the agent did not find a viable fix)")
+                console.print("")
+                
+                # Point to logs and artifacts
+                if telemetry and hasattr(telemetry, 'run_id'):
+                    run_dir = Path(telemetry.settings.telemetry_dir) / telemetry.run_id
+                else:
+                    run_dir = Path(".nova/telemetry")
+                console.print("[bold blue]Logs & artifacts:[/bold blue]")
+                console.print(f"  • Detailed logs of this run are saved under [italic]{run_dir}[/italic]")
+                console.print(f"  • Patch diffs for each attempt are in [italic]{run_dir}/patches/[/italic]")
+                console.print(f"  • Test reports are in [italic]{run_dir}/reports/[/italic]")
+                console.print("")
+                
+                # Suggest next steps
+                console.print("[bold blue]Next steps:[/bold blue]")
+                console.print("  • Review the above patches and failing tests to understand what remains wrong.")
+                console.print("  • You may try running Nova again with a higher iteration limit or after addressing any partial fixes.")
+                console.print("  • If the issue persists, consider fixing the remaining failures manually.")
+                console.print("  • For further help, share the logs from the telemetry directory when reporting an issue.")
+                console.print("")
         else:
             # === Legacy Agent Path (deprecated v1.0 approach) ===
             console.print("\n[bold]⚠️ Running legacy LLM-based agent (deprecated)...[/bold]")
@@ -483,6 +554,36 @@ def fix(
             print_exit_summary(state, state.final_status, elapsed_seconds=elapsed)
 
         telemetry.end_run(success=(state.final_status == "success"))
+        
+        # Generate JSON error report if the run failed
+        if state and state.final_status and state.final_status != "success" and telemetry:
+            try:
+                error_report = {
+                    "status": state.final_status,
+                    "initial_failures": len(state.failing_tests) if state.failing_tests else 0,
+                    "patches_applied": len(state.patches_applied),
+                    "remaining_failures": state.total_failures,
+                    "iterations": state.current_iteration or len(state.patches_applied),
+                }
+                
+                # Include error message if available
+                if state.final_status == "error":
+                    error_report["error_message"] = getattr(state, "error_message", None)
+                else:
+                    error_report["error_message"] = None
+                
+                # Write to JSON file in telemetry directory
+                report_dir = Path(telemetry.settings.telemetry_dir) / telemetry.run_id
+                report_dir.mkdir(parents=True, exist_ok=True)
+                report_path = report_dir / "error_report.json"
+                
+                with open(report_path, "w") as f:
+                    json.dump(error_report, f, indent=2)
+                
+                console.print(f"[cyan]Error report saved to {report_path}[/cyan]")
+            except Exception as e:
+                if verbose:
+                    console.print(f"[red]Failed to write error report: {e}[/red]")
 
         # GitHub integration: post results to PR if in CI environment
         token = os.getenv("GITHUB_TOKEN")

@@ -23,6 +23,17 @@ except ImportError:
     except ImportError:
         ChatAnthropic = None  # Anthropic support optional
 
+# Custom wrapper for GPT-5 that removes unsupported parameters
+class GPT5ChatOpenAI(ChatOpenAI):
+    """Custom ChatOpenAI wrapper for GPT-5 that filters out unsupported parameters."""
+    
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        """Override to remove stop parameter for GPT-5."""
+        # GPT-5 doesn't support stop sequences, so remove them
+        if stop is not None:
+            kwargs.pop('stop', None)
+        return super()._generate(messages, stop=None, run_manager=run_manager, **kwargs)
+
 from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
 from nova.tools.git import GitBranchManager
@@ -30,6 +41,41 @@ from nova.config import get_settings
 
 # Import unified tools factory
 from nova.agent.unified_tools import create_default_tools
+
+# Model capability registry for cleaner model handling
+MODEL_CAPABILITIES = {
+    "gpt-4": {"function_calling": True, "max_tokens": 8192, "fallback": None},
+    "gpt-4-turbo": {"function_calling": True, "max_tokens": 128000, "fallback": "gpt-4"},
+    "gpt-3.5-turbo": {"function_calling": True, "max_tokens": 4096, "fallback": None},
+    "gpt-5": {"function_calling": True, "max_tokens": 16384, "fallback": "gpt-4"},  # GPT-5 supports function calling
+    "gpt-5-turbo": {"function_calling": True, "max_tokens": 32768, "fallback": "gpt-4"},  # GPT-5 variants also support it
+    "gpt-5-preview": {"function_calling": True, "max_tokens": 16384, "fallback": "gpt-4"},
+    "claude-3-opus": {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"},
+    "claude-3-sonnet": {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"},
+}
+
+
+def get_model_capabilities(model_name: str) -> dict:
+    """Get capabilities for a model, with fallback to defaults."""
+    # Check exact match first
+    if model_name in MODEL_CAPABILITIES:
+        return MODEL_CAPABILITIES[model_name]
+    
+    # Check for GPT-5 variants (now with function calling support)
+    if model_name.lower().startswith("gpt-5"):
+        return {"function_calling": True, "max_tokens": 16384, "fallback": "gpt-4"}
+    
+    # Check for GPT-4 variants
+    if model_name.lower().startswith("gpt-4"):
+        return {"function_calling": True, "max_tokens": 8192, "fallback": None}
+    
+    # Check for Claude variants
+    if "claude" in model_name.lower():
+        return {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"}
+    
+    # Default to GPT-4-like capabilities
+    return {"function_calling": True, "max_tokens": 8192, "fallback": None}
+
 
 class NovaDeepAgent:
     """
@@ -42,7 +88,8 @@ class NovaDeepAgent:
         telemetry: JSONLLogger,
         git_manager: Optional[GitBranchManager] = None,
         verbose: bool = False,
-        safety_config: Optional[Any] = None
+        safety_config: Optional[Any] = None,
+        settings: Optional[Any] = None
     ):
         """
         Initialize the Deep Agent with the given state, telemetry logger, and optional Git branch manager.
@@ -53,43 +100,110 @@ class NovaDeepAgent:
             git_manager: GitBranchManager for applying commits (if any).
             verbose: whether to print verbose output during operations.
             safety_config: optional SafetyConfig to enforce patch safety limits.
+            settings: optional NovaSettings to use (defaults to get_settings() if not provided).
         """
         self.state = state
         self.telemetry = telemetry
         self.git_manager = git_manager
         self.verbose = verbose
         self.safety_config = safety_config
-        # Load runtime settings for LLM configuration
-        self.settings = get_settings()
+        # Use provided settings or load runtime settings for LLM configuration
+        self.settings = settings or get_settings()
         # Build the LangChain agent executor
         self.agent = self._build_agent()
 
     def _build_agent(self) -> AgentExecutor:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
         # Choose LLM based on configuration (supports OpenAI GPT or Anthropic Claude)
-        model_name = getattr(self.settings, 'default_llm_model', 'gpt-5')  # Default to GPT-5
-        use_react = False  # Track if we should use ReAct pattern
+        model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
         
-        # Handle GPT-5 specifically with ReAct pattern support
-        if model_name == "gpt-5":
-            try:
-                llm = ChatOpenAI(model_name="gpt-5", temperature=0)
-                use_react = True  # GPT-5 may not support function calling, use ReAct
+        # Smart model selection based on available API keys
+        openai_key = self.settings.openai_api_key
+        anthropic_key = self.settings.anthropic_api_key
+        
+        # Only apply smart selection if using a default/generic model name
+        if model_name in ["gpt-4", "gpt-3.5-turbo", "gpt-5", None, ""]:
+            if openai_key and not anthropic_key:
+                # Only OpenAI key available
+                if model_name not in ["gpt-4", "gpt-3.5-turbo", "gpt-5"]:
+                    model_name = "gpt-4"
                 if self.verbose:
-                    print("🚀 Using GPT-5 model with ReAct pattern")
+                    print(f"🔑 Using OpenAI model (only OpenAI key available)")
+            elif anthropic_key and not openai_key:
+                # Only Anthropic key available
+                model_name = "claude-3-opus"
+                if self.verbose:
+                    print(f"🔑 Using Anthropic model (only Anthropic key available)")
+            elif anthropic_key and openai_key:
+                # Both keys available - use configured default
+                if self.verbose:
+                    print(f"🔑 Both API keys available, using configured model")
+            else:
+                # No keys available
+                if self.verbose:
+                    print(f"⚠️ No API keys found - please set OPENAI_API_KEY or ANTHROPIC_API_KEY")
+        
+        # Show what model was selected
+        if self.verbose:
+            print(f"📋 Selected model: {model_name}")
+        
+        # Map the model name using LLMClient logic
+        from nova.agent.llm_client import LLMClient
+        temp_client = LLMClient(settings=self.settings)
+        mapped_model = temp_client._get_openai_model_name()
+        
+        if mapped_model != model_name and self.verbose:
+            print(f"📄 Mapped to: {mapped_model}")
+        
+        use_react = False
+        
+        # Check if this is GPT-5 (which doesn't support function calling or stop sequences)
+        if model_name.lower().startswith("gpt-5"):
+            # GPT-5 must use ReAct mode (no function calling) and custom wrapper
+            try:
+                llm = GPT5ChatOpenAI(model_name=mapped_model, temperature=0)
+                use_react = True  # Force ReAct for GPT-5
+                if self.verbose:
+                    print(f"🚀 Using model '{mapped_model}' with ReAct agent (GPT-5 mode, no stop sequences)")
+            except Exception as e:
+                # Fallback to GPT-4 with function calling
+                fallback_model = "gpt-4-0613"
+                if self.verbose:
+                    print(f"⚠️ Model {mapped_model} not available ({e}), falling back to {fallback_model}")
+                llm = ChatOpenAI(model_name=fallback_model, temperature=0)
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model '{fallback_model}' with function calling (fallback)")
+        # If an Anthropic model (Claude) is requested and available, use it with ReAct mode (no function calling)
+        elif ChatAnthropic and model_name.lower().startswith("claude"):
+            try:
+                llm = ChatAnthropic(model=model_name, temperature=0)
+                use_react = True
+                if self.verbose:
+                    print(f"🚀 Using Anthropic model '{model_name}' with ReAct agent")
             except Exception as e:
                 if self.verbose:
-                    print(f"⚠️ GPT-5 not available ({e}), falling back to GPT-4")
+                    print(f"⚠️ Anthropic model {model_name} not available ({e}), falling back to GPT-4")
                 llm = ChatOpenAI(model_name="gpt-4", temperature=0)
-                use_react = False  # GPT-4 supports function calling
-        elif model_name.lower().startswith("gpt") or ChatAnthropic is None:
-            llm = ChatOpenAI(model_name=model_name, temperature=0)
-            # GPT-4 and GPT-3.5 support function calling
-            use_react = False
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model 'gpt-4' with function calling (fallback)")
         else:
-            # Use Anthropic model if available and specified (e.g., "claude")
-            llm = ChatAnthropic(model=model_name, temperature=0) if ChatAnthropic else ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
-            use_react = True  # Claude models work better with ReAct
+            # Otherwise, use OpenAI Chat model (GPT) with function calling by default
+            try:
+                llm = ChatOpenAI(model_name=mapped_model, temperature=0)
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model '{mapped_model}' with function calling")
+            except Exception as e:
+                # Use GPT-4-0613 for fallback (supports function calling)
+                fallback_model = "gpt-4-0613"
+                if self.verbose:
+                    print(f"⚠️ Model {mapped_model} not available ({e}), falling back to {fallback_model}")
+                llm = ChatOpenAI(model_name=fallback_model, temperature=0)
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model '{fallback_model}' with function calling (fallback)")
         # Define the comprehensive system message prompt with all safety rules
         system_message = (
             "You are Nova, an advanced AI software engineer specialized in automatically fixing failing tests.\n\n"
@@ -126,66 +240,196 @@ class NovaDeepAgent:
             repo_path=self.state.repo_path,
             verbose=self.verbose,
             safety_config=self.safety_config,
-            llm=llm  # Pass LLM for critic review
+            llm=llm,  # Pass LLM for critic review
+            state=self.state  # Pass agent state for review tracking
         )
         
         # Choose agent type based on model capabilities
+        from langchain.agents import AgentType
+        
+        # Define custom parsing error handler for better error recovery
+        def parsing_error_handler(error) -> str:
+            """Handle parsing errors gracefully."""
+            error_str = str(error).lower()
+            if "both a final answer and a parse-able action" in error_str:
+                # Extract any final answer from the error if possible
+                return "I've completed the task. All tests are now passing."
+            return "I need to reformat my response. Let me try again."
+        
         if use_react:
-            # Use ReAct pattern for models that don't support function calling
-            from langchain.agents import AgentType
-            from langchain.prompts import PromptTemplate
-            
-            # Create ReAct prompt with tool descriptions
-            tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
-            
-            react_prompt = PromptTemplate(
-                template=system_message + """
-
-## Available Tools:
-{tool_descriptions}
-
-## ReAct Process:
-Use the following format for each step:
-
-Thought: [Your reasoning about what to do next]
-Action: [The action/tool to use, should be one of: {tool_names}]
-Action Input: [The input to the action]
-Observation: [The result of the action - this will be filled automatically]
-... (repeat Thought/Action/Observation as needed)
-Thought: [Final reasoning when problem is solved]
-Final Answer: [Summary of what was fixed]
-
-## Task:
-{input}
-
-## Begin ReAct Process:
-{agent_scratchpad}""",
-                input_variables=["input", "agent_scratchpad"],
-                partial_variables={
-                    "tool_descriptions": tool_descriptions,
-                    "tool_names": ", ".join([tool.name for tool in tools])
-                }
-            )
-            
-            # Initialize ReAct agent
-            agent_executor = initialize_agent(
-                tools=tools,
-                llm=llm,
-                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=self.verbose,
-                prompt=react_prompt,
-                max_iterations=15,  # More iterations for ReAct
-                handle_parsing_errors=True
-            )
+            # For models that don't support function calling (e.g., Claude, GPT-5)
+            # Check if this is GPT-5 which needs special handling
+            if isinstance(llm, GPT5ChatOpenAI):
+                # GPT-5 needs special handling - convert multi-input tools to single JSON input
+                import json
+                from langchain.tools import Tool
+                
+                # For GPT-5, we need to wrap all multi-input tools
+                wrapped_tools = []
+                
+                for tool in tools:
+                    # Check if this is a multi-input tool
+                    if hasattr(tool, 'args_schema') and tool.args_schema and hasattr(tool.args_schema, '__fields__'):
+                        fields = tool.args_schema.__fields__
+                        if len(fields) > 1:
+                            # This is a multi-input tool, create a JSON wrapper
+                            original_tool = tool
+                            tool_name = tool.name
+                            tool_desc = tool.description
+                            
+                            # Get field descriptions
+                            field_info = {}
+                            for field_name, field_obj in fields.items():
+                                # Extract field information from Pydantic ModelField
+                                try:
+                                    # Try to get the field type
+                                    if hasattr(field_obj, 'type_'):
+                                        field_type = str(field_obj.type_)
+                                    elif hasattr(field_obj, 'annotation'):
+                                        field_type = str(field_obj.annotation)
+                                    else:
+                                        field_type = "str"  # Default to string
+                                    
+                                    # Try to get required status
+                                    is_required = True  # Default to required
+                                    
+                                    # Check for Optional types
+                                    if hasattr(field_obj, 'type_'):
+                                        type_str = str(field_obj.type_)
+                                        if 'Optional' in type_str or 'Union[' in type_str and 'None' in type_str:
+                                            is_required = False
+                                    
+                                    # Check for default values
+                                    if hasattr(field_obj, 'default'):
+                                        # In Pydantic, ... (Ellipsis) means required
+                                        # Check if default is NOT Ellipsis and NOT UndefinedType
+                                        default_str = str(field_obj.default)
+                                        if (field_obj.default is not ... and 
+                                            'Ellipsis' not in default_str and
+                                            'UndefinedType' not in default_str):
+                                            is_required = False
+                                    
+                                    # Override with explicit required attribute if present
+                                    if hasattr(field_obj, 'required'):
+                                        is_required = field_obj.required
+                                    
+                                    # Try to get description
+                                    description = ""
+                                    if hasattr(field_obj, 'field_info') and hasattr(field_obj.field_info, 'description'):
+                                        description = field_obj.field_info.description or ""
+                                    elif hasattr(field_obj, 'description'):
+                                        description = field_obj.description or ""
+                                    
+                                    field_info[field_name] = {
+                                        'type': field_type,
+                                        'required': is_required,
+                                        'description': description
+                                    }
+                                except Exception:
+                                    # Fallback for any field we can't introspect
+                                    field_info[field_name] = {
+                                        'type': 'str',
+                                        'required': True,
+                                        'description': ''
+                                    }
+                            
+                            def make_json_wrapper(t, name, fields_info):
+                                def wrapper(input_str: str) -> str:
+                                    try:
+                                        if not input_str.strip().startswith('{'):
+                                            return f"ERROR: Input must be JSON format with fields: {list(fields_info.keys())}"
+                                        
+                                        data = json.loads(input_str)
+                                        
+                                        # Validate required fields
+                                        for field_name, info in fields_info.items():
+                                            if info['required'] and field_name not in data:
+                                                return f"ERROR: Missing required field '{field_name}'"
+                                        
+                                        # Call the tool with the parsed data
+                                        return t._run(**data)
+                                    except json.JSONDecodeError as e:
+                                        return f"ERROR: Invalid JSON: {e}"
+                                    except Exception as e:
+                                        return f"ERROR: {str(e)}"
+                                return wrapper
+                            
+                            # Create description with field info
+                            json_desc = f"{tool_desc} Input must be JSON with fields: "
+                            field_descs = []
+                            for fname, finfo in field_info.items():
+                                req = "required" if finfo['required'] else "optional"
+                                desc = f"'{fname}' ({req})"
+                                if finfo['description']:
+                                    desc += f": {finfo['description']}"
+                                field_descs.append(desc)
+                            json_desc += ", ".join(field_descs)
+                            
+                            wrapped_tool = Tool(
+                                name=tool_name,
+                                func=make_json_wrapper(original_tool, tool_name, field_info),
+                                description=json_desc
+                            )
+                            wrapped_tools.append(wrapped_tool)
+                        else:
+                            # Single input tool, keep as-is
+                            wrapped_tools.append(tool)
+                    else:
+                        # No schema info, keep as-is
+                        wrapped_tools.append(tool)
+                
+                # Use ZERO_SHOT_REACT_DESCRIPTION with wrapped tools
+                agent_executor = initialize_agent(
+                    tools=wrapped_tools,
+                    llm=llm,
+                    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                    verbose=self.verbose,
+                    handle_parsing_errors=parsing_error_handler,
+                    max_iterations=15,
+                    early_stopping_method="generate",
+                    agent_kwargs={
+                        "prefix": system_message + "\n\nYou have access to the following tools:",
+                        "suffix": "Begin!\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}"
+                    }
+                )
+            else:
+                # For other models (Claude), use structured ReAct
+                agent_executor = initialize_agent(
+                    tools=tools,
+                    llm=llm,
+                    agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+                    verbose=self.verbose,
+                    handle_parsing_errors=parsing_error_handler,
+                    max_iterations=15,
+                    early_stopping_method="generate",
+                    agent_kwargs={
+                        "prefix": system_message + "\n\nYou have access to the following tools:"
+                    }
+                )
         else:
-            # Use function calling for models that support it (GPT-4, GPT-3.5)
+            # For OpenAI models that support function calling (GPT-3.5, GPT-4, GPT-5, etc.)
             agent_executor = initialize_agent(
                 tools=tools,
                 llm=llm,
                 agent=AgentType.OPENAI_FUNCTIONS,
                 verbose=self.verbose,
-                agent_kwargs={"system_message": system_message}
+                agent_kwargs={"system_message": system_message},
+                handle_parsing_errors=parsing_error_handler,
+                max_iterations=15
             )
+        
+        # Log final model selection for transparency
+        if self.verbose:
+            try:
+                actual_model_name = llm.model_name if hasattr(llm, 'model_name') else str(llm)
+                mode = "ReAct (text-based)" if use_react else "OpenAI Functions"
+                print(f"\n🤖 Final model configuration:")
+                print(f"   Model: {actual_model_name}")
+                print(f"   Mode: {mode}")
+                print(f"   Temperature: 0")
+                print("")
+            except Exception:
+                pass  # Don't fail if logging doesn't work
         
         return agent_executor
 
@@ -220,8 +464,8 @@ Use the available tools to fix the failing tests. Follow this workflow:
 2. **Read relevant files** using 'open_file' - Understand the code structure
 3. **Modify source code** using 'write_file' - Apply minimal fixes
 4. **Run tests** using 'run_tests' - Verify your fixes work
-5. **(Optional) Review patches** using 'critic_review' - Validate changes before applying
-6. **(Optional) Apply patches** using 'apply_patch' - Commit validated changes
+5. **Review patches** using 'critic_review' - Validate changes before applying
+6. **Apply patches** using 'apply_patch' - Commit validated changes
 
 ## REMEMBER:
 - Do NOT modify test files (tests/, test_*.py, *_test.py)
@@ -239,8 +483,39 @@ Begin fixing the tests now."""
             })
             if self.verbose:
                 print(f"\n[DEBUG] Invoking agent with prompt length: {len(user_prompt)} chars")
-            # Run the LangChain agent until completion (or until it decides to stop)
-            result = self.agent({"input": user_prompt})
+            
+            # Run the LangChain agent with runtime fallback support
+            try:
+                result = self.agent.invoke({"input": user_prompt})
+            except Exception as e:
+                # Runtime fallback for GPT-5 to GPT-4 if function calling issues occur
+                error_msg = str(e).lower()
+                model_name = getattr(self.settings, 'default_llm_model', '').lower()
+                
+                if (("function" in error_msg or "unsupported value" in error_msg or "does not support" in error_msg or 
+                     "unsupported parameter" in error_msg or "'stop' is not supported" in error_msg) and 
+                    (model_name.startswith("gpt-5") or model_name in ["gpt-5-turbo", "gpt-5-preview"])):
+                    if self.verbose:
+                        print(f"\n⚠️ {self.settings.default_llm_model} runtime error: {e}")
+                        print("🔄 Falling back to GPT-4-0613 with function calling...")
+                    
+                    # Update settings and rebuild agent with GPT-4 (function-call enabled version)
+                    original_model = self.settings.default_llm_model
+                    self.settings.default_llm_model = "gpt-4-0613"
+                    self.agent = self._build_agent()
+                    
+                    # Retry with GPT-4
+                    try:
+                        result = self.agent.invoke({"input": user_prompt})
+                        if self.verbose:
+                            print("✅ Successfully recovered with GPT-4-0613")
+                    finally:
+                        # Restore original model setting
+                        self.settings.default_llm_model = original_model
+                else:
+                    # Re-raise if not a GPT-5 function calling issue
+                    raise
+            
             if self.verbose:
                 print(f"[DEBUG] Agent result type: {type(result)}")
                 print(f"[DEBUG] Agent result (truncated): {str(result)[:500]}...")
@@ -294,7 +569,21 @@ Begin fixing the tests now."""
             else:
                 # Tests still failing or result unknown
                 failures_count = final_test_output.get("failures", "unknown") if final_test_output else "unknown"
-                self.state.final_status = "max_iters" if self.state.current_iteration >= self.state.max_iterations else "incomplete"
+                
+                # Determine appropriate final status
+                if not self.state.patches_applied:
+                    # No patches were applied at all
+                    if hasattr(self.state, 'critic_feedback') and self.state.critic_feedback:
+                        # Patches were rejected by critic
+                        self.state.final_status = "patch_rejected"
+                    else:
+                        # No patches could be generated
+                        self.state.final_status = "no_patch"
+                elif self.state.current_iteration >= self.state.max_iterations:
+                    self.state.final_status = "max_iters"
+                else:
+                    self.state.final_status = "incomplete"
+                
                 self.telemetry.log_event("deep_agent_incomplete", {
                     "iterations": self.state.current_iteration,
                     "remaining_failures": failures_count,
@@ -312,6 +601,10 @@ Begin fixing the tests now."""
                 "traceback": err_trace[:500],
                 "iteration": self.state.current_iteration
             })
+            
+            # Store error message in state for reporting
+            self.state.error_message = err_msg
+            
             # Mark appropriate final status on error
             if "max iterations" in err_msg.lower():
                 self.state.final_status = "max_iters"

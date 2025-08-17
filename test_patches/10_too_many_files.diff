@@ -1,0 +1,66 @@
+--- a/src/file1.py
++++ b/src/file1.py
+@@ -1,2 +1,3 @@
+ def func1():
++    # Modified
+     pass
+--- a/src/file2.py
++++ b/src/file2.py
+@@ -1,2 +1,3 @@
+ def func2():
++    # Modified
+     pass
+--- a/src/file3.py
++++ b/src/file3.py
+@@ -1,2 +1,3 @@
+ def func3():
++    # Modified
+     pass
+--- a/src/file4.py
++++ b/src/file4.py
+@@ -1,2 +1,3 @@
+ def func4():
++    # Modified
+     pass
+--- a/src/file5.py
++++ b/src/file5.py
+@@ -1,2 +1,3 @@
+ def func5():
++    # Modified
+    pass
+--- a/src/file6.py
++++ b/src/file6.py
+@@ -1,2 +1,3 @@
+ def func6():
++    # Modified
+     pass
+--- a/src/file7.py
++++ b/src/file7.py
+@@ -1,2 +1,3 @@
+ def func7():
++    # Modified
+     pass
+--- a/src/file8.py
++++ b/src/file8.py
+@@ -1,2 +1,3 @@
+ def func8():
++    # Modified
+     pass
+--- a/src/file9.py
++++ b/src/file9.py
+@@ -1,2 +1,3 @@
+ def func9():
++    # Modified
+     pass
+--- a/src/file10.py
++++ b/src/file10.py
+@@ -1,2 +1,3 @@
+ def func10():
++    # Modified
+     pass
+--- a/src/file11.py
++++ b/src/file11.py
+@@ -1,2 +1,3 @@
+ def func11():
++    # Modified (This makes it 11 files, exceeding the limit of 10)
+     pass

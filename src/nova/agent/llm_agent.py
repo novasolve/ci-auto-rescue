@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 from nova.agent.llm_client import LLMClient
+from nova.config import NovaSettings
 
 
 class LLMAgent:
@@ -31,7 +32,10 @@ class LLMAgent:
         """
         self.repo_path = repo_path
         self.model = model
-        self.llm_client = LLMClient(model=model)
+        # Create settings with the specified model
+        settings = NovaSettings()
+        settings.default_llm_model = model
+        self.llm_client = LLMClient(settings=settings)
         self.conversation_history = []
     
     def generate_plan(self, failing_tests: str, error_details: str) -> str:
@@ -61,7 +65,7 @@ Create a step-by-step plan to fix these test failures. Be specific about:
 
 Return only the plan, no code."""
         
-        response = self.llm_client.generate(prompt, max_tokens=1000)
+        response = self.llm_client.complete(system="You are a software engineer expert at fixing failing tests.", user=prompt, max_tokens=1000)
         self.conversation_history.append({"role": "system", "content": prompt})
         self.conversation_history.append({"role": "assistant", "content": response})
         return response
@@ -94,7 +98,7 @@ Only modify source code files, not test files.
 
 Return only the patch in diff format, starting with the diff headers."""
         
-        response = self.llm_client.generate(prompt, max_tokens=2000)
+        response = self.llm_client.complete(system="You are a software engineer expert at generating patches to fix failing tests.", user=prompt, max_tokens=2000)
         
         # Extract patch if wrapped in code blocks
         if "```diff" in response:
@@ -139,7 +143,7 @@ Check for:
 Respond with a JSON object:
 {{"approved": true/false, "reason": "explanation"}}"""
         
-        response = self.llm_client.generate(prompt, max_tokens=500)
+        response = self.llm_client.complete(system="You are a code review expert that validates patches for correctness and safety.", user=prompt, max_tokens=500)
         
         try:
             # Try to parse JSON response

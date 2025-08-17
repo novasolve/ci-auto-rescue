@@ -1,0 +1,42 @@
+--- a/src/nova/agent/deep_agent.py
++++ b/src/nova/agent/deep_agent.py
+@@ -129,16 +129,28 @@ class DeepAgent:
+             llm=llm  # Pass LLM for critic review
+         )
+         
+-        # Always use OpenAI function-calling agent for reliable multi-input tool support
++        # Choose agent type based on model capabilities
+         from langchain.agents import AgentType
+         
+-        agent_executor = initialize_agent(
+-            tools=tools,
+-            llm=llm,
+-            agent=AgentType.OPENAI_FUNCTIONS,
+-            verbose=self.verbose,
+-            agent_kwargs={"system_message": system_message},
+-            handle_parsing_errors=True,
+-            max_iterations=15
+-        )
++        if use_react:
++            # Use ReAct pattern for models that don't support function calling (GPT-5, Claude)
++            agent_executor = initialize_agent(
++                tools=tools,
++                llm=llm,
++                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
++                verbose=self.verbose,
++                handle_parsing_errors=True,
++                max_iterations=15
++            )
++        else:
++            # Use function-calling agent for models that support it (GPT-4, GPT-3.5)
++            agent_executor = initialize_agent(
++                tools=tools,
++                llm=llm,
++                agent=AgentType.OPENAI_FUNCTIONS,
++                verbose=self.verbose,
++                agent_kwargs={"system_message": system_message},
++                handle_parsing_errors=True,
++                max_iterations=15
++            )
+         
+         return agent_executor

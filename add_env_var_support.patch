@@ -1,0 +1,21 @@
+--- a/src/nova/cli.py
++++ b/src/nova/cli.py
+@@ -213,10 +213,18 @@ def fix(
+         # Set up Ctrl+C signal handler for clean abort
+         git_manager.setup_signal_handler()
+ 
+         # Initialize settings and telemetry
+         settings = NovaSettings()
++        
++        # Support environment variables for model selection
++        env_model = os.getenv("NOVA_LLM_MODEL") or os.getenv("NOVA_MODEL")
++        if env_model:
++            settings.default_llm_model = env_model
++            console.print(f"[dim]Using model from environment: {env_model}[/dim]")
++        
+         if config_data and config_data.model:
+             settings.default_llm_model = config_data.model
++            
+         telemetry = JSONLLogger()
+         telemetry.log_event("run_start", {
+             "repo": str(repo_path),

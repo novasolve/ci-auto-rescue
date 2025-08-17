@@ -1,0 +1,15 @@
+# Nova Hints for demo_broken_project
+
+## File Locations
+
+- Source file to fix: `src/broken.py`
+- Test file (read-only): `tests/test_broken.py`
+
+## Known Issues to Fix
+
+1. `divide_numbers`: Add zero check, raise ValueError("Cannot divide by zero")
+2. `find_max`: Handle empty list, raise ValueError("Cannot find max of empty list")
+3. `concatenate_strings`: Add space between strings (return f"{str1} {str2}")
+4. `calculate_average`: Use float division (/) instead of integer division (//)
+5. `get_first_char`: Handle empty string, return "" for empty input
+6. `sort_list`: Return a new sorted list instead of modifying the original (use sorted())

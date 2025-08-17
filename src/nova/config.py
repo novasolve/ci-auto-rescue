@@ -10,6 +10,7 @@ import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
+from dotenv import load_dotenv
 
 
 @dataclass
@@ -17,7 +18,7 @@ class NovaSettings:
     """Main settings for Nova CI-Rescue."""
     
     # LLM Configuration
-    default_llm_model: str = "gpt-5"  # Updated to GPT-5 as default
+    default_llm_model: str = field(default_factory=lambda: os.getenv("NOVA_MODEL") or os.getenv("NOVA_DEFAULT_LLM_MODEL") or os.getenv("MODEL") or "gpt-4")
     temperature: float = 0.1
     max_tokens: Optional[int] = None
     
@@ -49,6 +50,60 @@ class NovaSettings:
     telemetry_dir: Path = field(default_factory=lambda: Path(".nova/telemetry"))
     
     @classmethod
+    def from_env(cls) -> "NovaSettings":
+        """
+        Load settings from environment variables and .env file.
+        
+        Automatically selects appropriate model based on available API keys.
+        """
+        # Load .env file if present
+        load_dotenv()
+        
+        # Helper function to get env var
+        def _get(key: str, default: Optional[str] = None) -> Optional[str]:
+            value = os.environ.get(key, default)
+            return value if value else default
+        
+        # Check for model override from environment
+        default_model = os.environ.get("NOVA_MODEL") or os.environ.get("NOVA_DEFAULT_LLM_MODEL") or os.environ.get("MODEL")
+        
+        # If no model specified, use smart defaults based on available API keys
+        if not default_model:
+            openai_key = os.environ.get("OPENAI_API_KEY", "")
+            anthro_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            
+            # Check if keys are actually present and not empty
+            has_openai = bool(openai_key and openai_key.strip())
+            has_anthropic = bool(anthro_key and anthro_key.strip())
+            
+            if not has_openai and has_anthropic:
+                # Only Anthropic key available - default to Claude
+                default_model = "claude-3-opus"
+            elif has_openai and not has_anthropic:
+                # Only OpenAI key available - default to GPT
+                default_model = "gpt-4"
+            else:
+                # Both keys available or neither - default to GPT
+                default_model = "gpt-4"
+        
+        # Create settings instance with environment values
+        return cls(
+            openai_api_key=_get("OPENAI_API_KEY"),
+            anthropic_api_key=_get("ANTHROPIC_API_KEY"),
+            default_llm_model=default_model,
+            temperature=float(_get("NOVA_TEMPERATURE", "0.1")),
+            max_iterations=int(_get("NOVA_MAX_ITERATIONS", "6")),
+            timeout_seconds=int(_get("NOVA_TIMEOUT", "1200")),
+            verbose=_get("NOVA_VERBOSE", "false").lower() in ["true", "1", "yes"],
+            max_patch_lines=int(_get("NOVA_MAX_PATCH_LINES", "500")),
+            max_affected_files=int(_get("NOVA_MAX_AFFECTED_FILES", "10")),
+            max_file_size=int(_get("NOVA_MAX_FILE_SIZE", "100000")),
+            use_docker=_get("NOVA_USE_DOCKER", "true").lower() in ["true", "1", "yes"],
+            docker_image=_get("NOVA_DOCKER_IMAGE", "nova-ci-rescue-sandbox:latest"),
+            telemetry_enabled=_get("NOVA_TELEMETRY", "true").lower() in ["true", "1", "yes"],
+        )
+    
+    @classmethod
     def from_yaml(cls, path: Path) -> "NovaSettings":
         """Load settings from YAML file."""
         with open(path, "r") as f:
@@ -59,6 +114,10 @@ class NovaSettings:
         
         # Update with YAML values
         if data:
+            # Handle 'model' as an alias for 'default_llm_model'
+            if 'model' in data and 'default_llm_model' not in data:
+                data['default_llm_model'] = data.pop('model')
+            
             for key, value in data.items():
                 if hasattr(settings, key):
                     setattr(settings, key, value)
@@ -72,8 +131,18 @@ class NovaSettings:
                 data = yaml.safe_load(f)
             
             if data:
+                # Handle 'model' as an alias for 'default_llm_model'
+                if 'model' in data and 'default_llm_model' not in data:
+                    data['default_llm_model'] = data.pop('model')
+                
+                # Save current model if it was set by environment variable
+                env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_DEFAULT_LLM_MODEL") or os.getenv("MODEL")
+                
                 for key, value in data.items():
                     if hasattr(self, key) and value is not None:
+                        # Don't override model if environment variable is set
+                        if key == 'default_llm_model' and env_model:
+                            continue
                         setattr(self, key, value)
 
 
@@ -160,14 +229,32 @@ def get_settings(config_file: Optional[Path] = None) -> NovaSettings:
     
     # Check for default config locations
     if not config_file:
-        for possible_path in [
-            Path(".nova.yml"),
-            Path(".nova.yaml"),
-            Path("nova.config.yml"),
-            Path("nova.config.yaml")
-        ]:
-            if possible_path.exists():
-                config_file = possible_path
+        # Check current directory and parent directories up to 3 levels
+        search_dirs = [Path.cwd()]
+        current = Path.cwd()
+        for _ in range(3):
+            if current.parent != current:
+                current = current.parent
+                search_dirs.append(current)
+        
+        # Also check the Nova package directory
+        nova_root = Path(__file__).parent.parent.parent
+        if nova_root.exists():
+            search_dirs.append(nova_root)
+        
+        # Search for config files in all directories
+        for search_dir in search_dirs:
+            for config_name in [
+                ".nova.yml",
+                ".nova.yaml", 
+                "nova.config.yml",
+                "nova.config.yaml"
+            ]:
+                possible_path = search_dir / config_name
+                if possible_path.exists():
+                    config_file = possible_path
+                    break
+            if config_file:
                 break
     
     # Load from config file if found

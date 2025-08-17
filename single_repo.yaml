@@ -1,0 +1,3 @@
+runs:
+  - name: "Math Operations Test"
+    path: "./examples/demos/demo_math_ops"

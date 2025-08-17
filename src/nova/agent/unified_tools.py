@@ -68,15 +68,14 @@ BLOCKED_PATTERNS = [
 
 
 # --- Function-based Tools (Simple Operations) ---
+# These remain as functions for backward compatibility, but are wrapped in classes below
 
-@tool("plan_todo", return_direct=False)
 def plan_todo(todo: str) -> str:
     """Plan next steps. The agent uses this to outline a TODO list or strategy."""
     # This tool is a no-op that just records the plan in the agent's log.
     return f"Plan noted: {todo}"
 
 
-@tool("open_file", return_direct=False)
 def open_file(path: str) -> str:
     """Read the contents of a file, with enhanced safety checks."""
     import fnmatch
@@ -112,7 +111,6 @@ def open_file(path: str) -> str:
         return f"ERROR: Could not read file {path}: {e}"
 
 
-@tool("write_file", return_direct=False)
 def write_file(path: str, new_content: str) -> str:
     """Overwrite a file with the given content, with enhanced safety checks."""
     import fnmatch
@@ -147,6 +145,118 @@ def write_file(path: str, new_content: str) -> str:
         return f"ERROR: Permission denied: {path}"
     except Exception as e:
         return f"ERROR: Could not write to file {path}: {e}"
+
+
+# --- Pydantic-based Tool Classes for Simple Tools ---
+
+class PlanTodoInput(BaseModel):
+    """Input schema for plan_todo tool."""
+    todo: str = Field(..., description="The plan or TODO description to record")
+
+
+class PlanTodoTool(BaseTool):
+    """Tool to plan next steps by outlining a TODO list or strategy."""
+    name: str = "plan_todo"
+    description: str = "Plan next steps by outlining a TODO list or strategy."
+    args_schema: Type[BaseModel] = PlanTodoInput
+    
+    def _run(self, todo: str) -> str:
+        """Execute the plan_todo function."""
+        # No-op tool: just logs the plan
+        return f"Plan noted: {todo}"
+    
+    async def _arun(self, todo: str) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("PlanTodoTool does not support async execution")
+
+
+class OpenFileInput(BaseModel):
+    """Input schema for open_file tool."""
+    path: str = Field(..., description="Path of the file to read from the repository")
+
+
+class OpenFileTool(BaseTool):
+    """Tool to read the contents of a file."""
+    name: str = "open_file"
+    description: str = "Read the contents of a file from the repository (with safety checks)."
+    args_schema: Type[BaseModel] = OpenFileInput
+    
+    def _run(self, path: str) -> str:
+        """Execute the open_file function with safety checks."""
+        # Same logic as the original open_file function, with safety guardrails
+        import fnmatch
+        import os
+        p = Path(path)
+        path_str = str(p)
+        for pattern in BLOCKED_PATTERNS:
+            if ('*' in pattern or '?' in pattern):
+                if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                    return f"ERROR: Access to {path} is blocked by policy (pattern: {pattern})"
+            else:
+                if pattern in path_str or p.name == pattern:
+                    return f"ERROR: Access to {path} is blocked by policy"
+        # Block any test files explicitly
+        if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
+            return f"ERROR: Access to test file {path} is blocked by policy"
+        try:
+            content = p.read_text()
+            if len(content) > 50000:  # 50KB limit
+                content = content[:50000] + "\n... (truncated)"
+            return content
+        except FileNotFoundError:
+            return f"ERROR: File not found: {path}"
+        except PermissionError:
+            return f"ERROR: Permission denied: {path}"
+        except Exception as e:
+            return f"ERROR: Could not read file {path}: {e}"
+    
+    async def _arun(self, path: str) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("OpenFileTool does not support async execution")
+
+
+class WriteFileInput(BaseModel):
+    """Input schema for write_file tool."""
+    path: str = Field(..., description="Path of the file to write/overwrite")
+    new_content: str = Field(..., description="The new content to write into the file")
+
+
+class WriteFileTool(BaseTool):
+    """Tool to write or overwrite a file with new content."""
+    name: str = "write_file"
+    description: str = "Write or overwrite a file with new content (with safety checks)."
+    args_schema: Type[BaseModel] = WriteFileInput
+    
+    def _run(self, path: str, new_content: str) -> str:
+        """Execute the write_file function with safety checks."""
+        import fnmatch
+        import os
+        p = Path(path)
+        path_str = str(p)
+        for pattern in BLOCKED_PATTERNS:
+            if ('*' in pattern or '?' in pattern):
+                if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                    return f"ERROR: Modification of {path} is not allowed (pattern: {pattern})"
+            else:
+                if pattern in path_str or p.name == pattern:
+                    return f"ERROR: Modification of {path} is not allowed"
+        # Block any test files explicitly
+        if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
+            return f"ERROR: Modification of test file {path} is not allowed"
+        if len(new_content) > 100000:  # 100KB write limit
+            return f"ERROR: Content too large ({len(new_content)} bytes). Max allowed: 100000 bytes"
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(new_content)
+            return f"SUCCESS: File {path} updated successfully"
+        except PermissionError:
+            return f"ERROR: Permission denied: {path}"
+        except Exception as e:
+            return f"ERROR: Could not write to file {path}: {e}"
+    
+    async def _arun(self, path: str, new_content: str) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("WriteFileTool does not support async execution")
 
 
 # --- Class-based Tools (Complex Operations) ---
@@ -226,6 +336,12 @@ class RunTestsTool(BaseTool):
         
         # If Docker failed, fall back to local TestRunner
         if docker_error:
+            # Warn the user that we are falling back to local execution (no isolation)
+            try:
+                from rich.console import Console
+                Console().print("[bold yellow]⚠️ Sandbox unavailable – running tests without isolation.[/bold yellow]")
+            except ImportError:
+                print("⚠️ Sandbox unavailable – running tests without isolation.")
             if self.verbose:
                 print(f"Docker execution failed: {docker_error}. Falling back to local test run.")
             
@@ -397,6 +513,45 @@ class ApplyPatchTool(BaseTool):
                 print(f"Safety check failed: {safe_msg}")
             return f"FAILED: Safety violation – {safe_msg}"
         
+        # 1.5. Critic review check (enforce review before applying)
+        # Check if we have state-based review tracking
+        if self.state and hasattr(self.state, 'last_review_approved'):
+            # Check if this exact patch was already reviewed and approved
+            if hasattr(self.state, 'last_reviewed_patch') and self.state.last_reviewed_patch:
+                normalized_input = '\n'.join(line.rstrip() for line in patch_text.strip().split('\n'))
+                normalized_reviewed = '\n'.join(line.rstrip() for line in self.state.last_reviewed_patch.strip().split('\n'))
+                
+                if normalized_input == normalized_reviewed and self.state.last_review_approved:
+                    # This patch was already reviewed and approved, proceed
+                    if self.verbose:
+                        print("✓ Patch was already reviewed and approved")
+                else:
+                    # Patch not reviewed or different from reviewed patch - run critic now
+                    if self.verbose:
+                        print("Running critic review on patch before applying...")
+                    critic_tool = CriticReviewTool(
+                        verbose=self.verbose, 
+                        llm=getattr(self, 'llm', None),
+                        state=self.state
+                    )
+                    review_result = critic_tool._run(patch_text)
+                    if review_result.startswith("REJECTED"):
+                        reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
+                        if self.verbose:
+                            print(f"Critic rejected patch: {reason}")
+                        return f"FAILED: Patch rejected by critic - {reason}"
+        else:
+            # No state tracking available - run critic review inline
+            if self.verbose:
+                print("Running critic review on patch...")
+            critic_tool = CriticReviewTool(verbose=self.verbose, llm=getattr(self, 'llm', None))
+            review_result = critic_tool._run(patch_text)
+            if review_result.startswith("REJECTED"):
+                reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
+                if self.verbose:
+                    print(f"Critic rejected patch: {reason}")
+                return f"FAILED: Patch rejected by critic - {reason}"
+        
         # 2. Preflight check: ensure patch applies cleanly
         tmp_file = None
         try:
@@ -420,6 +575,9 @@ class ApplyPatchTool(BaseTool):
                 # Git apply --check failed, patch does not apply
                 if self.verbose:
                     print(f"Patch preflight failed: {preflight.stderr}")
+                # Update state to indicate patch error
+                if self.state:
+                    self.state.final_status = "patch_error"
                 return "FAILED: Patch could not be applied (context mismatch)."
             
             # 3. Apply patch
@@ -431,6 +589,9 @@ class ApplyPatchTool(BaseTool):
             )
             
             if apply_proc.returncode != 0:
+                # Update state to indicate patch error
+                if self.state:
+                    self.state.final_status = "patch_error"
                 return f"FAILED: Could not apply patch: {apply_proc.stderr}"
             
             # 4. Commit changes
@@ -441,6 +602,15 @@ class ApplyPatchTool(BaseTool):
                 capture_output=True,
                 text=True
             )
+            
+            # 5. Success! Update state to clear the review
+            if self.state:
+                self.state.last_review_approved = False  # Reset for next patch
+                self.state.last_reviewed_patch = None
+                self.state.pending_patch = None
+                # Add to patches applied list
+                if hasattr(self.state, 'patches_applied'):
+                    self.state.patches_applied.append(patch_text)
             
             if self.verbose:
                 print("Patch applied and committed successfully")
@@ -488,6 +658,7 @@ class CriticReviewTool(BaseTool):
     
     verbose: bool = Field(default=False)
     llm: Optional[Any] = Field(default=None)
+    state: Optional[Any] = Field(default=None)  # Agent state for tracking reviews
     
     # Comprehensive safety patterns for patch review
     FORBIDDEN_PATTERNS: ClassVar[List[str]] = [
@@ -579,10 +750,14 @@ class CriticReviewTool(BaseTool):
         r"crypto.*mine",
     ]
     
-    def __init__(self, verbose: bool = False, llm: Optional[Any] = None, **kwargs):
-        """Initialize with optional LLM for semantic review."""
+    def __init__(self, verbose: bool = False, llm: Optional[Any] = None, state: Optional[Any] = None, **kwargs):
+        """Initialize with optional LLM for semantic review and agent state."""
         if verbose is not False:
             kwargs['verbose'] = verbose
+        
+        # Store agent state for tracking reviews
+        if state is not None:
+            kwargs['state'] = state
         
         # Initialize LLM if not provided and API key is available
         if llm is not None:
@@ -595,7 +770,7 @@ class CriticReviewTool(BaseTool):
                     from langchain_openai import ChatOpenAI
                 except ImportError:
                     from langchain.chat_models import ChatOpenAI
-                kwargs['llm'] = ChatOpenAI(model="gpt-4", temperature=0.1)
+                kwargs['llm'] = ChatOpenAI(model_name="gpt-4", temperature=0.1)
             else:
                 # No LLM for critic review in mock mode
                 kwargs['llm'] = None
@@ -735,11 +910,24 @@ Respond with JSON: {"approved": true/false, "reason": "brief explanation"}"""
         safe, safety_reason = self._check_safety(patch_diff)
         
         if not safe:
+            # Update state to indicate rejection
+            if self.state:
+                self.state.last_review_approved = False
+                self.state.last_reviewed_patch = patch_diff
+                self.state.critic_feedback = safety_reason
             return f"REJECTED: {safety_reason}"
         
         # Then, run LLM review if available
         if self.llm:
             approved, llm_reason = self._llm_review(patch_diff, failing_tests)
+            
+            # Update state based on review result
+            if self.state:
+                self.state.last_review_approved = approved
+                self.state.last_reviewed_patch = patch_diff
+                self.state.pending_patch = patch_diff if approved else None
+                if not approved:
+                    self.state.critic_feedback = llm_reason
             
             if approved:
                 return f"APPROVED: {llm_reason}"
@@ -747,6 +935,10 @@ Respond with JSON: {"approved": true/false, "reason": "brief explanation"}"""
                 return f"REJECTED: {llm_reason}"
         else:
             # If no LLM, approve based on safety checks alone
+            if self.state:
+                self.state.last_review_approved = True
+                self.state.last_reviewed_patch = patch_diff
+                self.state.pending_patch = patch_diff
             return f"APPROVED: {safety_reason}"
     
     async def _arun(self, patch_diff: str, failing_tests: Optional[str] = None) -> str:
@@ -760,7 +952,8 @@ def create_default_tools(
     repo_path: Optional[Path] = None,
     verbose: bool = False,
     safety_config: Optional[SafetyConfig] = None,
-    llm: Optional[Any] = None
+    llm: Optional[Any] = None,
+    state: Optional[Any] = None
 ) -> List[BaseTool]:
     """
     Create the default set of tools for the Deep Agent (v1.1).
@@ -784,27 +977,10 @@ def create_default_tools(
     """
     tools = []
     
-    # Add function-based tools (converted to Tool instances for consistency)
-    tools.append(Tool(
-        name="plan_todo",
-        func=plan_todo,
-        description="Plan next steps. Use this to outline a TODO list or strategy before making changes.",
-        return_direct=False  # Allow agent to continue after planning
-    ))
-    
-    tools.append(Tool(
-        name="open_file",
-        func=open_file,
-        description="Read the contents of a file from the repository. Provide the file path as a string.",
-        return_direct=False  # Allow agent to process file contents
-    ))
-    
-    tools.append(Tool(
-        name="write_file",
-        func=write_file,
-        description="Write or overwrite a file with new content. Provide path and new_content as arguments.",
-        return_direct=False  # Allow agent to continue after writing
-    ))
+    # Add tools with defined schemas for consistent function calling
+    tools.append(PlanTodoTool())
+    tools.append(OpenFileTool())
+    tools.append(WriteFileTool())
     
     # Add class-based tools
     tools.append(RunTestsTool(
@@ -815,12 +991,14 @@ def create_default_tools(
     tools.append(ApplyPatchTool(
         repo_path=repo_path,
         safety_config=safety_config,
-        verbose=verbose
+        verbose=verbose,
+        state=state
     ))
     
     tools.append(CriticReviewTool(
         verbose=verbose,
-        llm=llm
+        llm=llm,
+        state=state
     ))
     
     return tools

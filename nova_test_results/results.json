@@ -1,0 +1,17 @@
+[
+  {
+    "all_tests_passed": false,
+    "iterations": 0,
+    "patches_applied": 0,
+    "error_type": null,
+    "exit_code": 1,
+    "elapsed_time": 1.213198184967041,
+    "initial_failures": 3,
+    "final_failures": 3,
+    "tests_fixed": 0,
+    "name": "Math Operations Test",
+    "description": "",
+    "difficulty": "unknown",
+    "expected_failures": 0
+  }
+]

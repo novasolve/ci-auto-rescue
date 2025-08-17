@@ -216,13 +216,18 @@ def fix(
         settings = NovaSettings()
         
         # Check for model configuration in order of precedence:
-        # 1. Config file
+        # 1. Config file (supports both 'model' and 'default_llm_model')
         # 2. Environment variable
         # 3. Default from settings
-        if config_data and config_data.model:
-            settings.default_llm_model = config_data.model
-        else:
-            # Check environment variables for model configuration
+        if config_data:
+            # Support both 'model' and 'default_llm_model' fields
+            if hasattr(config_data, 'model') and config_data.model:
+                settings.default_llm_model = config_data.model
+            elif hasattr(config_data, 'default_llm_model') and config_data.default_llm_model:
+                settings.default_llm_model = config_data.default_llm_model
+        
+        # Check environment variables if no config file setting
+        if not (config_data and (hasattr(config_data, 'model') or hasattr(config_data, 'default_llm_model'))):
             import os
             env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_LLM_MODEL") or os.getenv("MODEL")
             if env_model:

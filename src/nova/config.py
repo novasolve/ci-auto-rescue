@@ -59,6 +59,10 @@ class NovaSettings:
         
         # Update with YAML values
         if data:
+            # Handle 'model' as an alias for 'default_llm_model'
+            if 'model' in data and 'default_llm_model' not in data:
+                data['default_llm_model'] = data.pop('model')
+            
             for key, value in data.items():
                 if hasattr(settings, key):
                     setattr(settings, key, value)
@@ -72,6 +76,10 @@ class NovaSettings:
                 data = yaml.safe_load(f)
             
             if data:
+                # Handle 'model' as an alias for 'default_llm_model'
+                if 'model' in data and 'default_llm_model' not in data:
+                    data['default_llm_model'] = data.pop('model')
+                
                 for key, value in data.items():
                     if hasattr(self, key) and value is not None:
                         setattr(self, key, value)

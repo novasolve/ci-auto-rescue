@@ -31,6 +31,41 @@ from nova.config import get_settings
 # Import unified tools factory
 from nova.agent.unified_tools import create_default_tools
 
+# Model capability registry for cleaner model handling
+MODEL_CAPABILITIES = {
+    "gpt-4": {"function_calling": True, "max_tokens": 8192, "fallback": None},
+    "gpt-4-turbo": {"function_calling": True, "max_tokens": 128000, "fallback": "gpt-4"},
+    "gpt-3.5-turbo": {"function_calling": True, "max_tokens": 4096, "fallback": None},
+    "gpt-5": {"function_calling": False, "max_tokens": 16384, "fallback": "gpt-4"},
+    "gpt-5-turbo": {"function_calling": False, "max_tokens": 32768, "fallback": "gpt-4"},
+    "gpt-5-preview": {"function_calling": False, "max_tokens": 16384, "fallback": "gpt-4"},
+    "claude-3-opus": {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"},
+    "claude-3-sonnet": {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"},
+}
+
+
+def get_model_capabilities(model_name: str) -> dict:
+    """Get capabilities for a model, with fallback to defaults."""
+    # Check exact match first
+    if model_name in MODEL_CAPABILITIES:
+        return MODEL_CAPABILITIES[model_name]
+    
+    # Check for GPT-5 variants
+    if model_name.lower().startswith("gpt-5"):
+        return {"function_calling": False, "max_tokens": 16384, "fallback": "gpt-4"}
+    
+    # Check for GPT-4 variants
+    if model_name.lower().startswith("gpt-4"):
+        return {"function_calling": True, "max_tokens": 8192, "fallback": None}
+    
+    # Check for Claude variants
+    if "claude" in model_name.lower():
+        return {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"}
+    
+    # Default to GPT-4-like capabilities
+    return {"function_calling": True, "max_tokens": 8192, "fallback": None}
+
+
 class NovaDeepAgent:
     """
     Orchestrator agent that uses LangChain's AgentExecutor to fix failing tests with minimal changes.
@@ -66,30 +101,35 @@ class NovaDeepAgent:
 
     def _build_agent(self) -> AgentExecutor:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
-        # Choose LLM based on configuration (supports OpenAI GPT or Anthropic Claude)
-        model_name = getattr(self.settings, 'default_llm_model', 'gpt-5')  # Default to GPT-5
-        use_react = False  # Track if we should use ReAct pattern
+        # Get model name and capabilities
+        model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
+        capabilities = get_model_capabilities(model_name)
+        use_react = not capabilities["function_calling"]
         
-        # Handle GPT-5 specifically with ReAct pattern support
-        if model_name == "gpt-5":
-            try:
-                llm = ChatOpenAI(model_name="gpt-5", temperature=0)
-                use_react = True  # GPT-5 may not support function calling, use ReAct
-                if self.verbose:
-                    print("🚀 Using GPT-5 model with ReAct pattern")
-            except Exception as e:
-                if self.verbose:
-                    print(f"⚠️ GPT-5 not available ({e}), falling back to GPT-4")
-                llm = ChatOpenAI(model_name="gpt-4", temperature=0)
-                use_react = False  # GPT-4 supports function calling
-        elif model_name.lower().startswith("gpt") or ChatAnthropic is None:
-            llm = ChatOpenAI(model_name=model_name, temperature=0)
-            # GPT-4 and GPT-3.5 support function calling
-            use_react = False
-        else:
-            # Use Anthropic model if available and specified (e.g., "claude")
-            llm = ChatAnthropic(model=model_name, temperature=0) if ChatAnthropic else ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
-            use_react = True  # Claude models work better with ReAct
+        # Try to initialize the model with fallback support
+        try:
+            if model_name.lower().startswith("claude") and ChatAnthropic:
+                llm = ChatAnthropic(model=model_name, temperature=0)
+            else:
+                llm = ChatOpenAI(model_name=model_name, temperature=0)
+            
+            if self.verbose:
+                if use_react:
+                    print(f"🚀 Using {model_name} model with ReAct pattern")
+                else:
+                    print(f"🚀 Using {model_name} model with function calling")
+                    
+        except Exception as e:
+            # Fallback to configured fallback model
+            fallback_model = capabilities.get("fallback", "gpt-4")
+            if self.verbose:
+                print(f"⚠️ {model_name} not available ({e}), falling back to {fallback_model}")
+            
+            llm = ChatOpenAI(model_name=fallback_model, temperature=0)
+            self.settings.default_llm_model = fallback_model
+            # Update capabilities for fallback model
+            capabilities = get_model_capabilities(fallback_model)
+            use_react = not capabilities["function_calling"]
         # Define the comprehensive system message prompt with all safety rules
         system_message = (
             "You are Nova, an advanced AI software engineer specialized in automatically fixing failing tests.\n\n"
@@ -212,8 +252,33 @@ Begin fixing the tests now."""
             })
             if self.verbose:
                 print(f"\n[DEBUG] Invoking agent with prompt length: {len(user_prompt)} chars")
-            # Run the LangChain agent until completion (or until it decides to stop)
-            result = self.agent({"input": user_prompt})
+            
+            # Run the LangChain agent with runtime fallback support
+            try:
+                result = self.agent({"input": user_prompt})
+            except Exception as e:
+                # Runtime fallback for GPT-5 to GPT-4 if function calling issues occur
+                error_msg = str(e).lower()
+                model_name = getattr(self.settings, 'default_llm_model', '').lower()
+                
+                if ("function" in error_msg or "unsupported value" in error_msg) and \
+                   (model_name.startswith("gpt-5") or model_name in ["gpt-5-turbo", "gpt-5-preview"]):
+                    if self.verbose:
+                        print(f"\n⚠️ {self.settings.default_llm_model} runtime error: {e}")
+                        print("🔄 Falling back to GPT-4 with function calling...")
+                    
+                    # Update settings and rebuild agent with GPT-4
+                    self.settings.default_llm_model = "gpt-4"
+                    self.agent = self._build_agent()
+                    
+                    # Retry with GPT-4
+                    result = self.agent({"input": user_prompt})
+                    if self.verbose:
+                        print("✅ Successfully recovered with GPT-4")
+                else:
+                    # Re-raise if not a GPT-5 function calling issue
+                    raise
+            
             if self.verbose:
                 print(f"[DEBUG] Agent result type: {type(result)}")
                 print(f"[DEBUG] Agent result (truncated): {str(result)[:500]}...")

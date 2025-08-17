@@ -244,12 +244,22 @@ class NovaDeepAgent:
                             
                             # Get field descriptions
                             field_info = {}
-                            for field_name, field in fields.items():
-                                field_info[field_name] = {
-                                    'type': field.type_.__name__ if hasattr(field.type_, '__name__') else str(field.type_),
-                                    'required': field.is_required(),
-                                    'description': field.field_info.description if hasattr(field.field_info, 'description') else ""
-                                }
+                            for field_name, field_obj in fields.items():
+                                # Handle different pydantic versions
+                                if hasattr(field_obj, 'field_info'):
+                                    # Pydantic v1
+                                    field_info[field_name] = {
+                                        'type': str(field_obj.type_),
+                                        'required': field_obj.required if hasattr(field_obj, 'required') else True,
+                                        'description': getattr(field_obj.field_info, 'description', '')
+                                    }
+                                else:
+                                    # Pydantic v2 or other
+                                    field_info[field_name] = {
+                                        'type': str(type(field_obj)),
+                                        'required': True,  # Assume required
+                                        'description': ''
+                                    }
                             
                             def make_json_wrapper(t, name, fields_info):
                                 def wrapper(input_str: str) -> str:

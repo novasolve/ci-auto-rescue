@@ -1,0 +1,182 @@
+# Nova Unified Test Suite - Sample Configuration
+# This file demonstrates all available configuration options
+
+# ============================================================================
+# Nova Commands (for comparison mode)
+# ============================================================================
+nova_v1_cmd: "nova"  # or "./nova_v1_0" if using wrapper
+nova_v2_cmd: "nova"  # or "./nova_v1_1" if using wrapper
+
+# ============================================================================
+# Global Settings
+# ============================================================================
+verbose: true
+global_timeout: 7200  # 2 hours max for entire suite
+
+# ============================================================================
+# Test Runs Configuration
+# ============================================================================
+runs:
+  # --------------------------------------------------------------------------
+  # Basic Test Scenarios
+  # --------------------------------------------------------------------------
+  
+  - name: "simple_math"
+    path: "./test_repos/simple_math"
+    max_iters: 6
+    timeout: 600
+    description: "Simple mathematical operations with basic bugs"
+    difficulty: "easy"
+    expected_failures: 3
+    
+  - name: "string_ops"
+    path: "./test_repos/string_ops"
+    max_iters: 6
+    timeout: 600
+    description: "String manipulation with encoding issues"
+    difficulty: "easy"
+    expected_failures: 4
+    
+  - name: "list_ops"
+    path: "./test_repos/list_ops"
+    max_iters: 6
+    timeout: 600
+    description: "List operations with logic errors"
+    difficulty: "easy"
+    expected_failures: 5
+    
+  # --------------------------------------------------------------------------
+  # Edge Case Scenarios
+  # --------------------------------------------------------------------------
+  
+  - name: "off_by_one"
+    path: "./test_repos/off_by_one"
+    max_iters: 4
+    timeout: 300
+    description: "Classic off-by-one error"
+    difficulty: "easy"
+    expected_failures: 2
+    
+  - name: "edge_cases"
+    path: "./test_repos/edge_cases"
+    max_iters: 8
+    timeout: 600
+    description: "Edge case handling bugs"
+    difficulty: "medium"
+    expected_failures: 4
+    
+  # --------------------------------------------------------------------------
+  # Challenging Scenarios (Expected to fail or struggle)
+  # --------------------------------------------------------------------------
+  
+  - name: "unfixable_bug"
+    path: "./test_repos/unfixable_bug"
+    max_iters: 3  # Low limit - we expect this to fail
+    timeout: 300
+    description: "Test with incorrect expectation (should fail)"
+    difficulty: "hard"
+    expected_failures: 2
+    edge_case: "unfixable"
+    
+  - name: "no_op_patch"
+    path: "./test_repos/no_op_patch"
+    max_iters: 2  # Very low - no fix possible
+    timeout: 180
+    description: "Test that always fails (no code fix possible)"
+    difficulty: "hard"
+    expected_failures: 2
+    edge_case: "no_op"
+    
+  # --------------------------------------------------------------------------
+  # Complex Scenarios
+  # --------------------------------------------------------------------------
+  
+  - name: "import_issues"
+    path: "./test_repos/import_issues"
+    max_iters: 8
+    timeout: 600
+    description: "Import and module resolution problems"
+    difficulty: "medium"
+    expected_failures: 2
+    
+  - name: "type_hints"
+    path: "./test_repos/type_hints"
+    max_iters: 6
+    timeout: 600
+    description: "Type hint related failures"
+    difficulty: "medium"
+    expected_failures: 3
+    
+  - name: "exception_handling"
+    path: "./test_repos/exception_handling"
+    max_iters: 10
+    timeout: 900
+    description: "Exception handling errors"
+    difficulty: "medium"
+    expected_failures: 4
+    
+  # --------------------------------------------------------------------------
+  # Remote Repository Example (commented out)
+  # --------------------------------------------------------------------------
+  
+  # - name: "github_project"
+  #   url: "https://github.com/username/repo.git"
+  #   branch: "main"
+  #   max_iters: 10
+  #   timeout: 1200
+  #   description: "Real project from GitHub"
+  #   difficulty: "hard"
+  
+  # --------------------------------------------------------------------------
+  # Custom Local Repository Example
+  # --------------------------------------------------------------------------
+  
+  # - name: "my_project"
+  #   path: "/absolute/path/to/my/project"
+  #   max_iters: 15
+  #   timeout: 1800
+  #   description: "My custom test project"
+  #   difficulty: "custom"
+
+# ============================================================================
+# Validation Criteria (for reporting)
+# ============================================================================
+validation:
+  min_success_rate: 70  # Minimum success rate required (%)
+  max_regressions: 0    # Maximum allowed regressions in comparison mode
+  required_scenarios:   # Scenarios that must pass
+    - "simple_math"
+    - "string_ops"
+    - "list_ops"
+  expected_failures:    # Scenarios expected to fail (not counted against success)
+    - "unfixable_bug"
+    - "no_op_patch"
+
+# ============================================================================
+# Output Configuration
+# ============================================================================
+output:
+  json_file: "results.json"
+  markdown_file: "report.md"
+  artifacts_dir: "./test_artifacts"
+  save_logs: true
+  save_patches: true
+
+# ============================================================================
+# Environment Configuration (optional)
+# ============================================================================
+environment:
+  python_version: "3.9"
+  venv_path: "./test_venv"
+  env_vars:
+    NOVA_LOG_LEVEL: "DEBUG"
+    NOVA_USE_DEEP_AGENT: "true"
+
+# ============================================================================
+# LLM Configuration (optional)
+# ============================================================================
+llm_config:
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 4000
+  api_key_env: "OPENAI_API_KEY"  # Environment variable containing API key

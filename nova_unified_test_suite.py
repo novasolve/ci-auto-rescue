@@ -41,6 +41,7 @@ class Colors:
     BLUE = '\033[94m'
     CYAN = '\033[96m'
     MAGENTA = '\033[95m'
+    GRAY = '\033[90m'
     BOLD = '\033[1m'
     END = '\033[0m'
     
@@ -790,22 +791,45 @@ class NovaTestRunner:
         start_time = time.time()
         
         try:
-            result = subprocess.run(
-                cmd,
-                cwd=str(repo_path),
-                capture_output=True,
-                text=True,
-                timeout=timeout if timeout else 3600
-            )
-            elapsed = time.time() - start_time
-            
-            return {
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "exit_code": result.returncode,
-                "elapsed_time": elapsed,
-                "version": version_label
-            }
+            if self.verbose:
+                # Show Nova output in real-time when verbose
+                print(f"{Colors.GRAY}{'='*60}")
+                print(f"Nova command: {' '.join(cmd)}")
+                print(f"{'='*60}{Colors.END}")
+                
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(repo_path),
+                    text=True,
+                    timeout=timeout if timeout else 3600
+                )
+                elapsed = time.time() - start_time
+                
+                return {
+                    "stdout": "",  # Already printed
+                    "stderr": "",  # Already printed
+                    "exit_code": result.returncode,
+                    "elapsed_time": elapsed,
+                    "version": version_label
+                }
+            else:
+                # Capture output when not verbose
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout if timeout else 3600
+                )
+                elapsed = time.time() - start_time
+                
+                return {
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "exit_code": result.returncode,
+                    "elapsed_time": elapsed,
+                    "version": version_label
+                }
             
         except subprocess.TimeoutExpired:
             elapsed = time.time() - start_time
@@ -1022,6 +1046,14 @@ class NovaUnifiedTestSuite:
             else:
                 print(f"{Colors.RED}Repository path does not exist: {repo_path}{Colors.END}")
                 return {"name": test_name, "error": "Repository path not found"}
+            
+            # Initialize git if not already a git repo
+            if not (test_repo / ".git").exists():
+                subprocess.run(["git", "init"], cwd=test_repo, capture_output=True)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=test_repo, capture_output=True)
+                subprocess.run(["git", "config", "user.name", "Test User"], cwd=test_repo, capture_output=True)
+                subprocess.run(["git", "add", "."], cwd=test_repo, capture_output=True)
+                subprocess.run(["git", "commit", "-m", "Initial commit for testing"], cwd=test_repo, capture_output=True)
             
             # Run Nova
             output = self.runner.run_nova_fix(

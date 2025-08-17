@@ -169,7 +169,19 @@ Iterate as needed until all tests are passing. When all failures are resolved, s
         file_path = parts[0].strip()
         content = parts[1]
         
-        return write_file_tool(file_path, content)
+        return self.agent_tools.write_file_tool(file_path, content)
+    
+    def _plan_todo_wrapper(self, notes: str = "") -> str:
+        """Wrapper for plan_todo_tool using instance AgentTools."""
+        return self.agent_tools.plan_todo_tool(notes)
+    
+    def _open_file_wrapper(self, file_path: str) -> str:
+        """Wrapper for open_file_tool using instance AgentTools."""
+        return self.agent_tools.open_file_tool(file_path)
+    
+    def _run_tests_wrapper(self, _: str = "") -> str:
+        """Wrapper for run_tests_tool using instance AgentTools."""
+        return self.agent_tools.run_tests_tool(_)
     
     def run(self, user_prompt: str) -> str:
         """

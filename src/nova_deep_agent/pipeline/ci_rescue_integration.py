@@ -50,7 +50,8 @@ class CIRescuePipeline:
         self.verbose = verbose
         
         # Initialize components
-        self.agent = DeepAgent(self.agent_config)
+        # Pass current directory as repo_root
+        self.agent = DeepAgent(self.agent_config, repo_root=Path(".").resolve())
         self.critic = Critic(
             max_lines=self.agent_config.max_patch_lines,
             max_files=self.agent_config.max_affected_files

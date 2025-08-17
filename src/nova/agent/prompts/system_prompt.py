@@ -63,6 +63,15 @@ You have access to these tools:
 5. **VERIFY**: Run tests to confirm fixes work
 6. **ITERATE**: If tests still fail, analyze and adjust
 
+## COMMON PROJECT STRUCTURES:
+
+When looking for files, be aware of common project layouts:
+- Source files are often in 'src/' directory (e.g., if looking for 'broken.py', try 'src/broken.py')
+- Test files are typically in 'tests/' directory (e.g., 'tests/test_broken.py')
+- If you get "File not found" errors, check if you need to add the correct directory prefix
+- For demo projects, files might be under 'examples/demos/PROJECT_NAME/'
+- Always check the test import statements to understand the correct module paths
+
 ## RESPONSE FORMAT:
 
 When reasoning about problems, structure your thoughts as:

@@ -10,9 +10,10 @@ from pathlib import Path
 json_report_path = "/tmp/debug_nova.json"
 junit_report_path = "/tmp/debug_nova.xml"
 
+test_path = Path("examples/demos/demo_broken_project")
 cmd = [
     "python", "-m", "pytest",
-    str(Path(".")),
+    str(test_path),
     "--json-report",
     f"--json-report-file={json_report_path}",
     f"--junit-xml={junit_report_path}",
@@ -24,6 +25,8 @@ cmd = [
     "-rN",
 ]
 
+print(f"Running from: {Path.cwd()}")
+print(f"Test path: {test_path}")
 print(f"Running: {' '.join(cmd)}")
 result = subprocess.run(cmd, capture_output=True, text=True, cwd=".")
 print(f"Exit code: {result.returncode}")

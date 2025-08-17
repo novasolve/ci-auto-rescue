@@ -103,6 +103,11 @@ class NovaDeepAgent:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
         # Get model name and capabilities
         model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
+        
+        # Show what model was requested for transparency
+        if self.verbose:
+            print(f"📋 Requested model: {model_name}")
+        
         capabilities = get_model_capabilities(model_name)
         use_react = not capabilities["function_calling"]
         
@@ -132,19 +137,27 @@ class NovaDeepAgent:
             if not fallback_model:
                 fallback_model = "gpt-4"
             
-            if self.verbose:
-                print(f"⚠️ {model_name} not available ({e}), falling back to {fallback_model}")
+            # Always print the fallback reason for transparency
+            print(f"⚠️  Model '{model_name}' not available: {str(e)[:100]}")
+            print(f"    Falling back to '{fallback_model}'...")
             
             try:
                 llm = ChatOpenAI(model_name=fallback_model, temperature=0)
+                model_name = fallback_model  # Update for display
                 self.settings.default_llm_model = fallback_model
                 # Update capabilities for fallback model
                 capabilities = get_model_capabilities(fallback_model)
                 use_react = not capabilities["function_calling"]
+                
+                if self.verbose:
+                    if use_react:
+                        print(f"🚀 Using {model_name} model with ReAct pattern (fallback)")
+                    else:
+                        print(f"🚀 Using {model_name} model with function calling (fallback)")
             except Exception as fallback_error:
                 # If even the fallback fails, raise a more informative error
                 raise RuntimeError(
-                    f"Failed to initialize both {model_name} and fallback {fallback_model}. "
+                    f"Failed to initialize both '{model_name}' and fallback '{fallback_model}'. "
                     f"Original error: {e}. Fallback error: {fallback_error}. "
                     f"Please ensure OPENAI_API_KEY is set and valid."
                 )

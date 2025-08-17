@@ -266,11 +266,6 @@ class WriteFileTool(BaseTool):
 
 # --- Class-based Tools (Complex Operations) ---
 
-class RunTestsInput(BaseModel):
-    """Input schema for run_tests tool."""
-    max_failures: int = Field(default=5, description="Max number of failing tests to report (optional, default: 5)")
-
-
 class RunTestsTool(BaseTool):
     """
     Tool to run tests and collect failing test details.
@@ -282,9 +277,9 @@ class RunTestsTool(BaseTool):
     description: str = (
         "Run the project's test suite inside a sandbox and get failing test info. "
         "Returns a summary with test names and error messages. "
-        "Input: (empty string or leave blank) - no input required."
+        "No input required - just call run_tests"
     )
-    args_schema: Type[BaseModel] = RunTestsInput
+    # No args_schema - makes it accept any input including empty string
     repo_path: Path = Field(default_factory=lambda: Path("."))
     verbose: bool = Field(default=False)
 
@@ -296,7 +291,7 @@ class RunTestsTool(BaseTool):
             kwargs['verbose'] = verbose
         super().__init__(**kwargs)
 
-    def _run(self, max_failures: int = 5) -> str:
+    def _run(self, *args, **kwargs) -> str:
         """Execute tests and return a JSON summary of results."""
         # Ensure .nova directory for test artifacts exists
         nova_path = self.repo_path / ".nova"

@@ -182,4 +182,9 @@ def get_settings(config_file: Optional[Path] = None) -> NovaSettings:
     if config_file:
         settings.merge_with_yaml(config_file)
     
+    # Check for environment variable overrides (highest priority)
+    env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_LLM_MODEL") or os.getenv("MODEL")
+    if env_model:
+        settings.default_llm_model = env_model
+    
     return settings

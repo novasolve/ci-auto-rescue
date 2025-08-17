@@ -513,6 +513,45 @@ class ApplyPatchTool(BaseTool):
                 print(f"Safety check failed: {safe_msg}")
             return f"FAILED: Safety violation – {safe_msg}"
         
+        # 1.5. Critic review check (enforce review before applying)
+        # Check if we have state-based review tracking
+        if self.state and hasattr(self.state, 'last_review_approved'):
+            # Check if this exact patch was already reviewed and approved
+            if hasattr(self.state, 'last_reviewed_patch') and self.state.last_reviewed_patch:
+                normalized_input = '\n'.join(line.rstrip() for line in patch_text.strip().split('\n'))
+                normalized_reviewed = '\n'.join(line.rstrip() for line in self.state.last_reviewed_patch.strip().split('\n'))
+                
+                if normalized_input == normalized_reviewed and self.state.last_review_approved:
+                    # This patch was already reviewed and approved, proceed
+                    if self.verbose:
+                        print("✓ Patch was already reviewed and approved")
+                else:
+                    # Patch not reviewed or different from reviewed patch - run critic now
+                    if self.verbose:
+                        print("Running critic review on patch before applying...")
+                    critic_tool = CriticReviewTool(
+                        verbose=self.verbose, 
+                        llm=getattr(self, 'llm', None),
+                        state=self.state
+                    )
+                    review_result = critic_tool._run(patch_text)
+                    if review_result.startswith("REJECTED"):
+                        reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
+                        if self.verbose:
+                            print(f"Critic rejected patch: {reason}")
+                        return f"FAILED: Patch rejected by critic - {reason}"
+        else:
+            # No state tracking available - run critic review inline
+            if self.verbose:
+                print("Running critic review on patch...")
+            critic_tool = CriticReviewTool(verbose=self.verbose, llm=getattr(self, 'llm', None))
+            review_result = critic_tool._run(patch_text)
+            if review_result.startswith("REJECTED"):
+                reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
+                if self.verbose:
+                    print(f"Critic rejected patch: {reason}")
+                return f"FAILED: Patch rejected by critic - {reason}"
+        
         # 2. Preflight check: ensure patch applies cleanly
         tmp_file = None
         try:
@@ -536,6 +575,9 @@ class ApplyPatchTool(BaseTool):
                 # Git apply --check failed, patch does not apply
                 if self.verbose:
                     print(f"Patch preflight failed: {preflight.stderr}")
+                # Update state to indicate patch error
+                if self.state:
+                    self.state.final_status = "patch_error"
                 return "FAILED: Patch could not be applied (context mismatch)."
             
             # 3. Apply patch
@@ -547,6 +589,9 @@ class ApplyPatchTool(BaseTool):
             )
             
             if apply_proc.returncode != 0:
+                # Update state to indicate patch error
+                if self.state:
+                    self.state.final_status = "patch_error"
                 return f"FAILED: Could not apply patch: {apply_proc.stderr}"
             
             # 4. Commit changes

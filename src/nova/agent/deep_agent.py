@@ -560,7 +560,21 @@ Begin fixing the tests now."""
             else:
                 # Tests still failing or result unknown
                 failures_count = final_test_output.get("failures", "unknown") if final_test_output else "unknown"
-                self.state.final_status = "max_iters" if self.state.current_iteration >= self.state.max_iterations else "incomplete"
+                
+                # Determine appropriate final status
+                if not self.state.patches_applied:
+                    # No patches were applied at all
+                    if hasattr(self.state, 'critic_feedback') and self.state.critic_feedback:
+                        # Patches were rejected by critic
+                        self.state.final_status = "patch_rejected"
+                    else:
+                        # No patches could be generated
+                        self.state.final_status = "no_patch"
+                elif self.state.current_iteration >= self.state.max_iterations:
+                    self.state.final_status = "max_iters"
+                else:
+                    self.state.final_status = "incomplete"
+                
                 self.telemetry.log_event("deep_agent_incomplete", {
                     "iterations": self.state.current_iteration,
                     "remaining_failures": failures_count,

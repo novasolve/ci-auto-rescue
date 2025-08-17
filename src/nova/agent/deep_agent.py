@@ -43,17 +43,44 @@ class GPT5ChatOpenAI(ChatOpenAI):
 class GPT5ReActOutputParser(ReActOutputParser):
     """Custom ReAct output parser that handles GPT-5's tendency to output both actions and final answers."""
     
+    def __init__(self):
+        super().__init__()
+        self.iteration_count = 0
+    
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
         """Parse GPT-5 output, prioritizing actions over final answers."""
+        self.iteration_count += 1
+        text_lower = text.lower()
+        
+        # Check for success indicators in the output
+        success_terms = ["all tests passing", "all tests pass", "0 failures", "successfully fixed", "tests passed"]
+        has_success = any(term in text_lower for term in success_terms)
+        
+        # If tests are passing and agent provides Final Answer, allow completion
+        if has_success:
+            final_answer_match = re.search(
+                r"Final\s*Answer\s*:\s*(.+?)(?=\n(?:Action:|Observation:|Thought:)|$)", 
+                text, 
+                re.DOTALL | re.IGNORECASE
+            )
+            if final_answer_match:
+                answer_text = final_answer_match.group(1).strip()
+                return AgentFinish(
+                    return_values={"output": answer_text}, 
+                    log=text
+                )
+        
         # Special handling for plan_todo responses that try to end prematurely
-        if ("plan noted" in text.lower() or "todo created" in text.lower() or "plan recorded" in text.lower()):
+        # Only apply this intervention in early iterations (first 2 iterations)
+        if self.iteration_count <= 2 and ("plan noted" in text_lower or "todo created" in text_lower or "plan recorded" in text_lower):
             # Check if agent is trying to provide a final answer after planning
-            if "final answer" in text.lower():
-                # Force continuation with next logical step
+            if "final answer" in text_lower and not has_success:
+                # Instead of forcing a specific file, just indicate continuation is needed
+                # Let the agent figure out the next action naturally
                 return AgentAction(
-                    tool="open_file",
-                    tool_input="broken_module.py",  # Generic filename, will be adjusted based on context
-                    log=text + "\n[Parser: Detected premature completion after planning. Continuing with implementation.]"
+                    tool="run_tests",
+                    tool_input={},
+                    log=text + "\n[Parser: Detected premature completion after planning. Checking test status.]"
                 )
         
         # First check if there's a valid action in the output
@@ -87,13 +114,13 @@ class GPT5ReActOutputParser(ReActOutputParser):
         if final_answer_match:
             # Check if this is a premature final answer after planning
             answer_text = final_answer_match.group(1).strip()
-            if any(phrase in answer_text.lower() for phrase in ["i will", "i need to", "to proceed", "please allow", "i should"]):
+            # Only block "permission-seeking" answers if we're not in success state
+            if not has_success and any(phrase in answer_text.lower() for phrase in ["i will", "i need to", "to proceed", "please allow", "i should"]):
                 # This looks like the agent asking for permission rather than completing
-                # Force it to continue with the actual work
                 return AgentAction(
-                    tool="open_file",
-                    tool_input="examples/demos/demo_broken_project/broken_module.py",
-                    log=text + "\n[Parser: Agent seems stuck - forcing continuation]"
+                    tool="run_tests",
+                    tool_input={},
+                    log=text + "\n[Parser: Agent seems stuck - checking test status]"
                 )
             
             return AgentFinish(
@@ -108,7 +135,7 @@ class GPT5ReActOutputParser(ReActOutputParser):
             # If all else fails, guide the agent to continue
             return AgentAction(
                 tool="run_tests",
-                tool_input="",
+                tool_input={},
                 log=text + "\n[Parser: No clear action found - running tests to check status]"
             )
 

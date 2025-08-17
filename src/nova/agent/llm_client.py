@@ -25,8 +25,8 @@ from nova.tools.http import AllowedHTTPClient
 class LLMClient:
     """Unified LLM client that supports OpenAI and Anthropic models."""
     
-    def __init__(self):
-        self.settings = get_settings()
+    def __init__(self, settings=None):
+        self.settings = settings or get_settings()
         self.client = None
         self.provider = None
         

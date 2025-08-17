@@ -123,8 +123,7 @@ class NovaDeepAgent:
         
         # Map the model name using LLMClient logic
         from nova.agent.llm_client import LLMClient
-        temp_client = LLMClient.__new__(LLMClient)
-        temp_client.settings = self.settings
+        temp_client = LLMClient(settings=self.settings)
         mapped_model = temp_client._get_openai_model_name()
         
         if mapped_model != model_name and self.verbose:

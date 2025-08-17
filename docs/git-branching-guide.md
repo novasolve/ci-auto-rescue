@@ -106,7 +106,19 @@ nova fix . --model gpt-4
 nova fix . -m gpt-3.5-turbo
 ```
 
-### 2. Configuration File
+### 2. Environment Variables (Takes Precedence Over Config File)
+
+```bash
+export NOVA_MODEL=gpt-4              # Highest priority env var
+# or
+export NOVA_DEFAULT_LLM_MODEL=gpt-4  # For backward compatibility
+# or
+export MODEL=gpt-4                  # Legacy support
+```
+
+**Important**: Environment variables now take precedence over config files. This ensures you can always override file-based configuration with environment settings.
+
+### 3. Configuration File
 
 Create `nova.config.yml`:
 
@@ -114,16 +126,6 @@ Create `nova.config.yml`:
 model: gpt-4
 # or
 default_llm_model: gpt-4
-```
-
-### 3. Environment Variables
-
-```bash
-export NOVA_MODEL=gpt-4
-# or
-export NOVA_LLM_MODEL=gpt-4
-# or
-export MODEL=gpt-4
 ```
 
 ### 4. Default

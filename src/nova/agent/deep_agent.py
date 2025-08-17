@@ -229,44 +229,49 @@ class NovaDeepAgent:
                 import json
                 from langchain.tools import Tool
                 
-                # Create wrapper tools that accept JSON strings for multi-input tools
+                # For GPT-5, we need to use a simpler approach
+                # Convert tools to use single string inputs where needed
+                from langchain.tools import StructuredTool
                 wrapped_tools = []
+                
                 for tool in tools:
                     if tool.name == "write_file":
-                        # Create a wrapper that accepts JSON input
-                        def write_file_json(json_str: str) -> str:
+                        # Special handling for write_file
+                        def write_file_wrapper(input_str: str) -> str:
+                            """
+                            Write file tool that accepts either:
+                            1. JSON format: {"path": "file.py", "new_content": "content"}
+                            2. Format: path:::content (where ::: is the delimiter)
+                            """
                             try:
-                                data = json.loads(json_str)
-                                return tool._run(path=data["path"], new_content=data["new_content"])
+                                # Try JSON first
+                                if input_str.strip().startswith('{'):
+                                    data = json.loads(input_str)
+                                    path = data.get("path", data.get("file_path", ""))
+                                    content = data.get("new_content", data.get("content", ""))
+                                    if not path:
+                                        return "ERROR: Missing 'path' in JSON input"
+                                    return tool._run(path=path, new_content=content)
+                                # Try delimiter format
+                                elif ":::" in input_str:
+                                    parts = input_str.split(":::", 1)
+                                    if len(parts) == 2:
+                                        return tool._run(path=parts[0].strip(), new_content=parts[1])
+                                    else:
+                                        return "ERROR: Invalid format. Use: path:::content"
+                                else:
+                                    return "ERROR: Invalid input. Use JSON {'path': 'file', 'new_content': 'content'} or path:::content"
                             except Exception as e:
-                                return f"ERROR: Invalid JSON input: {e}. Expected format: {{'path': 'file_path', 'new_content': 'content'}}"
+                                return f"ERROR: {str(e)}"
                         
                         wrapped_tool = Tool(
                             name="write_file",
-                            func=write_file_json,
-                            description="Write or overwrite a file. Input must be JSON: {'path': 'file_path', 'new_content': 'content'}"
-                        )
-                        wrapped_tools.append(wrapped_tool)
-                    elif hasattr(tool, 'args_schema') and tool.args_schema and hasattr(tool.args_schema, '__fields__') and len(tool.args_schema.__fields__) > 1:
-                        # For other multi-input tools, create JSON wrappers
-                        original_tool = tool
-                        def make_json_wrapper(t):
-                            def wrapper(json_str: str) -> str:
-                                try:
-                                    data = json.loads(json_str)
-                                    return t._run(**data)
-                                except Exception as e:
-                                    return f"ERROR: Invalid JSON input: {e}"
-                            return wrapper
-                        
-                        wrapped_tool = Tool(
-                            name=tool.name,
-                            func=make_json_wrapper(tool),
-                            description=f"{tool.description} Input must be JSON with required fields."
+                            func=write_file_wrapper,
+                            description="Write or overwrite a file. Input format: {'path': 'file.py', 'new_content': 'content'} OR path:::content"
                         )
                         wrapped_tools.append(wrapped_tool)
                     else:
-                        # Single input tools can be used as-is
+                        # Keep other tools as-is
                         wrapped_tools.append(tool)
                 
                 # Use ZERO_SHOT_REACT_DESCRIPTION with wrapped tools
@@ -279,7 +284,8 @@ class NovaDeepAgent:
                     max_iterations=15,
                     early_stopping_method="generate",
                     agent_kwargs={
-                        "prefix": system_message + "\n\nYou have access to the following tools:"
+                        "prefix": system_message + "\n\nYou have access to the following tools:",
+                        "suffix": "Begin!\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}"
                     }
                 )
             else:

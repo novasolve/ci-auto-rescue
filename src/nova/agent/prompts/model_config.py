@@ -137,11 +137,11 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
         supports_long_context=True
     ),
     
-    # Future model projections (speculative)
+    # GPT-5 is now available with function calling support
     "gpt-5": ModelCapabilities(
         max_tokens=16384,
         context_window=256000,
-        supports_functions=True,
+        supports_functions=True,  # Confirmed: GPT-5 supports function calling
         supports_json_mode=True,
         supports_react=True,
         supports_multimodal=True,

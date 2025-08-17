@@ -36,9 +36,9 @@ MODEL_CAPABILITIES = {
     "gpt-4": {"function_calling": True, "max_tokens": 8192, "fallback": None},
     "gpt-4-turbo": {"function_calling": True, "max_tokens": 128000, "fallback": "gpt-4"},
     "gpt-3.5-turbo": {"function_calling": True, "max_tokens": 4096, "fallback": None},
-    "gpt-5": {"function_calling": False, "max_tokens": 16384, "fallback": "gpt-4"},
-    "gpt-5-turbo": {"function_calling": False, "max_tokens": 32768, "fallback": "gpt-4"},
-    "gpt-5-preview": {"function_calling": False, "max_tokens": 16384, "fallback": "gpt-4"},
+    "gpt-5": {"function_calling": True, "max_tokens": 16384, "fallback": "gpt-4"},  # GPT-5 supports function calling
+    "gpt-5-turbo": {"function_calling": True, "max_tokens": 32768, "fallback": "gpt-4"},  # GPT-5 variants also support it
+    "gpt-5-preview": {"function_calling": True, "max_tokens": 16384, "fallback": "gpt-4"},
     "claude-3-opus": {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"},
     "claude-3-sonnet": {"function_calling": False, "max_tokens": 200000, "fallback": "gpt-4"},
 }
@@ -50,9 +50,9 @@ def get_model_capabilities(model_name: str) -> dict:
     if model_name in MODEL_CAPABILITIES:
         return MODEL_CAPABILITIES[model_name]
     
-    # Check for GPT-5 variants
+    # Check for GPT-5 variants (now with function calling support)
     if model_name.lower().startswith("gpt-5"):
-        return {"function_calling": False, "max_tokens": 16384, "fallback": "gpt-4"}
+        return {"function_calling": True, "max_tokens": 16384, "fallback": "gpt-4"}
     
     # Check for GPT-4 variants
     if model_name.lower().startswith("gpt-4"):
@@ -121,15 +121,28 @@ class NovaDeepAgent:
                     
         except Exception as e:
             # Fallback to configured fallback model
-            fallback_model = capabilities.get("fallback", "gpt-4")
+            fallback_model = capabilities.get("fallback")
+            
+            # If no fallback or fallback is None, use gpt-4 as ultimate fallback
+            if not fallback_model:
+                fallback_model = "gpt-4"
+            
             if self.verbose:
                 print(f"⚠️ {model_name} not available ({e}), falling back to {fallback_model}")
             
-            llm = ChatOpenAI(model_name=fallback_model, temperature=0)
-            self.settings.default_llm_model = fallback_model
-            # Update capabilities for fallback model
-            capabilities = get_model_capabilities(fallback_model)
-            use_react = not capabilities["function_calling"]
+            try:
+                llm = ChatOpenAI(model_name=fallback_model, temperature=0)
+                self.settings.default_llm_model = fallback_model
+                # Update capabilities for fallback model
+                capabilities = get_model_capabilities(fallback_model)
+                use_react = not capabilities["function_calling"]
+            except Exception as fallback_error:
+                # If even the fallback fails, raise a more informative error
+                raise RuntimeError(
+                    f"Failed to initialize both {model_name} and fallback {fallback_model}. "
+                    f"Original error: {e}. Fallback error: {fallback_error}. "
+                    f"Please ensure OPENAI_API_KEY is set and valid."
+                )
         # Define the comprehensive system message prompt with all safety rules
         system_message = (
             "You are Nova, an advanced AI software engineer specialized in automatically fixing failing tests.\n\n"

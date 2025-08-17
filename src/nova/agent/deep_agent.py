@@ -627,19 +627,27 @@ class NovaDeepAgent:
 ## YOUR TASK:
 Use the available tools to fix the failing tests. Follow this workflow:
 
-1. **Plan your approach** using 'plan_todo' - Outline what needs to be fixed
-2. **Read relevant files** using 'open_file' - Understand the code structure
-3. **Modify source code** using 'write_file' - Apply minimal fixes
-4. **Run tests** using 'run_tests' - Verify your fixes work
-5. **Review patches** using 'critic_review' - Validate changes before applying
-6. **Apply patches** using 'apply_patch' - Commit validated changes
+1. **Analyze the error messages above** to identify:
+   - Function names that are failing (e.g., divide_numbers, calculate_average)
+   - Module names from the traceback (look for "from X import" in the errors)
+   
+2. **Open the SOURCE file** containing these functions:
+   - Based on the test file path, look for the implementation file
+   - If you see "from broken import ...", try opening: broken.py, then src/broken.py
+   - NEVER try to open test files - they will return "ERROR: Access blocked"
+   - If you get "Access blocked", DO NOT hallucinate the content - move on
 
-## REMEMBER:
-- Do NOT modify test files (tests/, test_*.py, *_test.py)
-- Keep changes minimal and focused on fixing the failures
-- Only use the provided tools (no invented commands)
-- Follow all safety guidelines
-- Stop when tests are all green or you cannot fix the issue
+3. **Fix the functions** based on the error messages:
+   - Use 'write_file' or 'apply_patch' to make minimal fixes
+   - Focus only on making tests pass
+
+4. **Run tests** to verify your fixes work
+
+## CRITICAL RULES:
+- When you see "ERROR: Access to ... is blocked", DO NOT make up file contents
+- Use ONLY the error messages and stack traces provided above to understand failures
+- Test files are BLOCKED - you cannot read them, only fix source files
+- Common source locations: module.py, src/module.py, lib/module.py
 
 Begin fixing the tests now."""
         try:

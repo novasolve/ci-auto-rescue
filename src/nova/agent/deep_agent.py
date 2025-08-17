@@ -43,13 +43,8 @@ class GPT5ChatOpenAI(ChatOpenAI):
 class GPT5ReActOutputParser(ReActOutputParser):
     """Custom ReAct output parser that handles GPT-5's tendency to output both actions and final answers."""
     
-    def __init__(self):
-        super().__init__()
-        self.iteration_count = 0
-    
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
         """Parse GPT-5 output, prioritizing actions over final answers."""
-        self.iteration_count += 1
         text_lower = text.lower()
         
         # Check for success indicators in the output
@@ -71,8 +66,8 @@ class GPT5ReActOutputParser(ReActOutputParser):
                 )
         
         # Special handling for plan_todo responses that try to end prematurely
-        # Only apply this intervention in early iterations (first 2 iterations)
-        if self.iteration_count <= 2 and ("plan noted" in text_lower or "todo created" in text_lower or "plan recorded" in text_lower):
+        # Check if output contains planning keywords AND a premature final answer
+        if ("plan noted" in text_lower or "todo created" in text_lower or "plan recorded" in text_lower):
             # Check if agent is trying to provide a final answer after planning
             if "final answer" in text_lower and not has_success:
                 # Instead of forcing a specific file, just indicate continuation is needed

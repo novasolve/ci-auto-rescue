@@ -357,54 +357,54 @@ class RunTestsTool(BaseTool):
                 failing_tests, junit_xml = runner.run_tests(max_failures=max_failures)
                 
                 if not failing_tests:
-                    # All tests passing, return JSON
-                    return json.dumps({
+                    # All tests passing, set result dict
+                    result = {
                         "exit_code": 0,
                         "failures": 0,
                         "passed": "unknown",  # We don't have the count from the runner
                         "message": "All tests passed",
                         "failing_tests": []
-                    })
-                
-                # Format local runner results as JSON
-                failures_json = []
-                for test in failing_tests[:max_failures]:
-                    failures_json.append({
-                        "name": test.name if hasattr(test, 'name') else "unknown",
-                        "error": (test.short_traceback.split("\n")[0][:500] 
-                                 if hasattr(test, 'short_traceback') else "Unknown error"),
-                        "traceback": (test.short_traceback[:1000] 
-                                     if hasattr(test, 'short_traceback') else "")
-                    })
-                
-                return json.dumps({
-                    "exit_code": 1,
-                    "failures": len(failing_tests),
-                    "passed": 0,  # We don't have the count from the runner
-                    "message": f"{len(failing_tests)} test(s) failed",
-                    "failing_tests": failures_json
-                })
+                    }
+                else:
+                    # Format local runner results as dict
+                    failures_json = []
+                    for test in failing_tests[:max_failures]:
+                        failures_json.append({
+                            "name": test.name if hasattr(test, 'name') else "unknown",
+                            "error": (test.short_traceback.split("\n")[0][:500] 
+                                     if hasattr(test, 'short_traceback') else "Unknown error"),
+                            "traceback": (test.short_traceback[:1000] 
+                                         if hasattr(test, 'short_traceback') else "")
+                        })
+                    
+                    result = {
+                        "exit_code": 1,
+                        "failures": len(failing_tests),
+                        "passed": 0,  # We don't have the count from the runner
+                        "message": f"{len(failing_tests)} test(s) failed",
+                        "failing_tests": failures_json
+                    }
                 
             except Exception as e:
-                # Return error as JSON
-                return json.dumps({
+                # Set error result dict
+                result = {
                     "exit_code": 1,
                     "error": f"Test execution failed: {e}",
                     "failures": 0,
                     "passed": 0,
                     "stderr": str(e)
-                })
+                }
         
         # Always return JSON formatted results for consistent parsing
         if result is None:
-            # Docker execution failed, return error as JSON
-            return json.dumps({
+            # Docker execution failed, set error result dict
+            result = {
                 "exit_code": 1,
                 "error": docker_error or "Unknown test error",
                 "failures": 0,
                 "passed": 0,
                 "stderr": docker_error
-            })
+            }
         
         if result.get("exit_code", 0) == 0:
             # All tests passing

@@ -615,6 +615,27 @@ class NovaDeepAgent:
             True if all tests were fixed (success), False otherwise.
         """
         success = False
+        
+        # Check for hint file and include in prompt if found
+        hint_content = ""
+        hint_files = [".nova-hints", ".nova/hints.md", "HINTS.md"]
+        for hint_file in hint_files:
+            hint_path = self.state.repo_path / hint_file
+            if hint_path.exists():
+                try:
+                    hint_text = hint_path.read_text()
+                    hint_content = f"\n## PROJECT HINTS (from {hint_file}):\n{hint_text}\n"
+                    if self.verbose:
+                        print(f"📝 Found hint file: {hint_file}")
+                    self.telemetry.log_event("hint_file_found", {
+                        "file": hint_file,
+                        "size": len(hint_text)
+                    })
+                    break
+                except Exception as e:
+                    if self.verbose:
+                        print(f"⚠️ Could not read hint file {hint_file}: {e}")
+        
         # Prepare a comprehensive user prompt with failing test details and structured instructions
         user_prompt = f"""Fix the following failing tests:
 
@@ -625,7 +646,7 @@ class NovaDeepAgent:
 {error_details}
 
 {f"## RELEVANT CODE SNIPPETS:\n{code_snippets}" if code_snippets else ""}
-
+{hint_content}
 ## YOUR TASK:
 Use the available tools to fix the failing tests. Follow this workflow:
 

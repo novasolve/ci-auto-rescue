@@ -1,0 +1,10 @@
+# Nova CI-Rescue Configuration
+# This fixes the GPT-5 function calling error
+
+# Use GPT-4 instead of GPT-5 (GPT-5 doesn't support function calling)
+model: gpt-5
+
+# Other settings (optional)
+max_iters: 6
+timeout: 1200
+verbose: false

@@ -72,10 +72,14 @@ class NovaSettings:
             openai_key = os.environ.get("OPENAI_API_KEY", "")
             anthro_key = os.environ.get("ANTHROPIC_API_KEY", "")
             
-            if not openai_key and anthro_key:
+            # Check if keys are actually present and not empty
+            has_openai = bool(openai_key and openai_key.strip())
+            has_anthropic = bool(anthro_key and anthro_key.strip())
+            
+            if not has_openai and has_anthropic:
                 # Only Anthropic key available - default to Claude
                 default_model = "claude-3-opus"
-            elif openai_key and not anthro_key:
+            elif has_openai and not has_anthropic:
                 # Only OpenAI key available - default to GPT
                 default_model = "gpt-4"
             else:

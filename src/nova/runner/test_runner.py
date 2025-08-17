@@ -210,7 +210,14 @@ class TestRunner:
                 
                 # Get the traceback
                 call_info = test.get('call', {})
-                longrepr = call_info.get('longrepr', '')
+                # Handle both dict and string types for call_info
+                if isinstance(call_info, dict):
+                    longrepr = call_info.get('longrepr', '')
+                elif isinstance(call_info, str):
+                    longrepr = call_info  # call contains the error message string
+                else:
+                    # Fallback: maybe the failure info is under a different key
+                    longrepr = test.get('longrepr', '')
                 
                 # Extract short traceback (first few lines)
                 traceback_lines = longrepr.split('\n') if longrepr else []

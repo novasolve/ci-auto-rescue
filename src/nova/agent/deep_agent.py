@@ -229,49 +229,71 @@ class NovaDeepAgent:
                 import json
                 from langchain.tools import Tool
                 
-                # For GPT-5, we need to use a simpler approach
-                # Convert tools to use single string inputs where needed
-                from langchain.tools import StructuredTool
+                # For GPT-5, we need to wrap all multi-input tools
                 wrapped_tools = []
                 
                 for tool in tools:
-                    if tool.name == "write_file":
-                        # Special handling for write_file
-                        def write_file_wrapper(input_str: str) -> str:
-                            """
-                            Write file tool that accepts either:
-                            1. JSON format: {"path": "file.py", "new_content": "content"}
-                            2. Format: path:::content (where ::: is the delimiter)
-                            """
-                            try:
-                                # Try JSON first
-                                if input_str.strip().startswith('{'):
-                                    data = json.loads(input_str)
-                                    path = data.get("path", data.get("file_path", ""))
-                                    content = data.get("new_content", data.get("content", ""))
-                                    if not path:
-                                        return "ERROR: Missing 'path' in JSON input"
-                                    return tool._run(path=path, new_content=content)
-                                # Try delimiter format
-                                elif ":::" in input_str:
-                                    parts = input_str.split(":::", 1)
-                                    if len(parts) == 2:
-                                        return tool._run(path=parts[0].strip(), new_content=parts[1])
-                                    else:
-                                        return "ERROR: Invalid format. Use: path:::content"
-                                else:
-                                    return "ERROR: Invalid input. Use JSON {'path': 'file', 'new_content': 'content'} or path:::content"
-                            except Exception as e:
-                                return f"ERROR: {str(e)}"
-                        
-                        wrapped_tool = Tool(
-                            name="write_file",
-                            func=write_file_wrapper,
-                            description="Write or overwrite a file. Input format: {'path': 'file.py', 'new_content': 'content'} OR path:::content"
-                        )
-                        wrapped_tools.append(wrapped_tool)
+                    # Check if this is a multi-input tool
+                    if hasattr(tool, 'args_schema') and tool.args_schema and hasattr(tool.args_schema, '__fields__'):
+                        fields = tool.args_schema.__fields__
+                        if len(fields) > 1:
+                            # This is a multi-input tool, create a JSON wrapper
+                            original_tool = tool
+                            tool_name = tool.name
+                            tool_desc = tool.description
+                            
+                            # Get field descriptions
+                            field_info = {}
+                            for field_name, field in fields.items():
+                                field_info[field_name] = {
+                                    'type': field.type_.__name__ if hasattr(field.type_, '__name__') else str(field.type_),
+                                    'required': field.is_required(),
+                                    'description': field.field_info.description if hasattr(field.field_info, 'description') else ""
+                                }
+                            
+                            def make_json_wrapper(t, name, fields_info):
+                                def wrapper(input_str: str) -> str:
+                                    try:
+                                        if not input_str.strip().startswith('{'):
+                                            return f"ERROR: Input must be JSON format with fields: {list(fields_info.keys())}"
+                                        
+                                        data = json.loads(input_str)
+                                        
+                                        # Validate required fields
+                                        for field_name, info in fields_info.items():
+                                            if info['required'] and field_name not in data:
+                                                return f"ERROR: Missing required field '{field_name}'"
+                                        
+                                        # Call the tool with the parsed data
+                                        return t._run(**data)
+                                    except json.JSONDecodeError as e:
+                                        return f"ERROR: Invalid JSON: {e}"
+                                    except Exception as e:
+                                        return f"ERROR: {str(e)}"
+                                return wrapper
+                            
+                            # Create description with field info
+                            json_desc = f"{tool_desc} Input must be JSON with fields: "
+                            field_descs = []
+                            for fname, finfo in field_info.items():
+                                req = "required" if finfo['required'] else "optional"
+                                desc = f"'{fname}' ({req})"
+                                if finfo['description']:
+                                    desc += f": {finfo['description']}"
+                                field_descs.append(desc)
+                            json_desc += ", ".join(field_descs)
+                            
+                            wrapped_tool = Tool(
+                                name=tool_name,
+                                func=make_json_wrapper(original_tool, tool_name, field_info),
+                                description=json_desc
+                            )
+                            wrapped_tools.append(wrapped_tool)
+                        else:
+                            # Single input tool, keep as-is
+                            wrapped_tools.append(tool)
                     else:
-                        # Keep other tools as-is
+                        # No schema info, keep as-is
                         wrapped_tools.append(tool)
                 
                 # Use ZERO_SHOT_REACT_DESCRIPTION with wrapped tools

@@ -293,6 +293,11 @@ class RunTestsTool(BaseTool):
 
     def _run(self, *args, **kwargs) -> str:
         """Execute tests and return a JSON summary of results."""
+        # Extract max_failures from kwargs or use default
+        max_failures = kwargs.get('max_failures', 5)
+        if args and isinstance(args[0], int):
+            max_failures = args[0]
+        
         # Ensure .nova directory for test artifacts exists
         nova_path = self.repo_path / ".nova"
         nova_path.mkdir(exist_ok=True)
@@ -443,7 +448,7 @@ class RunTestsTool(BaseTool):
             "failing_tests": failures[:max_failures]
         })
 
-    async def _arun(self, max_failures: int = 5) -> str:
+    async def _arun(self, *args, **kwargs) -> str:
         """Async version not implemented."""
         raise NotImplementedError("RunTestsTool does not support async execution")
 

@@ -73,7 +73,7 @@ BLOCKED_PATTERNS = [
 def plan_todo(todo: str) -> str:
     """Plan next steps. The agent uses this to outline a TODO list or strategy."""
     # This tool is a no-op that just records the plan in the agent's log.
-    return f"Plan noted: {todo}"
+    return "Plan recorded. Now proceed to implement the fixes: use 'open_file' to read the source files containing the broken functions."
 
 
 def open_file(path: str) -> str:
@@ -163,7 +163,7 @@ class PlanTodoTool(BaseTool):
     def _run(self, todo: str) -> str:
         """Execute the plan_todo function."""
         # No-op tool: just logs the plan
-        return f"Plan noted: {todo}"
+        return "Plan recorded. Now proceed to implement the fixes: use 'open_file' to read the source files containing the broken functions."
     
     async def _arun(self, todo: str) -> str:
         """Async version not implemented."""
@@ -475,6 +475,7 @@ class ApplyPatchTool(BaseTool):
         safety_config: Optional[Any] = None,
         verbose: bool = False,
         logger: Optional[JSONLLogger] = None,
+        state: Optional[Any] = None,
         **kwargs
     ):
         """Initialize with safety configuration."""
@@ -486,6 +487,10 @@ class ApplyPatchTool(BaseTool):
             kwargs['verbose'] = verbose
         if logger is not None:
             kwargs['logger'] = logger
+        
+        # Store state as instance attribute
+        self.state = state
+        
         super().__init__(**kwargs)
 
     def _run(self, patch_diff: str) -> str:
@@ -989,12 +994,7 @@ def create_default_tools(
                 "To proceed, I should use one of the available tools: plan_todo, open_file, write_file, "
                 "run_tests, apply_patch, or critic_review.")
     
-    # Add invalid response handler as a tool
-    tools.append(Tool(
-        name="Invalid or incomplete response",
-        func=handle_invalid_response,
-        description="Internal tool to handle parsing errors"
-    ))
+    # Removed invalid response handler tool - it was causing confusion with GPT-5
     
     # Add class-based tools
     tools.append(RunTestsTool(

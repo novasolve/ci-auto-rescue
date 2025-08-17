@@ -223,19 +223,79 @@ class NovaDeepAgent:
         
         if use_react:
             # For models that don't support function calling (e.g., Claude, GPT-5)
-            # Use structured ReAct pattern that supports multi-input tools
-            agent_executor = initialize_agent(
-                tools=tools,
-                llm=llm,
-                agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=self.verbose,
-                handle_parsing_errors=True,
-                max_iterations=15,
-                early_stopping_method="generate",
-                agent_kwargs={
-                    "prefix": system_message + "\n\nYou have access to the following tools:"
-                }
-            )
+            # Check if this is GPT-5 which needs special handling
+            if isinstance(llm, GPT5ChatOpenAI):
+                # GPT-5 needs special handling - convert multi-input tools to single JSON input
+                import json
+                from langchain.tools import Tool
+                
+                # Create wrapper tools that accept JSON strings for multi-input tools
+                wrapped_tools = []
+                for tool in tools:
+                    if tool.name == "write_file":
+                        # Create a wrapper that accepts JSON input
+                        def write_file_json(json_str: str) -> str:
+                            try:
+                                data = json.loads(json_str)
+                                return tool._run(path=data["path"], new_content=data["new_content"])
+                            except Exception as e:
+                                return f"ERROR: Invalid JSON input: {e}. Expected format: {{'path': 'file_path', 'new_content': 'content'}}"
+                        
+                        wrapped_tool = Tool(
+                            name="write_file",
+                            func=write_file_json,
+                            description="Write or overwrite a file. Input must be JSON: {'path': 'file_path', 'new_content': 'content'}"
+                        )
+                        wrapped_tools.append(wrapped_tool)
+                    elif hasattr(tool, 'args_schema') and tool.args_schema and hasattr(tool.args_schema, '__fields__') and len(tool.args_schema.__fields__) > 1:
+                        # For other multi-input tools, create JSON wrappers
+                        original_tool = tool
+                        def make_json_wrapper(t):
+                            def wrapper(json_str: str) -> str:
+                                try:
+                                    data = json.loads(json_str)
+                                    return t._run(**data)
+                                except Exception as e:
+                                    return f"ERROR: Invalid JSON input: {e}"
+                            return wrapper
+                        
+                        wrapped_tool = Tool(
+                            name=tool.name,
+                            func=make_json_wrapper(tool),
+                            description=f"{tool.description} Input must be JSON with required fields."
+                        )
+                        wrapped_tools.append(wrapped_tool)
+                    else:
+                        # Single input tools can be used as-is
+                        wrapped_tools.append(tool)
+                
+                # Use ZERO_SHOT_REACT_DESCRIPTION with wrapped tools
+                agent_executor = initialize_agent(
+                    tools=wrapped_tools,
+                    llm=llm,
+                    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                    verbose=self.verbose,
+                    handle_parsing_errors=True,
+                    max_iterations=15,
+                    early_stopping_method="generate",
+                    agent_kwargs={
+                        "prefix": system_message + "\n\nYou have access to the following tools:"
+                    }
+                )
+            else:
+                # For other models (Claude), use structured ReAct
+                agent_executor = initialize_agent(
+                    tools=tools,
+                    llm=llm,
+                    agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+                    verbose=self.verbose,
+                    handle_parsing_errors=True,
+                    max_iterations=15,
+                    early_stopping_method="generate",
+                    agent_kwargs={
+                        "prefix": system_message + "\n\nYou have access to the following tools:"
+                    }
+                )
         else:
             # For OpenAI models that support function calling (GPT-3.5, GPT-4, GPT-5, etc.)
             agent_executor = initialize_agent(
@@ -322,8 +382,9 @@ Begin fixing the tests now."""
                 error_msg = str(e).lower()
                 model_name = getattr(self.settings, 'default_llm_model', '').lower()
                 
-                if ("function" in error_msg or "unsupported value" in error_msg or "does not support" in error_msg) and \
-                   (model_name.startswith("gpt-5") or model_name in ["gpt-5-turbo", "gpt-5-preview"]):
+                if (("function" in error_msg or "unsupported value" in error_msg or "does not support" in error_msg or 
+                     "unsupported parameter" in error_msg or "'stop' is not supported" in error_msg) and 
+                    (model_name.startswith("gpt-5") or model_name in ["gpt-5-turbo", "gpt-5-preview"])):
                     if self.verbose:
                         print(f"\n⚠️ {self.settings.default_llm_model} runtime error: {e}")
                         print("🔄 Falling back to GPT-4-0613 with function calling...")

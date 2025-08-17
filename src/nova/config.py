@@ -17,7 +17,7 @@ class NovaSettings:
     """Main settings for Nova CI-Rescue."""
     
     # LLM Configuration
-    default_llm_model: str = "gpt-4"  # Default to GPT-4 for better out-of-box compatibility
+    default_llm_model: str = field(default_factory=lambda: os.getenv("NOVA_MODEL") or os.getenv("NOVA_DEFAULT_LLM_MODEL") or os.getenv("MODEL") or "gpt-4")
     temperature: float = 0.1
     max_tokens: Optional[int] = None
     
@@ -80,8 +80,14 @@ class NovaSettings:
                 if 'model' in data and 'default_llm_model' not in data:
                     data['default_llm_model'] = data.pop('model')
                 
+                # Save current model if it was set by environment variable
+                env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_DEFAULT_LLM_MODEL") or os.getenv("MODEL")
+                
                 for key, value in data.items():
                     if hasattr(self, key) and value is not None:
+                        # Don't override model if environment variable is set
+                        if key == 'default_llm_model' and env_model:
+                            continue
                         setattr(self, key, value)
 
 
@@ -199,10 +205,5 @@ def get_settings(config_file: Optional[Path] = None) -> NovaSettings:
     # Load from config file if found
     if config_file:
         settings.merge_with_yaml(config_file)
-    
-    # Check for environment variable overrides (highest priority)
-    env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_LLM_MODEL") or os.getenv("MODEL")
-    if env_model:
-        settings.default_llm_model = env_model
     
     return settings

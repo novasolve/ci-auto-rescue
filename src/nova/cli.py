@@ -223,28 +223,32 @@ def fix(
         
         # Check for model configuration in order of precedence:
         # 1. CLI --model option (highest priority)
-        # 2. Config file (supports both 'model' and 'default_llm_model')
-        # 3. Environment variable
-        # 4. Default from settings
+        # 2. Environment variable (takes precedence over config file)
+        # 3. Config file (supports both 'model' and 'default_llm_model')
+        # 4. Default from settings (already includes env check)
         if model:
             # CLI option takes highest precedence
             settings.default_llm_model = model
             if verbose:
                 print(f"Using model from CLI: {model}")
-        elif config_data:
-            # Support both 'model' and 'default_llm_model' fields
-            if hasattr(config_data, 'model') and config_data.model:
-                settings.default_llm_model = config_data.model
-            elif hasattr(config_data, 'default_llm_model') and config_data.default_llm_model:
-                settings.default_llm_model = config_data.default_llm_model
         else:
-            # Check environment variables if no CLI or config file setting
+            # Check environment variables (higher priority than config file)
             import os
-            env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_LLM_MODEL") or os.getenv("MODEL")
+            env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_DEFAULT_LLM_MODEL") or os.getenv("MODEL")
             if env_model:
                 settings.default_llm_model = env_model
                 if verbose:
                     print(f"Using model from environment: {env_model}")
+            elif config_data:
+                # Config file has lower priority than env vars
+                if hasattr(config_data, 'model') and config_data.model:
+                    settings.default_llm_model = config_data.model
+                    if verbose:
+                        print(f"Using model from config file: {config_data.model}")
+                elif hasattr(config_data, 'default_llm_model') and config_data.default_llm_model:
+                    settings.default_llm_model = config_data.default_llm_model
+                    if verbose:
+                        print(f"Using model from config file: {config_data.default_llm_model}")
         telemetry = JSONLLogger()
         telemetry.log_event("run_start", {
             "repo": str(repo_path),

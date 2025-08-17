@@ -99,6 +99,12 @@ class TestRunner:
             if self.verbose:
                 console.print(f"[dim]JSON report path: {json_report_path}[/dim]")
                 console.print(f"[dim]JSON report exists: {Path(json_report_path).exists()}[/dim]")
+                if Path(json_report_path).exists():
+                    console.print(f"[dim]JSON report size: {Path(json_report_path).stat().st_size} bytes[/dim]")
+                    # Read first 200 chars of the file
+                    with open(json_report_path, 'r') as f:
+                        content = f.read(200)
+                        console.print(f"[dim]JSON report content (first 200 chars): {repr(content)}[/dim]")
             
             failing_tests = self._parse_json_report(json_report_path, max_failures)
             

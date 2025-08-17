@@ -268,7 +268,7 @@ class WriteFileTool(BaseTool):
 
 class RunTestsInput(BaseModel):
     """Input schema for run_tests tool."""
-    max_failures: int = Field(5, description="Max number of failing tests to report")
+    max_failures: int = Field(default=5, description="Max number of failing tests to report (optional, default: 5)")
 
 
 class RunTestsTool(BaseTool):

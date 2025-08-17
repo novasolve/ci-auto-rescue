@@ -69,6 +69,7 @@ class TestRunner:
             cmd = [
                 sys.executable, "-m", "pytest",
                 str(self.repo_path),
+                "-c", "/dev/null",  # Ignore any pytest.ini files
                 "--json-report",
                 f"--json-report-file={json_report_path}",
                 f"--junit-xml={junit_report_path}",

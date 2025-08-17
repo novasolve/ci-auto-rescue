@@ -68,15 +68,14 @@ BLOCKED_PATTERNS = [
 
 
 # --- Function-based Tools (Simple Operations) ---
+# These remain as functions for backward compatibility, but are wrapped in classes below
 
-@tool("plan_todo", return_direct=False)
 def plan_todo(todo: str) -> str:
     """Plan next steps. The agent uses this to outline a TODO list or strategy."""
     # This tool is a no-op that just records the plan in the agent's log.
     return f"Plan noted: {todo}"
 
 
-@tool("open_file", return_direct=False)
 def open_file(path: str) -> str:
     """Read the contents of a file, with enhanced safety checks."""
     import fnmatch
@@ -112,7 +111,6 @@ def open_file(path: str) -> str:
         return f"ERROR: Could not read file {path}: {e}"
 
 
-@tool("write_file", return_direct=False)
 def write_file(path: str, new_content: str) -> str:
     """Overwrite a file with the given content, with enhanced safety checks."""
     import fnmatch
@@ -147,6 +145,69 @@ def write_file(path: str, new_content: str) -> str:
         return f"ERROR: Permission denied: {path}"
     except Exception as e:
         return f"ERROR: Could not write to file {path}: {e}"
+
+
+# --- Pydantic-based Tool Classes for Simple Tools ---
+
+class PlanTodoInput(BaseModel):
+    """Input schema for plan_todo tool."""
+    todo: str = Field(..., description="The plan or TODO steps to record.")
+
+
+class PlanTodoTool(BaseTool):
+    """Tool to plan next steps by outlining a TODO list or strategy."""
+    name: str = "plan_todo"
+    description: str = "Plan next steps by outlining a TODO list or strategy (no-op, just records the plan)."
+    args_schema: Type[BaseModel] = PlanTodoInput
+    
+    def _run(self, todo: str) -> str:
+        """Execute the plan_todo function."""
+        return plan_todo(todo)
+    
+    async def _arun(self, todo: str) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("PlanTodoTool does not support async execution")
+
+
+class OpenFileInput(BaseModel):
+    """Input schema for open_file tool."""
+    path: str = Field(..., description="Path of the file to read from the repository.")
+
+
+class OpenFileTool(BaseTool):
+    """Tool to read the contents of a file."""
+    name: str = "open_file"
+    description: str = "Read the contents of a file. Provide the file path to open."
+    args_schema: Type[BaseModel] = OpenFileInput
+    
+    def _run(self, path: str) -> str:
+        """Execute the open_file function."""
+        return open_file(path)
+    
+    async def _arun(self, path: str) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("OpenFileTool does not support async execution")
+
+
+class WriteFileInput(BaseModel):
+    """Input schema for write_file tool."""
+    path: str = Field(..., description="Path of the file to write to.")
+    new_content: str = Field(..., description="The new content to write into the file.")
+
+
+class WriteFileTool(BaseTool):
+    """Tool to write or overwrite a file with new content."""
+    name: str = "write_file"
+    description: str = "Write or overwrite a file with new content. Requires a file path and the content string."
+    args_schema: Type[BaseModel] = WriteFileInput
+    
+    def _run(self, path: str, new_content: str) -> str:
+        """Execute the write_file function."""
+        return write_file(path, new_content)
+    
+    async def _arun(self, path: str, new_content: str) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("WriteFileTool does not support async execution")
 
 
 # --- Class-based Tools (Complex Operations) ---
@@ -784,27 +845,10 @@ def create_default_tools(
     """
     tools = []
     
-    # Add function-based tools (converted to Tool instances for consistency)
-    tools.append(Tool(
-        name="plan_todo",
-        func=plan_todo,
-        description="Plan next steps. Use this to outline a TODO list or strategy before making changes.",
-        return_direct=False  # Allow agent to continue after planning
-    ))
-    
-    tools.append(Tool(
-        name="open_file",
-        func=open_file,
-        description="Read the contents of a file from the repository. Provide the file path as a string.",
-        return_direct=False  # Allow agent to process file contents
-    ))
-    
-    tools.append(Tool(
-        name="write_file",
-        func=write_file,
-        description="Write or overwrite a file with new content. Provide path and new_content as arguments.",
-        return_direct=False  # Allow agent to continue after writing
-    ))
+    # Add tools with defined schemas for consistent function calling
+    tools.append(PlanTodoTool())
+    tools.append(OpenFileTool())
+    tools.append(WriteFileTool())
     
     # Add class-based tools
     tools.append(RunTestsTool(

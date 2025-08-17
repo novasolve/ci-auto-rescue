@@ -159,6 +159,12 @@ def fix(
         dir_okay=False,
         resolve_path=True,
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="LLM model to use (e.g., gpt-4, gpt-3.5-turbo, claude-3-sonnet)",
+    ),
     legacy_agent: bool = typer.Option(
         False,
         "--legacy-agent",
@@ -216,18 +222,23 @@ def fix(
         settings = NovaSettings()
         
         # Check for model configuration in order of precedence:
-        # 1. Config file (supports both 'model' and 'default_llm_model')
-        # 2. Environment variable
-        # 3. Default from settings
-        if config_data:
+        # 1. CLI --model option (highest priority)
+        # 2. Config file (supports both 'model' and 'default_llm_model')
+        # 3. Environment variable
+        # 4. Default from settings
+        if model:
+            # CLI option takes highest precedence
+            settings.default_llm_model = model
+            if verbose:
+                print(f"Using model from CLI: {model}")
+        elif config_data:
             # Support both 'model' and 'default_llm_model' fields
             if hasattr(config_data, 'model') and config_data.model:
                 settings.default_llm_model = config_data.model
             elif hasattr(config_data, 'default_llm_model') and config_data.default_llm_model:
                 settings.default_llm_model = config_data.default_llm_model
-        
-        # Check environment variables if no config file setting
-        if not (config_data and (hasattr(config_data, 'model') or hasattr(config_data, 'default_llm_model'))):
+        else:
+            # Check environment variables if no CLI or config file setting
             import os
             env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_LLM_MODEL") or os.getenv("MODEL")
             if env_model:

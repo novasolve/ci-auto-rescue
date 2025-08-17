@@ -3,8 +3,8 @@
 # Copy to nova.config.yml and customize
 
 # LLM Configuration
-model: gpt-5 # Alias for default_llm_model - Options: gpt-5, gpt-4, gpt-3.5-turbo, claude-3, llama-2
-default_llm_model: gpt-5 # Can use either 'model' or 'default_llm_model'
+model: gpt-5
+default_llm_model: gpt-5
 temperature: 0.1
 max_tokens: 4000
 

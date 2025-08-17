@@ -131,15 +131,19 @@ class NovaDeepAgent:
             try:
                 llm = ChatOpenAI(model_name=model_name, temperature=0)
                 use_react = False
+                actual_model = model_name
                 if self.verbose:
                     print(f"🚀 Using OpenAI model '{model_name}' with function calling")
             except Exception as e:
+                # Use GPT-4-0613 for fallback (supports function calling)
+                fallback_model = "gpt-4-0613"
                 if self.verbose:
-                    print(f"⚠️ Model {model_name} not available ({e}), falling back to GPT-4")
-                llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+                    print(f"⚠️ Model {model_name} not available ({e}), falling back to {fallback_model}")
+                llm = ChatOpenAI(model_name=fallback_model, temperature=0)
                 use_react = False
+                actual_model = fallback_model
                 if self.verbose:
-                    print(f"🚀 Using OpenAI model 'gpt-4' with function calling (fallback)")
+                    print(f"🚀 Using OpenAI model '{fallback_model}' with function calling (fallback)")
         # Define the comprehensive system message prompt with all safety rules
         system_message = (
             "You are Nova, an advanced AI software engineer specialized in automatically fixing failing tests.\n\n"
@@ -210,6 +214,19 @@ class NovaDeepAgent:
                 max_iterations=15
             )
         
+        # Log final model selection for transparency
+        if self.verbose:
+            try:
+                actual_model_name = llm.model_name if hasattr(llm, 'model_name') else str(llm)
+                mode = "ReAct (text-based)" if use_react else "OpenAI Functions"
+                print(f"\n🤖 Final model configuration:")
+                print(f"   Model: {actual_model_name}")
+                print(f"   Mode: {mode}")
+                print(f"   Temperature: 0")
+                print("")
+            except Exception:
+                pass  # Don't fail if logging doesn't work
+        
         return agent_executor
 
     def run(self, failures_summary: str = "", error_details: str = "", code_snippets: str = "") -> bool:
@@ -275,16 +292,16 @@ Begin fixing the tests now."""
                    (model_name.startswith("gpt-5") or model_name in ["gpt-5-turbo", "gpt-5-preview"]):
                     if self.verbose:
                         print(f"\n⚠️ {self.settings.default_llm_model} runtime error: {e}")
-                        print("🔄 Falling back to GPT-4 with function calling...")
+                        print("🔄 Falling back to GPT-4-0613 with function calling...")
                     
-                    # Update settings and rebuild agent with GPT-4
-                    self.settings.default_llm_model = "gpt-4"
+                    # Update settings and rebuild agent with GPT-4 (function-call enabled version)
+                    self.settings.default_llm_model = "gpt-4-0613"
                     self.agent = self._build_agent()
                     
                     # Retry with GPT-4
-                    result = self.agent({"input": user_prompt})
+                    result = self.agent.invoke({"input": user_prompt})
                     if self.verbose:
-                        print("✅ Successfully recovered with GPT-4")
+                        print("✅ Successfully recovered with GPT-4-0613")
                 else:
                     # Re-raise if not a GPT-5 function calling issue
                     raise

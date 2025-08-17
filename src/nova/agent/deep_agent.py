@@ -245,19 +245,56 @@ class NovaDeepAgent:
                             # Get field descriptions
                             field_info = {}
                             for field_name, field_obj in fields.items():
-                                # Handle different pydantic versions
-                                if hasattr(field_obj, 'field_info'):
-                                    # Pydantic v1
+                                # Extract field information from Pydantic ModelField
+                                try:
+                                    # Try to get the field type
+                                    if hasattr(field_obj, 'type_'):
+                                        field_type = str(field_obj.type_)
+                                    elif hasattr(field_obj, 'annotation'):
+                                        field_type = str(field_obj.annotation)
+                                    else:
+                                        field_type = "str"  # Default to string
+                                    
+                                    # Try to get required status
+                                    is_required = True  # Default to required
+                                    
+                                    # Check for Optional types
+                                    if hasattr(field_obj, 'type_'):
+                                        type_str = str(field_obj.type_)
+                                        if 'Optional' in type_str or 'Union[' in type_str and 'None' in type_str:
+                                            is_required = False
+                                    
+                                    # Check for default values
+                                    if hasattr(field_obj, 'default'):
+                                        # In Pydantic, ... (Ellipsis) means required
+                                        # Check if default is NOT Ellipsis and NOT UndefinedType
+                                        default_str = str(field_obj.default)
+                                        if (field_obj.default is not ... and 
+                                            'Ellipsis' not in default_str and
+                                            'UndefinedType' not in default_str):
+                                            is_required = False
+                                    
+                                    # Override with explicit required attribute if present
+                                    if hasattr(field_obj, 'required'):
+                                        is_required = field_obj.required
+                                    
+                                    # Try to get description
+                                    description = ""
+                                    if hasattr(field_obj, 'field_info') and hasattr(field_obj.field_info, 'description'):
+                                        description = field_obj.field_info.description or ""
+                                    elif hasattr(field_obj, 'description'):
+                                        description = field_obj.description or ""
+                                    
                                     field_info[field_name] = {
-                                        'type': str(field_obj.type_),
-                                        'required': field_obj.required if hasattr(field_obj, 'required') else True,
-                                        'description': getattr(field_obj.field_info, 'description', '')
+                                        'type': field_type,
+                                        'required': is_required,
+                                        'description': description
                                     }
-                                else:
-                                    # Pydantic v2 or other
+                                except Exception:
+                                    # Fallback for any field we can't introspect
                                     field_info[field_name] = {
-                                        'type': str(type(field_obj)),
-                                        'required': True,  # Assume required
+                                        'type': 'str',
+                                        'required': True,
                                         'description': ''
                                     }
                             

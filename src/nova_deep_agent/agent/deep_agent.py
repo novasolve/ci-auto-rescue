@@ -13,12 +13,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.agents import initialize_agent, AgentType, Tool
 from langchain.schema import SystemMessage
 
-from ..tools.agent_tools import (
-    plan_todo_tool,
-    open_file_tool,
-    write_file_tool,
-    run_tests_tool
-)
+from ..tools.agent_tools import AgentTools
 from .agent_config import AgentConfig
 
 
@@ -40,6 +35,11 @@ You have access to the repository and can perform these actions:
 
 Your goal is to make all tests pass by **minimally** editing the source code (do NOT edit the tests themselves).
 
+Common project structures:
+- Source files are typically in 'src/' directory (e.g., if looking for 'broken.py', try 'src/broken.py')
+- Test files are typically in 'tests/' directory (e.g., 'tests/test_broken.py')
+- If you get "File not found" errors, check if you need to add the correct directory prefix
+
 Guidelines:
 - Start by planning your approach to understand the failing tests
 - Read relevant files to understand the code structure
@@ -52,14 +52,17 @@ Guidelines:
 Use the tools step-by-step: first plan your solution, then open relevant files, apply fixes, and run tests to verify.
 Iterate as needed until all tests are passing. When all failures are resolved, stop and provide a final confirmation."""
     
-    def __init__(self, config: Optional[AgentConfig] = None):
+    def __init__(self, config: Optional[AgentConfig] = None, repo_root: Optional[Path] = None):
         """
         Initialize the Deep Agent.
         
         Args:
             config: Agent configuration. Uses defaults if not provided.
+            repo_root: Path to repository root. Defaults to current directory.
         """
         self.config = config or AgentConfig()
+        self.repo_root = Path(repo_root or ".").resolve()
+        self.agent_tools = AgentTools(repo_root=self.repo_root)
         self.llm = None
         self.agent = None
         self.tools = []
@@ -105,7 +108,7 @@ Iterate as needed until all tests are passing. When all failures are resolved, s
         if self.config.enable_planning:
             tools.append(Tool(
                 name="plan_todo",
-                func=plan_todo_tool,
+                func=self._plan_todo_wrapper,
                 description=(
                     "Plan the next steps to fix the failing tests. "
                     "Input: optional notes/context. "
@@ -116,7 +119,7 @@ Iterate as needed until all tests are passing. When all failures are resolved, s
         if self.config.enable_file_access:
             tools.append(Tool(
                 name="open_file",
-                func=open_file_tool,
+                func=self._open_file_wrapper,
                 description=(
                     "Read the contents of a file from the repository. "
                     "Input: file path relative to repo root. "
@@ -140,7 +143,7 @@ Iterate as needed until all tests are passing. When all failures are resolved, s
         if self.config.enable_testing:
             tools.append(Tool(
                 name="run_tests",
-                func=run_tests_tool,
+                func=self._run_tests_wrapper,
                 description=(
                     "Run the full test suite in a sandboxed environment. "
                     "Input: none (just call the tool). "

@@ -458,7 +458,7 @@ def fix(
                 # Add logs and artifacts info
                 console.print("\n[bold blue]Logs & artifacts:[/bold blue]")
                 if telemetry and hasattr(telemetry, 'run_id'):
-                    run_dir = Path(telemetry.settings.telemetry_dir) / telemetry.run_id
+                    run_dir = telemetry.log_dir
                 else:
                     run_dir = Path(".nova/telemetry")
                 console.print(f"  • Detailed logs: [italic]{run_dir}[/italic]")
@@ -582,7 +582,7 @@ def fix(
                     error_report["error_message"] = None
                 
                 # Write to JSON file in telemetry directory
-                report_dir = Path(telemetry.settings.telemetry_dir) / telemetry.run_id
+                report_dir = telemetry.log_dir
                 report_dir.mkdir(parents=True, exist_ok=True)
                 report_path = report_dir / "error_report.json"
                 

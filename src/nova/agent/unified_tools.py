@@ -70,10 +70,11 @@ BLOCKED_PATTERNS = [
 # --- Function-based Tools (Simple Operations) ---
 # These remain as functions for backward compatibility, but are wrapped in classes below
 
-def plan_todo(todo: str) -> str:
+def plan_todo(input: str) -> str:
     """Plan next steps. The agent uses this to outline a TODO list or strategy."""
     # This tool is a no-op that just records the plan in the agent's log.
-    return "Plan recorded. Now proceed to implement the fixes: use 'open_file' to read the source files containing the broken functions."
+    # Store the plan (in real implementation, this would save to state)
+    return "Plan recorded. Continue with the next action."
 
 
 def open_file(path: str) -> str:
@@ -163,7 +164,8 @@ class PlanTodoTool(BaseTool):
     def _run(self, todo: str) -> str:
         """Execute the plan_todo function."""
         # No-op tool: just logs the plan
-        return "Plan recorded. Now proceed to implement the fixes: use 'open_file' to read the source files containing the broken functions."
+        # Store the plan (in real implementation, this would save to state)
+        return "Plan recorded. Continue with the next action."
     
     async def _arun(self, todo: str) -> str:
         """Async version not implemented."""

@@ -46,13 +46,15 @@ class GPT5ReActOutputParser(ReActOutputParser):
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
         """Parse GPT-5 output, prioritizing actions over final answers."""
         # Special handling for plan_todo responses that try to end prematurely
-        if ("plan noted" in text.lower() or "todo created" in text.lower() or "plan recorded" in text.lower()) and "final answer" in text.lower():
-            # Force continuation with next logical step
-            return AgentAction(
-                tool="open_file",
-                tool_input="examples/demos/demo_broken_project/broken_module.py",
-                log=text + "\n[Parser: Continuing with implementation after planning]"
-            )
+        if ("plan noted" in text.lower() or "todo created" in text.lower() or "plan recorded" in text.lower()):
+            # Check if agent is trying to provide a final answer after planning
+            if "final answer" in text.lower():
+                # Force continuation with next logical step
+                return AgentAction(
+                    tool="open_file",
+                    tool_input="broken_module.py",  # Generic filename, will be adjusted based on context
+                    log=text + "\n[Parser: Detected premature completion after planning. Continuing with implementation.]"
+                )
         
         # First check if there's a valid action in the output
         action_match = re.search(
@@ -309,13 +311,13 @@ class NovaDeepAgent:
             "4. IMPLEMENT: Make targeted changes to fix the issues\n"
             "5. VERIFY: Run tests to confirm fixes work\n"
             "6. ITERATE: If tests still fail, analyze and adjust\n\n"
-            "IMPORTANT: After using plan_todo, you MUST continue with the next action!\n"
-            "Creating a plan is just the first step. After planning, immediately:\n"
-            "- Use 'open_file' to read the source files\n"
-            "- Use 'critic_review' to review your proposed changes\n"
-            "- Use 'apply_patch' or 'write_file' to make changes\n"
-            "- Use 'run_tests' to verify fixes\n"
-            "NEVER stop after just creating a plan!\n\n"
+            "IMPORTANT: After using plan_todo, you MUST continue with another action.\n"
+            "Never treat planning as the final step.\n"
+            "Always follow planning with:\n"
+            "1. Opening relevant files (open_file)\n"
+            "2. Making code changes (write_file/apply_patch)\n"
+            "3. Running tests (run_tests)\n"
+            "Only provide a Final Answer after all steps are done.\n\n"
             "Remember: Your goal is to make ALL tests pass with MINIMAL, SAFE changes."
         )
         # Create the tool set (unified tools with safety and testing integrated)

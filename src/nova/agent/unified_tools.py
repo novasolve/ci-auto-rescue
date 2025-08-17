@@ -202,7 +202,17 @@ class OpenFileTool(BaseTool):
                     return f"ERROR: Access to {path} is blocked by policy"
         # Block any test files explicitly
         if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
-            return f"ERROR: Access to test file {path} is blocked by policy"
+            # Provide helpful guidance when test files are blocked
+            hint = ""
+            if "test_broken.py" in path:
+                hint = "\nHINT: Look for source file: broken.py or src/broken.py"
+            elif path.endswith('_test.py'):
+                module_name = path.replace('_test.py', '.py')
+                hint = f"\nHINT: Look for source file: {module_name}"
+            elif path.startswith('test_'):
+                module_name = path.replace('test_', '', 1)
+                hint = f"\nHINT: Look for source file: {module_name}"
+            return f"ERROR: Access to test file {path} is blocked by policy. Use error messages to understand what to fix.{hint}"
         try:
             content = p.read_text()
             if len(content) > 50000:  # 50KB limit

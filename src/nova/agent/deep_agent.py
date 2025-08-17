@@ -117,9 +117,35 @@ class NovaDeepAgent:
         # Choose LLM based on configuration (supports OpenAI GPT or Anthropic Claude)
         model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
         
-        # Show what model was requested for transparency
+        # Smart model selection based on available API keys
+        openai_key = self.settings.openai_api_key
+        anthropic_key = self.settings.anthropic_api_key
+        
+        # Only apply smart selection if using a default/generic model name
+        if model_name in ["gpt-4", "gpt-3.5-turbo", "gpt-5", None, ""]:
+            if openai_key and not anthropic_key:
+                # Only OpenAI key available
+                if model_name not in ["gpt-4", "gpt-3.5-turbo", "gpt-5"]:
+                    model_name = "gpt-4"
+                if self.verbose:
+                    print(f"🔑 Using OpenAI model (only OpenAI key available)")
+            elif anthropic_key and not openai_key:
+                # Only Anthropic key available
+                model_name = "claude-3-opus"
+                if self.verbose:
+                    print(f"🔑 Using Anthropic model (only Anthropic key available)")
+            elif anthropic_key and openai_key:
+                # Both keys available - use configured default
+                if self.verbose:
+                    print(f"🔑 Both API keys available, using configured model")
+            else:
+                # No keys available
+                if self.verbose:
+                    print(f"⚠️ No API keys found - please set OPENAI_API_KEY or ANTHROPIC_API_KEY")
+        
+        # Show what model was selected
         if self.verbose:
-            print(f"📋 Requested model: {model_name}")
+            print(f"📋 Selected model: {model_name}")
         
         # Map the model name using LLMClient logic
         from nova.agent.llm_client import LLMClient
@@ -214,7 +240,8 @@ class NovaDeepAgent:
             repo_path=self.state.repo_path,
             verbose=self.verbose,
             safety_config=self.safety_config,
-            llm=llm  # Pass LLM for critic review
+            llm=llm,  # Pass LLM for critic review
+            state=self.state  # Pass agent state for review tracking
         )
         
         # Choose agent type based on model capabilities
@@ -428,8 +455,8 @@ Use the available tools to fix the failing tests. Follow this workflow:
 2. **Read relevant files** using 'open_file' - Understand the code structure
 3. **Modify source code** using 'write_file' - Apply minimal fixes
 4. **Run tests** using 'run_tests' - Verify your fixes work
-5. **(Optional) Review patches** using 'critic_review' - Validate changes before applying
-6. **(Optional) Apply patches** using 'apply_patch' - Commit validated changes
+5. **Review patches** using 'critic_review' - Validate changes before applying
+6. **Apply patches** using 'apply_patch' - Commit validated changes
 
 ## REMEMBER:
 - Do NOT modify test files (tests/, test_*.py, *_test.py)
@@ -551,6 +578,10 @@ Begin fixing the tests now."""
                 "traceback": err_trace[:500],
                 "iteration": self.state.current_iteration
             })
+            
+            # Store error message in state for reporting
+            self.state.error_message = err_msg
+            
             # Mark appropriate final status on error
             if "max iterations" in err_msg.lower():
                 self.state.final_status = "max_iters"

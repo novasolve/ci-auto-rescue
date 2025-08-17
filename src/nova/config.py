@@ -10,6 +10,7 @@ import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
+from dotenv import load_dotenv
 
 
 @dataclass
@@ -47,6 +48,56 @@ class NovaSettings:
     # Telemetry
     telemetry_enabled: bool = True
     telemetry_dir: Path = field(default_factory=lambda: Path(".nova/telemetry"))
+    
+    @classmethod
+    def from_env(cls) -> "NovaSettings":
+        """
+        Load settings from environment variables and .env file.
+        
+        Automatically selects appropriate model based on available API keys.
+        """
+        # Load .env file if present
+        load_dotenv()
+        
+        # Helper function to get env var
+        def _get(key: str, default: Optional[str] = None) -> Optional[str]:
+            value = os.environ.get(key, default)
+            return value if value else default
+        
+        # Check for model override from environment
+        default_model = os.environ.get("NOVA_MODEL") or os.environ.get("NOVA_DEFAULT_LLM_MODEL") or os.environ.get("MODEL")
+        
+        # If no model specified, use smart defaults based on available API keys
+        if not default_model:
+            openai_key = os.environ.get("OPENAI_API_KEY", "")
+            anthro_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            
+            if not openai_key and anthro_key:
+                # Only Anthropic key available - default to Claude
+                default_model = "claude-3-opus"
+            elif openai_key and not anthro_key:
+                # Only OpenAI key available - default to GPT
+                default_model = "gpt-4"
+            else:
+                # Both keys available or neither - default to GPT
+                default_model = "gpt-4"
+        
+        # Create settings instance with environment values
+        return cls(
+            openai_api_key=_get("OPENAI_API_KEY"),
+            anthropic_api_key=_get("ANTHROPIC_API_KEY"),
+            default_llm_model=default_model,
+            temperature=float(_get("NOVA_TEMPERATURE", "0.1")),
+            max_iterations=int(_get("NOVA_MAX_ITERATIONS", "6")),
+            timeout_seconds=int(_get("NOVA_TIMEOUT", "1200")),
+            verbose=_get("NOVA_VERBOSE", "false").lower() in ["true", "1", "yes"],
+            max_patch_lines=int(_get("NOVA_MAX_PATCH_LINES", "500")),
+            max_affected_files=int(_get("NOVA_MAX_AFFECTED_FILES", "10")),
+            max_file_size=int(_get("NOVA_MAX_FILE_SIZE", "100000")),
+            use_docker=_get("NOVA_USE_DOCKER", "true").lower() in ["true", "1", "yes"],
+            docker_image=_get("NOVA_DOCKER_IMAGE", "nova-ci-rescue-sandbox:latest"),
+            telemetry_enabled=_get("NOVA_TELEMETRY", "true").lower() in ["true", "1", "yes"],
+        )
     
     @classmethod
     def from_yaml(cls, path: Path) -> "NovaSettings":

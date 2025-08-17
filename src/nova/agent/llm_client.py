@@ -32,21 +32,40 @@ class LLMClient:
         
         # Determine which provider to use based on model name and available API keys
         model_name = self.settings.default_llm_model.lower()
+        openai_key = self.settings.openai_api_key
+        anthropic_key = self.settings.anthropic_api_key
         
-        if "claude" in model_name and self.settings.anthropic_api_key:
-            # Use Anthropic
+        # Smart provider selection
+        if "claude" in model_name and anthropic_key:
+            # Claude model requested and key available
             if anthropic is None:
                 raise ImportError("anthropic package not installed. Run: pip install anthropic")
-            self.client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
+            self.client = anthropic.Anthropic(api_key=anthropic_key)
             self.provider = "anthropic"
             self.model = self._get_anthropic_model_name()
-        elif self.settings.openai_api_key:
-            # Use OpenAI
+        elif "claude" in model_name and not anthropic_key and openai_key:
+            # Claude requested but only OpenAI key available - fallback to GPT
+            print(f"Warning: Claude model '{self.settings.default_llm_model}' requested but no Anthropic key found. Using OpenAI instead.")
             if OpenAI is None:
                 raise ImportError("openai package not installed. Run: pip install openai")
-            self.client = OpenAI(api_key=self.settings.openai_api_key)
+            self.client = OpenAI(api_key=openai_key)
+            self.provider = "openai"
+            self.model = "gpt-4"  # Fallback to GPT-4
+        elif openai_key:
+            # OpenAI model or default
+            if OpenAI is None:
+                raise ImportError("openai package not installed. Run: pip install openai")
+            self.client = OpenAI(api_key=openai_key)
             self.provider = "openai"
             self.model = self._get_openai_model_name()
+        elif anthropic_key:
+            # Only Anthropic key available, use Claude even if not explicitly requested
+            print(f"Note: Using Claude model (only Anthropic key available)")
+            if anthropic is None:
+                raise ImportError("anthropic package not installed. Run: pip install anthropic")
+            self.client = anthropic.Anthropic(api_key=anthropic_key)
+            self.provider = "anthropic"
+            self.model = self._get_anthropic_model_name()
         else:
             raise ValueError("No valid API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
     

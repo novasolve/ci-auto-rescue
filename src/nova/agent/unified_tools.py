@@ -336,6 +336,12 @@ class RunTestsTool(BaseTool):
         
         # If Docker failed, fall back to local TestRunner
         if docker_error:
+            # Warn the user that we are falling back to local execution (no isolation)
+            try:
+                from rich.console import Console
+                Console().print("[bold yellow]⚠️ Sandbox unavailable – running tests without isolation.[/bold yellow]")
+            except ImportError:
+                print("⚠️ Sandbox unavailable – running tests without isolation.")
             if self.verbose:
                 print(f"Docker execution failed: {docker_error}. Falling back to local test run.")
             
@@ -552,6 +558,15 @@ class ApplyPatchTool(BaseTool):
                 text=True
             )
             
+            # 5. Success! Update state to clear the review
+            if self.state:
+                self.state.last_review_approved = False  # Reset for next patch
+                self.state.last_reviewed_patch = None
+                self.state.pending_patch = None
+                # Add to patches applied list
+                if hasattr(self.state, 'patches_applied'):
+                    self.state.patches_applied.append(patch_text)
+            
             if self.verbose:
                 print("Patch applied and committed successfully")
             
@@ -598,6 +613,7 @@ class CriticReviewTool(BaseTool):
     
     verbose: bool = Field(default=False)
     llm: Optional[Any] = Field(default=None)
+    state: Optional[Any] = Field(default=None)  # Agent state for tracking reviews
     
     # Comprehensive safety patterns for patch review
     FORBIDDEN_PATTERNS: ClassVar[List[str]] = [
@@ -689,10 +705,14 @@ class CriticReviewTool(BaseTool):
         r"crypto.*mine",
     ]
     
-    def __init__(self, verbose: bool = False, llm: Optional[Any] = None, **kwargs):
-        """Initialize with optional LLM for semantic review."""
+    def __init__(self, verbose: bool = False, llm: Optional[Any] = None, state: Optional[Any] = None, **kwargs):
+        """Initialize with optional LLM for semantic review and agent state."""
         if verbose is not False:
             kwargs['verbose'] = verbose
+        
+        # Store agent state for tracking reviews
+        if state is not None:
+            kwargs['state'] = state
         
         # Initialize LLM if not provided and API key is available
         if llm is not None:
@@ -845,11 +865,24 @@ Respond with JSON: {"approved": true/false, "reason": "brief explanation"}"""
         safe, safety_reason = self._check_safety(patch_diff)
         
         if not safe:
+            # Update state to indicate rejection
+            if self.state:
+                self.state.last_review_approved = False
+                self.state.last_reviewed_patch = patch_diff
+                self.state.critic_feedback = safety_reason
             return f"REJECTED: {safety_reason}"
         
         # Then, run LLM review if available
         if self.llm:
             approved, llm_reason = self._llm_review(patch_diff, failing_tests)
+            
+            # Update state based on review result
+            if self.state:
+                self.state.last_review_approved = approved
+                self.state.last_reviewed_patch = patch_diff
+                self.state.pending_patch = patch_diff if approved else None
+                if not approved:
+                    self.state.critic_feedback = llm_reason
             
             if approved:
                 return f"APPROVED: {llm_reason}"
@@ -857,6 +890,10 @@ Respond with JSON: {"approved": true/false, "reason": "brief explanation"}"""
                 return f"REJECTED: {llm_reason}"
         else:
             # If no LLM, approve based on safety checks alone
+            if self.state:
+                self.state.last_review_approved = True
+                self.state.last_reviewed_patch = patch_diff
+                self.state.pending_patch = patch_diff
             return f"APPROVED: {safety_reason}"
     
     async def _arun(self, patch_diff: str, failing_tests: Optional[str] = None) -> str:
@@ -870,7 +907,8 @@ def create_default_tools(
     repo_path: Optional[Path] = None,
     verbose: bool = False,
     safety_config: Optional[SafetyConfig] = None,
-    llm: Optional[Any] = None
+    llm: Optional[Any] = None,
+    state: Optional[Any] = None
 ) -> List[BaseTool]:
     """
     Create the default set of tools for the Deep Agent (v1.1).
@@ -908,12 +946,14 @@ def create_default_tools(
     tools.append(ApplyPatchTool(
         repo_path=repo_path,
         safety_config=safety_config,
-        verbose=verbose
+        verbose=verbose,
+        state=state
     ))
     
     tools.append(CriticReviewTool(
         verbose=verbose,
-        llm=llm
+        llm=llm,
+        state=state
     ))
     
     return tools

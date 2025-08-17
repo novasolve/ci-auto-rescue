@@ -218,37 +218,25 @@ def fix(
         # Set up Ctrl+C signal handler for clean abort
         git_manager.setup_signal_handler()
 
-        # Initialize settings and telemetry
-        settings = NovaSettings()
+        # Initialize settings (load .env and env vars) and telemetry
+        settings = NovaSettings.from_env()
         
-        # Check for model configuration in order of precedence:
-        # 1. CLI --model option (highest priority)
-        # 2. Environment variable (takes precedence over config file)
-        # 3. Config file (supports both 'model' and 'default_llm_model')
-        # 4. Default from settings (already includes env check)
+        # Override with config file values if provided
+        if config_data:
+            if hasattr(config_data, 'model') and config_data.model:
+                settings.default_llm_model = config_data.model
+                if verbose:
+                    print(f"Using model from config file: {config_data.model}")
+            elif hasattr(config_data, 'default_llm_model') and config_data.default_llm_model:
+                settings.default_llm_model = config_data.default_llm_model
+                if verbose:
+                    print(f"Using model from config file: {config_data.default_llm_model}")
+        
+        # CLI --model option takes highest precedence
         if model:
-            # CLI option takes highest precedence
             settings.default_llm_model = model
             if verbose:
                 print(f"Using model from CLI: {model}")
-        else:
-            # Check environment variables (higher priority than config file)
-            import os
-            env_model = os.getenv("NOVA_MODEL") or os.getenv("NOVA_DEFAULT_LLM_MODEL") or os.getenv("MODEL")
-            if env_model:
-                settings.default_llm_model = env_model
-                if verbose:
-                    print(f"Using model from environment: {env_model}")
-            elif config_data:
-                # Config file has lower priority than env vars
-                if hasattr(config_data, 'model') and config_data.model:
-                    settings.default_llm_model = config_data.model
-                    if verbose:
-                        print(f"Using model from config file: {config_data.model}")
-                elif hasattr(config_data, 'default_llm_model') and config_data.default_llm_model:
-                    settings.default_llm_model = config_data.default_llm_model
-                    if verbose:
-                        print(f"Using model from config file: {config_data.default_llm_model}")
         telemetry = JSONLLogger()
         telemetry.log_event("run_start", {
             "repo": str(repo_path),
@@ -423,9 +411,16 @@ def fix(
             else:
                 console.print("\n[red bold]❌ FAILED - Some tests could not be fixed.[/red bold]")
                 if state.final_status == "max_iters":
-                    console.print(f"[yellow]Reached maximum iterations ({state.max_iterations}) without full success.[/yellow]")
+                    console.print(f"[bold yellow]🔄 Reached the maximum iterations ({state.max_iterations}) without fixing all tests.[/bold yellow]")
+                    if state.total_failures:
+                        console.print(f"[yellow]{state.total_failures} test(s) still failing after the final iteration.[/yellow]")
                 elif state.final_status == "error":
-                    console.print("[yellow]Agent encountered an error during execution.[/yellow]")
+                    # Show the error message captured from the agent (e.g., API errors, etc.)
+                    err_detail = getattr(state, "error_message", "Unexpected error")
+                    console.print(f"[bold red]❌ Agent Error – {err_detail}[/bold red]")
+                # Suggest using verbose mode for more info on failures
+                if state.final_status in {"max_iters", "error"}:
+                    console.print("[dim]ℹ️  Run with --verbose for more detailed logs and reasoning output.[/dim]")
         else:
             # === Legacy Agent Path (deprecated v1.0 approach) ===
             console.print("\n[bold]⚠️ Running legacy LLM-based agent (deprecated)...[/bold]")

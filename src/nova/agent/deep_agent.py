@@ -211,19 +211,18 @@ class NovaDeepAgent:
         from langchain.agents import AgentType
         
         if use_react:
-            # For models that don't support function calling (e.g., Claude)
-            # Use ReAct pattern with description-based tool selection
+            # For models that don't support function calling (e.g., Claude, GPT-5)
+            # Use structured ReAct pattern that supports multi-input tools
             agent_executor = initialize_agent(
                 tools=tools,
                 llm=llm,
-                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
                 verbose=self.verbose,
                 handle_parsing_errors=True,
                 max_iterations=15,
                 early_stopping_method="generate",
                 agent_kwargs={
-                    "prefix": system_message + "\n\nYou have access to the following tools:",
-                    "format_instructions": "Use the following format:\n\nThought: I need to [describe what you need to do]\nAction: [the action/tool to take, should be one of the available tools]\nAction Input: [the input to the action]\nObservation: [the result of the action]\n... (this Thought/Action/Action Input/Observation can repeat N times)\nThought: I now know the final answer\nFinal Answer: [your final response]\n\nBegin!"
+                    "prefix": system_message + "\n\nYou have access to the following tools:"
                 }
             )
         else:

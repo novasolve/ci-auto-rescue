@@ -77,7 +77,8 @@ class NovaDeepAgent:
         telemetry: JSONLLogger,
         git_manager: Optional[GitBranchManager] = None,
         verbose: bool = False,
-        safety_config: Optional[Any] = None
+        safety_config: Optional[Any] = None,
+        settings: Optional[Any] = None
     ):
         """
         Initialize the Deep Agent with the given state, telemetry logger, and optional Git branch manager.
@@ -88,14 +89,15 @@ class NovaDeepAgent:
             git_manager: GitBranchManager for applying commits (if any).
             verbose: whether to print verbose output during operations.
             safety_config: optional SafetyConfig to enforce patch safety limits.
+            settings: optional NovaSettings to use (defaults to get_settings() if not provided).
         """
         self.state = state
         self.telemetry = telemetry
         self.git_manager = git_manager
         self.verbose = verbose
         self.safety_config = safety_config
-        # Load runtime settings for LLM configuration
-        self.settings = get_settings()
+        # Use provided settings or load runtime settings for LLM configuration
+        self.settings = settings or get_settings()
         # Build the LangChain agent executor
         self.agent = self._build_agent()
 

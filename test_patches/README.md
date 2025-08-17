@@ -33,23 +33,27 @@ This directory contains test patches to validate the Safe Patching system's vari
 ## Usage Examples
 
 ### Review a safe patch:
+
 ```bash
 python -m nova.cli_safe_patch review test_patches/01_safe_patch.diff --context test_patches/context_divide_by_zero.txt
 ```
 
 ### Test dangerous code detection:
+
 ```bash
 python -m nova.cli_safe_patch review test_patches/02_dangerous_exec.diff
 python -m nova.cli_safe_patch review test_patches/03_dangerous_eval.diff
 ```
 
 ### Test file restriction:
+
 ```bash
 python -m nova.cli_safe_patch review test_patches/05_modify_tests.diff
 python -m nova.cli_safe_patch review test_patches/06_modify_config.diff
 ```
 
 ### Test size limits:
+
 ```bash
 python -m nova.cli_safe_patch review test_patches/09_exceeds_size_limit.diff
 python -m nova.cli_safe_patch review test_patches/10_too_many_files.diff
@@ -63,6 +67,7 @@ python -m nova.cli_safe_patch review test_patches/10_too_many_files.diff
 ## Testing the Full Workflow
 
 1. First, review patches to see what passes/fails:
+
    ```bash
    for patch in test_patches/*.diff; do
        echo "Testing: $patch"
@@ -72,11 +77,13 @@ python -m nova.cli_safe_patch review test_patches/10_too_many_files.diff
    ```
 
 2. Apply the safe patch:
+
    ```bash
    python -m nova.cli_safe_patch apply test_patches/01_safe_patch.diff --context test_patches/context_divide_by_zero.txt
    ```
 
 3. Check rollback status:
+
    ```bash
    python -m nova.cli_safe_patch status
    ```

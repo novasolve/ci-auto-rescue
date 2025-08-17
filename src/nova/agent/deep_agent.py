@@ -103,62 +103,43 @@ class NovaDeepAgent:
 
     def _build_agent(self) -> AgentExecutor:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
-        # Get model name and capabilities
-        model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
+        # Choose LLM based on configuration (supports OpenAI GPT or Anthropic Claude)
+        model_name = getattr(self.settings, 'default_llm_model', 'gpt-5')
         
         # Show what model was requested for transparency
         if self.verbose:
             print(f"📋 Requested model: {model_name}")
         
-        capabilities = get_model_capabilities(model_name)
-        use_react = not capabilities["function_calling"]
+        use_react = False
         
-        # Try to initialize the model with fallback support
-        try:
-            if model_name.lower().startswith("claude") and ChatAnthropic:
-                llm = ChatAnthropic(model=model_name, temperature=0)
-            else:
-                # Try to use the model as requested, let OpenAI API handle availability
-                llm = ChatOpenAI(model_name=model_name, temperature=0)
-            
-            if self.verbose:
-                if use_react:
-                    print(f"🚀 Using {model_name} model with ReAct pattern")
-                else:
-                    print(f"🚀 Using {model_name} model with function calling")
-                    
-        except Exception as e:
-            # Fallback to configured fallback model
-            fallback_model = capabilities.get("fallback")
-            
-            # If no fallback or fallback is None, use gpt-4 as ultimate fallback
-            if not fallback_model:
-                fallback_model = "gpt-4"
-            
-            # Always print the fallback reason for transparency
-            print(f"⚠️  Model '{model_name}' not available: {str(e)[:100]}")
-            print(f"    Falling back to '{fallback_model}'...")
-            
+        # If an Anthropic model (Claude) is requested and available, use it with ReAct mode (no function calling)
+        if ChatAnthropic and model_name.lower().startswith("claude"):
             try:
-                llm = ChatOpenAI(model_name=fallback_model, temperature=0)
-                model_name = fallback_model  # Update for display
-                self.settings.default_llm_model = fallback_model
-                # Update capabilities for fallback model
-                capabilities = get_model_capabilities(fallback_model)
-                use_react = not capabilities["function_calling"]
-                
+                llm = ChatAnthropic(model=model_name, temperature=0)
+                use_react = True
                 if self.verbose:
-                    if use_react:
-                        print(f"🚀 Using {model_name} model with ReAct pattern (fallback)")
-                    else:
-                        print(f"🚀 Using {model_name} model with function calling (fallback)")
-            except Exception as fallback_error:
-                # If even the fallback fails, raise a more informative error
-                raise RuntimeError(
-                    f"Failed to initialize both '{model_name}' and fallback '{fallback_model}'. "
-                    f"Original error: {e}. Fallback error: {fallback_error}. "
-                    f"Please ensure OPENAI_API_KEY is set and valid."
-                )
+                    print(f"🚀 Using Anthropic model '{model_name}' with ReAct agent")
+            except Exception as e:
+                if self.verbose:
+                    print(f"⚠️ Anthropic model {model_name} not available ({e}), falling back to GPT-4")
+                llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model 'gpt-4' with function calling (fallback)")
+        else:
+            # Otherwise, use OpenAI Chat model (GPT) with function calling by default
+            try:
+                llm = ChatOpenAI(model_name=model_name, temperature=0)
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model '{model_name}' with function calling")
+            except Exception as e:
+                if self.verbose:
+                    print(f"⚠️ Model {model_name} not available ({e}), falling back to GPT-4")
+                llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model 'gpt-4' with function calling (fallback)")
         # Define the comprehensive system message prompt with all safety rules
         system_message = (
             "You are Nova, an advanced AI software engineer specialized in automatically fixing failing tests.\n\n"
@@ -202,7 +183,7 @@ class NovaDeepAgent:
         from langchain.agents import AgentType
         
         if use_react:
-            # For GPT-5 and other models that don't support function calling
+            # For models that don't support function calling (e.g., Claude)
             # Use ReAct pattern with description-based tool selection
             agent_executor = initialize_agent(
                 tools=tools,
@@ -218,7 +199,7 @@ class NovaDeepAgent:
                 }
             )
         else:
-            # For GPT-4 and other models that support function calling
+            # For OpenAI models that support function calling (GPT-3.5, GPT-4, GPT-5, etc.)
             agent_executor = initialize_agent(
                 tools=tools,
                 llm=llm,

@@ -151,18 +151,19 @@ def write_file(path: str, new_content: str) -> str:
 
 class PlanTodoInput(BaseModel):
     """Input schema for plan_todo tool."""
-    todo: str = Field(..., description="The plan or TODO steps to record.")
+    todo: str = Field(..., description="The plan or TODO description to record")
 
 
 class PlanTodoTool(BaseTool):
     """Tool to plan next steps by outlining a TODO list or strategy."""
     name: str = "plan_todo"
-    description: str = "Plan next steps by outlining a TODO list or strategy (no-op, just records the plan)."
+    description: str = "Plan next steps by outlining a TODO list or strategy."
     args_schema: Type[BaseModel] = PlanTodoInput
     
     def _run(self, todo: str) -> str:
         """Execute the plan_todo function."""
-        return plan_todo(todo)
+        # No-op tool: just logs the plan
+        return f"Plan noted: {todo}"
     
     async def _arun(self, todo: str) -> str:
         """Async version not implemented."""
@@ -171,18 +172,43 @@ class PlanTodoTool(BaseTool):
 
 class OpenFileInput(BaseModel):
     """Input schema for open_file tool."""
-    path: str = Field(..., description="Path of the file to read from the repository.")
+    path: str = Field(..., description="Path of the file to read from the repository")
 
 
 class OpenFileTool(BaseTool):
     """Tool to read the contents of a file."""
     name: str = "open_file"
-    description: str = "Read the contents of a file. Provide the file path to open."
+    description: str = "Read the contents of a file from the repository (with safety checks)."
     args_schema: Type[BaseModel] = OpenFileInput
     
     def _run(self, path: str) -> str:
-        """Execute the open_file function."""
-        return open_file(path)
+        """Execute the open_file function with safety checks."""
+        # Same logic as the original open_file function, with safety guardrails
+        import fnmatch
+        import os
+        p = Path(path)
+        path_str = str(p)
+        for pattern in BLOCKED_PATTERNS:
+            if ('*' in pattern or '?' in pattern):
+                if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                    return f"ERROR: Access to {path} is blocked by policy (pattern: {pattern})"
+            else:
+                if pattern in path_str or p.name == pattern:
+                    return f"ERROR: Access to {path} is blocked by policy"
+        # Block any test files explicitly
+        if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
+            return f"ERROR: Access to test file {path} is blocked by policy"
+        try:
+            content = p.read_text()
+            if len(content) > 50000:  # 50KB limit
+                content = content[:50000] + "\n... (truncated)"
+            return content
+        except FileNotFoundError:
+            return f"ERROR: File not found: {path}"
+        except PermissionError:
+            return f"ERROR: Permission denied: {path}"
+        except Exception as e:
+            return f"ERROR: Could not read file {path}: {e}"
     
     async def _arun(self, path: str) -> str:
         """Async version not implemented."""
@@ -191,19 +217,42 @@ class OpenFileTool(BaseTool):
 
 class WriteFileInput(BaseModel):
     """Input schema for write_file tool."""
-    path: str = Field(..., description="Path of the file to write to.")
-    new_content: str = Field(..., description="The new content to write into the file.")
+    path: str = Field(..., description="Path of the file to write/overwrite")
+    new_content: str = Field(..., description="The new content to write into the file")
 
 
 class WriteFileTool(BaseTool):
     """Tool to write or overwrite a file with new content."""
     name: str = "write_file"
-    description: str = "Write or overwrite a file with new content. Requires a file path and the content string."
+    description: str = "Write or overwrite a file with new content (with safety checks)."
     args_schema: Type[BaseModel] = WriteFileInput
     
     def _run(self, path: str, new_content: str) -> str:
-        """Execute the write_file function."""
-        return write_file(path, new_content)
+        """Execute the write_file function with safety checks."""
+        import fnmatch
+        import os
+        p = Path(path)
+        path_str = str(p)
+        for pattern in BLOCKED_PATTERNS:
+            if ('*' in pattern or '?' in pattern):
+                if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                    return f"ERROR: Modification of {path} is not allowed (pattern: {pattern})"
+            else:
+                if pattern in path_str or p.name == pattern:
+                    return f"ERROR: Modification of {path} is not allowed"
+        # Block any test files explicitly
+        if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
+            return f"ERROR: Modification of test file {path} is not allowed"
+        if len(new_content) > 100000:  # 100KB write limit
+            return f"ERROR: Content too large ({len(new_content)} bytes). Max allowed: 100000 bytes"
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(new_content)
+            return f"SUCCESS: File {path} updated successfully"
+        except PermissionError:
+            return f"ERROR: Permission denied: {path}"
+        except Exception as e:
+            return f"ERROR: Could not write to file {path}: {e}"
     
     async def _arun(self, path: str, new_content: str) -> str:
         """Async version not implemented."""

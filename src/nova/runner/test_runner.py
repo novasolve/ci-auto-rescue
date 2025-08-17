@@ -96,7 +96,14 @@ class TestRunner:
                 return [], None
             
             # Parse the JSON report
+            if self.verbose:
+                console.print(f"[dim]JSON report path: {json_report_path}[/dim]")
+                console.print(f"[dim]JSON report exists: {Path(json_report_path).exists()}[/dim]")
+            
             failing_tests = self._parse_json_report(json_report_path, max_failures)
+            
+            if self.verbose:
+                console.print(f"[dim]Parsed {len(failing_tests)} failing tests from JSON report[/dim]")
             
             # Read the JUnit XML report if it exists
             junit_path = Path(junit_report_path)
@@ -127,10 +134,16 @@ class TestRunner:
         try:
             with open(report_path, 'r') as f:
                 report = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            if self.verbose:
+                console.print(f"[red]Failed to load JSON report: {e}[/red]")
             return []
         
         failing_tests = []
+        
+        if self.verbose:
+            console.print(f"[dim]JSON report summary: {report.get('summary', {})}[/dim]")
+            console.print(f"[dim]Number of tests in report: {len(report.get('tests', []))}[/dim]")
         
         # Extract failing tests from the report
         for test in report.get('tests', []):

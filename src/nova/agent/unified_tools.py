@@ -353,14 +353,14 @@ class RunTestsTool(BaseTool):
             try:
                 from nova.runner.test_runner import TestRunner
                 runner = TestRunner(self.repo_path, verbose=self.verbose)
-                failing_tests, summary = runner.run_tests(max_failures=max_failures)
+                failing_tests, junit_xml = runner.run_tests(max_failures=max_failures)
                 
                 if not failing_tests:
                     # All tests passing, return JSON
                     return json.dumps({
                         "exit_code": 0,
                         "failures": 0,
-                        "passed": summary.get("passed", 0) if summary else "unknown",
+                        "passed": "unknown",  # We don't have the count from the runner
                         "message": "All tests passed",
                         "failing_tests": []
                     })
@@ -379,7 +379,7 @@ class RunTestsTool(BaseTool):
                 return json.dumps({
                     "exit_code": 1,
                     "failures": len(failing_tests),
-                    "passed": summary.get("passed", 0) if summary else 0,
+                    "passed": 0,  # We don't have the count from the runner
                     "message": f"{len(failing_tests)} test(s) failed",
                     "failing_tests": failures_json
                 })

@@ -1,0 +1,78 @@
+--- a/src/large_module.py
++++ b/src/large_module.py
+@@ -1,10 +1,600 @@
+ """Large module with many functions."""
+ 
+ 
+-def function1():
+-    pass
++def function1():
++    """Updated function 1."""
++    # Line 1
++    # Line 2
++    # Line 3
++    # Line 4
++    # Line 5
++    # Line 6
++    # Line 7
++    # Line 8
++    # Line 9
++    # Line 10
++    pass
+ 
+ 
+-def function2():
+-    pass
++def function2():
++    """Updated function 2."""
++    # Adding 500+ lines of changes
++    x = 1
++    x = 2
++    x = 3
++    x = 4
++    x = 5
++    x = 6
++    x = 7
++    x = 8
++    x = 9
++    x = 10
++    x = 11
++    x = 12
++    x = 13
++    x = 14
++    x = 15
++    x = 16
++    x = 17
++    x = 18
++    x = 19
++    x = 20
++    # ... imagine this continues for 500+ lines total
++    # This patch would exceed the 500 line limit
++    # Line after line after line
++    # More lines
++    # Even more lines
++    # Continuing...
++    # Still going...
++    # And more...
++    # This represents a patch that's too large
++    pass
++
++# Adding many more functions to exceed limits
++def function3(): pass
++def function4(): pass
++def function5(): pass
++def function6(): pass
++def function7(): pass
++def function8(): pass
++def function9(): pass
++def function10(): pass
++def function11(): pass
++def function12(): pass
++def function13(): pass
++def function14(): pass
++def function15(): pass
++def function16(): pass
++def function17(): pass
++def function18(): pass
++def function19(): pass
++def function20(): pass

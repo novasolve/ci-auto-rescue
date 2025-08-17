@@ -1,0 +1,16 @@
+--- a/src/helpers.py
++++ b/src/helpers.py
+@@ -10,6 +10,13 @@ def format_output(data):
+     return json.dumps(data, indent=2)
+ 
+ 
++def format_output(data):
++    """Format data for output with custom formatting."""
++    if isinstance(data, dict):
++        return json.dumps(data, indent=4)
++    return str(data)
++
++
+ def validate_input(data):
+     """Validate input data."""
+     if not data:

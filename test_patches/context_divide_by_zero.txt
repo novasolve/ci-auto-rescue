@@ -1,0 +1,9 @@
+FAILING TESTS:
+
+test_divide_by_zero:
+    AssertionError: Expected ValueError when dividing by zero, but got ZeroDivisionError
+    
+test_divide_edge_cases:
+    Failed with: ZeroDivisionError: division by zero
+
+The divide function should raise a ValueError with a clear message when attempting to divide by zero, not let Python's default ZeroDivisionError propagate.

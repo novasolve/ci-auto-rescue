@@ -160,10 +160,13 @@ class PlanTodoTool(BaseTool):
     name: str = "plan_todo"
     description: str = "Plan next steps by outlining a TODO list or strategy."
     args_schema: Type[BaseModel] = PlanTodoInput
+    state: Optional[Any] = None
     
     def _run(self, todo: str) -> str:
         """Execute the plan_todo function."""
-        # No-op tool: just logs the plan
+        # Update phase to implementing after planning
+        if self.state and hasattr(self.state, 'phase'):
+            self.state.phase = 'implementing'
         # Store the plan (in real implementation, this would save to state)
         return "Plan recorded. Continue with the next action."
     

@@ -43,11 +43,38 @@ class GPT5ChatOpenAI(ChatOpenAI):
 class GPT5ReActOutputParser(ReActOutputParser):
     """Custom ReAct output parser that handles GPT-5's tendency to output both actions and final answers."""
     
+    def __init__(self, agent_state=None):
+        """Initialize parser with optional agent state for context-aware decisions."""
+        super().__init__()
+        self.agent_state = agent_state
+    
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
         """Parse GPT-5 output, prioritizing actions over final answers."""
         text_lower = text.lower()
         
-        # Check for success indicators in the output
+        # First check agent state if available (more reliable than text parsing)
+        if self.agent_state:
+            # Check if tests are passing based on agent state
+            tests_passing = getattr(self.agent_state, 'total_failures', 1) == 0
+            phase = getattr(self.agent_state, 'phase', 'unknown')
+            
+            # If we have a Final Answer and tests are passing, allow it
+            if "final answer" in text_lower and tests_passing:
+                final_answer_match = re.search(
+                    r"Final\s*Answer\s*:\s*(.+?)(?=\n(?:Action:|Observation:|Thought:)|$)", 
+                    text, 
+                    re.DOTALL | re.IGNORECASE
+                )
+                if final_answer_match:
+                    answer_text = final_answer_match.group(1).strip()
+                    if self.agent_state.verbose:
+                        print(f"[Parser] Allowing Final Answer - tests passing (failures={self.agent_state.total_failures})")
+                    return AgentFinish(
+                        return_values={"output": answer_text}, 
+                        log=text
+                    )
+        
+        # Fallback to text-based success detection
         success_terms = ["all tests passing", "all tests pass", "0 failures", "successfully fixed", "tests passed"]
         has_success = any(term in text_lower for term in success_terms)
         
@@ -69,7 +96,14 @@ class GPT5ReActOutputParser(ReActOutputParser):
         # Check if output contains planning keywords AND a premature final answer
         if ("plan noted" in text_lower or "todo created" in text_lower or "plan recorded" in text_lower):
             # Check if agent is trying to provide a final answer after planning
-            if "final answer" in text_lower and not has_success:
+            phase = getattr(self.agent_state, 'phase', 'planning') if self.agent_state else 'planning'
+            tests_passing = getattr(self.agent_state, 'total_failures', 1) == 0 if self.agent_state else has_success
+            
+            if "final answer" in text_lower and not tests_passing and phase != 'complete':
+                # Log the intervention
+                if self.agent_state and hasattr(self.agent_state, 'verbose') and self.agent_state.verbose:
+                    print(f"[Parser] Blocked premature Final Answer - phase={phase}, failures={getattr(self.agent_state, 'total_failures', '?')}")
+                
                 # Instead of forcing a specific file, just indicate continuation is needed
                 # Let the agent figure out the next action naturally
                 return AgentAction(
@@ -497,7 +531,7 @@ class NovaDeepAgent:
                     agent_kwargs={
                         "prefix": system_message + "\n\nYou have access to the following tools:",
                         "suffix": "Begin!\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}",
-                        "output_parser": GPT5ReActOutputParser(),
+                        "output_parser": GPT5ReActOutputParser(agent_state=self.state),
                         "handle_parsing_errors": "Check your output and ensure it follows the correct format. Use EITHER 'Action:' followed by 'Action Input:' OR 'Final Answer:', but not both in the same response."
                     }
                 )

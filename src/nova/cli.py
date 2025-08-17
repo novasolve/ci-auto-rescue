@@ -409,52 +409,61 @@ def fix(
                 console.print("\n[green bold]✅ SUCCESS - All tests fixed![/green bold]")
                 state.final_status = "success"
             else:
-                # Detailed failure report
-                console.print(f"\n[bold red]❌ Nova could not resolve all issues.[/bold red]\n")
+                # Use OutcomeReporter for consistent error reporting (OS-1182)
+                from nova.github_integration import OutcomeReporter
                 
-                # Explain the reason for failure
+                # Create metrics for reporting (simplified version for CLI)
+                elapsed = (datetime.now() - state.start_time).total_seconds()
+                
+                # Determine failure type and reason
+                failure_type = None
+                failure_reason = None
                 if state.final_status == "max_iters":
-                    console.print(f"[red]Reason:[/red] Reached the maximum allowed iterations ({state.max_iterations}) without fixing all tests.")
+                    failure_type = "MaxIterationsExceeded"
+                    failure_reason = f"Reached maximum {state.max_iterations} iterations with {state.total_failures} tests still failing."
                 elif state.final_status == "timeout":
-                    console.print(f"[red]Reason:[/red] Timed out after {state.timeout_seconds}s without resolving all failures.")
-                elif state.final_status == "no_patch":
-                    console.print(f"[red]Reason:[/red] The agent could not generate a valid patch for the failing tests.")
-                elif state.final_status == "patch_error":
-                    console.print(f"[red]Reason:[/red] A patch was generated but failed to apply to the code (possible merge/context issue).")
+                    failure_type = "TestExecutionError"
+                    failure_reason = f"Timed out after {state.timeout_seconds}s without resolving all failures."
                 elif state.final_status == "patch_rejected":
-                    console.print(f"[red]Reason:[/red] The agent's patch proposals were rejected by the critic and not applied.")
+                    failure_type = "SafetyGuardTriggered"
+                    failure_reason = "All proposed patches were rejected by safety checks."
+                elif state.final_status == "patch_error":
+                    failure_type = "PatchApplicationError"
+                    failure_reason = "Failed to apply generated patches to the codebase."
+                elif state.final_status == "no_patch":
+                    failure_type = "AgentException"
+                    failure_reason = "Could not generate a valid patch for the failing tests."
                 elif state.final_status == "error":
-                    err_detail = getattr(state, "error_message", "Unknown error")
-                    console.print(f"[red]Reason:[/red] An unexpected error occurred: {err_detail}")
+                    failure_type = "AgentException"
+                    failure_reason = state.error_message or "An unexpected error occurred during execution."
                 else:
-                    console.print(f"[red]Reason:[/red] {state.final_status}")
-                console.print("")
+                    failure_type = "Unknown"
+                    failure_reason = f"Failed with status: {state.final_status}"
                 
-                # Summarize what was tried
-                patches = len(state.patches_applied)
-                initial = len(state.failing_tests) if state.failing_tests else 0
-                remaining = state.total_failures
-                iter_count = state.current_iteration or patches
+                # Create temporary metrics for reporting
+                temp_metrics = type('obj', (object,), {
+                    'success': False,
+                    'failure_type': failure_type,
+                    'failure_reason': failure_reason,
+                    'iterations': state.current_iteration,
+                    'files_changed': len(state.patches_applied),
+                    'tests_fixed': len(state.failing_tests) - state.total_failures if state.failing_tests else 0,
+                    'initial_failures': len(state.failing_tests) if state.failing_tests else 0,
+                    'runtime_seconds': int(elapsed)
+                })
                 
-                console.print("[bold blue]What the agent tried:[/bold blue]")
-                if patches > 0:
-                    console.print(f"  • Applied {patches} patch{'es' if patches > 1 else ''} across {iter_count} iteration{'s' if iter_count > 1 else ''}")
-                    if remaining is not None and remaining > 0:
-                        console.print(f"  • {remaining} test{'s' if remaining > 1 else ''} are still failing after these attempts")
-                else:
-                    console.print("  • No patches were applied (the agent did not find a viable fix)")
-                console.print("")
+                reporter = OutcomeReporter(temp_metrics)
+                console.print(f"\n{reporter.generate_cli_summary()}")
                 
-                # Point to logs and artifacts
+                # Add logs and artifacts info
+                console.print("\n[bold blue]Logs & artifacts:[/bold blue]")
                 if telemetry and hasattr(telemetry, 'run_id'):
                     run_dir = Path(telemetry.settings.telemetry_dir) / telemetry.run_id
                 else:
                     run_dir = Path(".nova/telemetry")
-                console.print("[bold blue]Logs & artifacts:[/bold blue]")
-                console.print(f"  • Detailed logs of this run are saved under [italic]{run_dir}[/italic]")
-                console.print(f"  • Patch diffs for each attempt are in [italic]{run_dir}/patches/[/italic]")
-                console.print(f"  • Test reports are in [italic]{run_dir}/reports/[/italic]")
-                console.print("")
+                console.print(f"  • Detailed logs: [italic]{run_dir}[/italic]")
+                console.print(f"  • Patch diffs: [italic]{run_dir}/patches/[/italic]")
+                console.print(f"  • Test reports: [italic]{run_dir}/reports/[/italic]")
                 
                 # Suggest next steps
                 console.print("[bold blue]Next steps:[/bold blue]")
@@ -607,7 +616,7 @@ def fix(
                         pass
         if token and repo:
             try:
-                from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator, OutcomeReporter
                 elapsed = (datetime.now() - state.start_time).total_seconds()
                 # Count unique files changed across all applied patches
                 files_changed = set()
@@ -617,6 +626,33 @@ def fix(
                     for patch in state.patches_applied:
                         analysis = safety.analyze_patch(patch)
                         files_changed.update(analysis.files_modified | analysis.files_added)
+                
+                # Determine failure type and reason based on state
+                failure_type = None
+                failure_reason = None
+                if not success:
+                    if state.final_status == "max_iters":
+                        failure_type = "MaxIterationsExceeded"
+                        failure_reason = f"Reached maximum {state.max_iterations} iterations with {state.total_failures} tests still failing."
+                    elif state.final_status == "timeout":
+                        failure_type = "TestExecutionError"
+                        failure_reason = f"Timed out after {state.timeout_seconds}s without resolving all failures."
+                    elif state.final_status == "patch_rejected":
+                        failure_type = "SafetyGuardTriggered"
+                        failure_reason = "All proposed patches were rejected by safety checks."
+                    elif state.final_status == "patch_error":
+                        failure_type = "PatchApplicationError"
+                        failure_reason = "Failed to apply generated patches to the codebase."
+                    elif state.final_status == "no_patch":
+                        failure_type = "AgentException"
+                        failure_reason = "Could not generate a valid patch for the failing tests."
+                    elif state.final_status == "error":
+                        failure_type = "AgentException"
+                        failure_reason = state.error_message or "An unexpected error occurred during execution."
+                    else:
+                        failure_type = "Unknown"
+                        failure_reason = f"Failed with status: {state.final_status}"
+                
                 metrics = RunMetrics(
                     runtime_seconds=int(elapsed),
                     iterations=state.current_iteration,
@@ -626,26 +662,36 @@ def fix(
                     tests_remaining=state.total_failures,
                     initial_failures=len(state.failing_tests) if state.failing_tests else 0,
                     final_failures=state.total_failures,
-                    branch_name=branch_name
+                    branch_name=branch_name,
+                    # Enhanced error reporting fields (OS-1182)
+                    success=success,
+                    failure_type=failure_type,
+                    failure_reason=failure_reason
                 )
                 api = GitHubAPI(token)
-                generator = ReportGenerator()
+                outcome_reporter = OutcomeReporter(metrics)
+                
                 head_sha = git_manager._get_current_head() if git_manager else None
                 if head_sha:
+                    # Generate transparent check run summary
+                    check_title = "CI-Auto-Rescue: All Tests Fixed!" if success else f"CI-Auto-Rescue: {failure_type or 'Failed'}"
+                    check_summary = outcome_reporter.generate_cli_summary()  # Use CLI summary for check runs
+                    
                     api.create_check_run(
                         repo=repo,
                         sha=head_sha,
                         name="CI-Auto-Rescue",
                         status="completed",
                         conclusion="success" if success else "failure",
-                        title=f"CI-Auto-Rescue: {metrics.status.upper()}",
-                        summary=generator.generate_check_summary(metrics)
+                        title=check_title,
+                        summary=check_summary
                     )
                     if verbose:
                         console.print("[dim]✅ Posted check run to GitHub[/dim]")
+                
                 if pr_num:
                     existing_id = api.find_pr_comment(repo, int(pr_num), "<!-- ci-auto-rescue-report -->")
-                    comment_body = generator.generate_pr_comment(metrics)
+                    comment_body = outcome_reporter.generate_pr_comment()  # Use new reporter for PR comments
                     if existing_id:
                         api.update_pr_comment(repo, existing_id, comment_body)
                         if verbose:

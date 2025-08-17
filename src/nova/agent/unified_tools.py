@@ -982,6 +982,20 @@ def create_default_tools(
     tools.append(OpenFileTool())
     tools.append(WriteFileTool())
     
+    # Add handler for invalid responses
+    def handle_invalid_response(input: str = "") -> str:
+        """Handle parsing errors by returning a helpful message."""
+        return ("I noticed my previous response had formatting issues. Let me continue with the task. "
+                "To proceed, I should use one of the available tools: plan_todo, open_file, write_file, "
+                "run_tests, apply_patch, or critic_review.")
+    
+    # Add invalid response handler as a tool
+    tools.append(Tool(
+        name="Invalid or incomplete response",
+        func=handle_invalid_response,
+        description="Internal tool to handle parsing errors"
+    ))
+    
     # Add class-based tools
     tools.append(RunTestsTool(
         repo_path=repo_path,

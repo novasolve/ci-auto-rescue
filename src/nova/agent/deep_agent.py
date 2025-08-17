@@ -9,6 +9,10 @@ from typing import Optional, Any
 from pathlib import Path
 
 from langchain.agents import AgentExecutor, Tool, initialize_agent, AgentType
+from langchain.agents.react.output_parser import ReActOutputParser
+from langchain.schema import AgentAction, AgentFinish
+from typing import Union
+import re
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 # Use newer imports to avoid deprecation warnings
 try:
@@ -33,6 +37,58 @@ class GPT5ChatOpenAI(ChatOpenAI):
         if stop is not None:
             kwargs.pop('stop', None)
         return super()._generate(messages, stop=None, run_manager=run_manager, **kwargs)
+
+
+# Custom output parser for GPT-5 that handles both action and final answer in same output
+class GPT5ReActOutputParser(ReActOutputParser):
+    """Custom ReAct output parser that handles GPT-5's tendency to output both actions and final answers."""
+    
+    def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
+        """Parse GPT-5 output, prioritizing actions over final answers."""
+        # First check if there's a valid action in the output
+        action_match = re.search(
+            r"Action\s*:\s*([^\n]+)\s*\n\s*Action\s*Input\s*:\s*(.+?)(?=\n|$)", 
+            text, 
+            re.DOTALL
+        )
+        
+        if action_match:
+            # If we found an action, use it even if there's also a final answer
+            action = action_match.group(1).strip()
+            action_input = action_match.group(2).strip()
+            
+            # Clean up action input if it's multiline
+            if '\n' in action_input:
+                # For multiline inputs, take everything until we see "Observation:" or "Final Answer:"
+                cutoff_match = re.search(r'(Observation:|Final Answer:)', action_input)
+                if cutoff_match:
+                    action_input = action_input[:cutoff_match.start()].strip()
+            
+            return AgentAction(tool=action, tool_input=action_input, log=text)
+        
+        # If no action found, check for final answer
+        final_answer_match = re.search(
+            r"Final\s*Answer\s*:\s*(.+?)(?=\n(?:Action:|Observation:|Thought:)|$)", 
+            text, 
+            re.DOTALL | re.IGNORECASE
+        )
+        
+        if final_answer_match:
+            return AgentFinish(
+                return_values={"output": final_answer_match.group(1).strip()}, 
+                log=text
+            )
+        
+        # If neither found, try the parent parser
+        try:
+            return super().parse(text)
+        except Exception:
+            # If all else fails, treat as incomplete response and continue
+            return AgentAction(
+                tool="Invalid or incomplete response",
+                tool_input="",
+                log=text
+            )
 
 from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
@@ -369,7 +425,7 @@ class NovaDeepAgent:
                         # No schema info, keep as-is
                         wrapped_tools.append(tool)
                 
-                # Use ZERO_SHOT_REACT_DESCRIPTION with wrapped tools
+                # Use ZERO_SHOT_REACT_DESCRIPTION with wrapped tools and custom parser
                 agent_executor = initialize_agent(
                     tools=wrapped_tools,
                     llm=llm,
@@ -380,7 +436,9 @@ class NovaDeepAgent:
                     early_stopping_method="generate",
                     agent_kwargs={
                         "prefix": system_message + "\n\nYou have access to the following tools:",
-                        "suffix": "Begin!\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}"
+                        "suffix": "Begin!\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}",
+                        "output_parser": GPT5ReActOutputParser(),
+                        "handle_parsing_errors": "Check your output and ensure it follows the correct format. Use EITHER 'Action:' followed by 'Action Input:' OR 'Final Answer:', but not both in the same response."
                     }
                 )
             else:
@@ -552,7 +610,10 @@ Begin fixing the tests now."""
                 success = True
                 self.state.final_status = "success"
                 self.state.total_failures = 0
+                # Log structured success event (OS-1182)
                 self.telemetry.log_event("deep_agent_success", {
+                    "event": "run_complete",
+                    "success": True,
                     "iterations": self.state.current_iteration,
                     "message": "All tests passing",
                     "tests_passed": final_test_output.get("passed", "unknown")
@@ -575,11 +636,25 @@ Begin fixing the tests now."""
                 else:
                     self.state.final_status = "incomplete"
                 
-                self.telemetry.log_event("deep_agent_incomplete", {
+                # Log structured failure event (OS-1182)
+                failure_event = {
+                    "event": "run_complete",
+                    "success": False,
+                    "failure_type": self.state.final_status,
                     "iterations": self.state.current_iteration,
                     "remaining_failures": failures_count,
                     "error": final_test_output.get("error") if final_test_output else None
-                })
+                }
+                
+                # Add failure reason for transparency
+                if self.state.final_status == "max_iters":
+                    failure_event["failure_reason"] = f"Reached max {self.state.max_iterations} iterations with {failures_count} tests still failing."
+                elif self.state.final_status == "patch_rejected":
+                    failure_event["failure_reason"] = "All proposed patches were rejected by safety checks."
+                elif self.state.final_status == "no_patch":
+                    failure_event["failure_reason"] = "Could not generate a valid patch for the failing tests."
+                    
+                self.telemetry.log_event("deep_agent_incomplete", failure_event)
         except Exception as e:
             import traceback
             err_msg = str(e)

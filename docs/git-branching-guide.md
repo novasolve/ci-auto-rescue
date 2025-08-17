@@ -55,6 +55,7 @@ NOVA_FIX_BRANCH_NAME=nova-fixes
 ### Behavior with Custom Branch Names
 
 When using a custom branch name:
+
 - Nova uses `git checkout -B <branch>` (creates or resets the branch)
 - Existing branch is reset to current HEAD
 - All previous commits on that branch are lost
@@ -65,6 +66,7 @@ When using a custom branch name:
 ### Development Workflow
 
 Keep the default timestamped branches:
+
 ```bash
 nova fix .
 # Creates: nova-fix/20250817_105520
@@ -74,6 +76,7 @@ nova fix .
 ### CI/CD Pipeline
 
 Use a consistent branch name:
+
 ```bash
 # In CI script
 export NOVA_FIX_BRANCH_NAME="automated-fixes"
@@ -83,6 +86,7 @@ nova fix .
 ### Working on Current Branch
 
 To work on your current branch (be careful!):
+
 ```bash
 # Get current branch name
 CURRENT_BRANCH=$(git branch --show-current)
@@ -105,6 +109,7 @@ nova fix . -m gpt-3.5-turbo
 ### 2. Configuration File
 
 Create `nova.config.yml`:
+
 ```yaml
 model: gpt-4
 # or
@@ -128,6 +133,7 @@ If no configuration is provided, Nova defaults to `gpt-4`.
 ## Supported Models
 
 Nova supports these OpenAI models:
+
 - `gpt-4`
 - `gpt-4-turbo`
 - `gpt-4-0613`
@@ -136,6 +142,7 @@ Nova supports these OpenAI models:
 - `gpt-3.5-turbo-16k`
 
 And Anthropic models:
+
 - `claude-3-opus`
 - `claude-3-sonnet`
 - `claude-3-haiku`
@@ -151,6 +158,7 @@ Nova includes intelligent fallback for invalid or unavailable models:
 4. **Runtime errors**: If a model fails at runtime, Nova retries with `gpt-4`
 
 Example:
+
 ```bash
 # These all safely fallback to gpt-4:
 nova fix . --model gpt-5
@@ -171,6 +179,7 @@ nova fix . --model unknown-model
 ### "Working tree not clean" Error
 
 Nova requires a clean working tree. Commit or stash changes:
+
 ```bash
 git add .
 git commit -m "WIP"
@@ -181,6 +190,7 @@ git stash
 ### Model Not Found Errors
 
 If you see model errors, check:
+
 1. API key is set (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`)
 2. Model name is valid (see supported models above)
 3. Your API key has access to the model
@@ -188,6 +198,7 @@ If you see model errors, check:
 ### Branch Already Exists
 
 With custom branch names, Nova will reset the branch. To preserve it:
+
 ```bash
 git branch backup-branch nova-fixes
 NOVA_FIX_BRANCH_NAME="nova-fixes" nova fix .

@@ -57,8 +57,8 @@ class LLMClient:
         
         # Map known aliases and variations to valid OpenAI models
         if "gpt-5" in model_lower:
-            # GPT-5 not yet available, fallback to GPT-4
-            return "gpt-4"
+            # Return GPT-5 as-is (Deep Agent will handle it specially)
+            return model
         elif "gpt-4.1" in model_lower:
             # Handle GPT-4.1 variations (including "gpt-4.1alias")
             return "gpt-4"

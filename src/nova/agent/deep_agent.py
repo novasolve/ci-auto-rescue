@@ -104,16 +104,42 @@ class NovaDeepAgent:
     def _build_agent(self) -> AgentExecutor:
         """Set up the LangChain Agent with the LLM, tools, and prompt."""
         # Choose LLM based on configuration (supports OpenAI GPT or Anthropic Claude)
-        model_name = getattr(self.settings, 'default_llm_model', 'gpt-5')
+        model_name = getattr(self.settings, 'default_llm_model', 'gpt-4')
         
         # Show what model was requested for transparency
         if self.verbose:
             print(f"📋 Requested model: {model_name}")
         
+        # Map the model name using LLMClient logic
+        from nova.agent.llm_client import LLMClient
+        temp_client = LLMClient.__new__(LLMClient)
+        temp_client.settings = self.settings
+        mapped_model = temp_client._get_openai_model_name()
+        
+        if mapped_model != model_name and self.verbose:
+            print(f"📄 Mapped to: {mapped_model}")
+        
         use_react = False
         
+        # Check if this is GPT-5 (which doesn't support function calling)
+        if model_name.lower().startswith("gpt-5"):
+            # GPT-5 must use ReAct mode (no function calling)
+            try:
+                llm = ChatOpenAI(model_name=mapped_model, temperature=0)
+                use_react = True  # Force ReAct for GPT-5
+                if self.verbose:
+                    print(f"🚀 Using model '{mapped_model}' with ReAct agent (GPT-5 mode)")
+            except Exception as e:
+                # Fallback to GPT-4 with function calling
+                fallback_model = "gpt-4-0613"
+                if self.verbose:
+                    print(f"⚠️ Model {mapped_model} not available ({e}), falling back to {fallback_model}")
+                llm = ChatOpenAI(model_name=fallback_model, temperature=0)
+                use_react = False
+                if self.verbose:
+                    print(f"🚀 Using OpenAI model '{fallback_model}' with function calling (fallback)")
         # If an Anthropic model (Claude) is requested and available, use it with ReAct mode (no function calling)
-        if ChatAnthropic and model_name.lower().startswith("claude"):
+        elif ChatAnthropic and model_name.lower().startswith("claude"):
             try:
                 llm = ChatAnthropic(model=model_name, temperature=0)
                 use_react = True
@@ -129,19 +155,17 @@ class NovaDeepAgent:
         else:
             # Otherwise, use OpenAI Chat model (GPT) with function calling by default
             try:
-                llm = ChatOpenAI(model_name=model_name, temperature=0)
+                llm = ChatOpenAI(model_name=mapped_model, temperature=0)
                 use_react = False
-                actual_model = model_name
                 if self.verbose:
-                    print(f"🚀 Using OpenAI model '{model_name}' with function calling")
+                    print(f"🚀 Using OpenAI model '{mapped_model}' with function calling")
             except Exception as e:
                 # Use GPT-4-0613 for fallback (supports function calling)
                 fallback_model = "gpt-4-0613"
                 if self.verbose:
-                    print(f"⚠️ Model {model_name} not available ({e}), falling back to {fallback_model}")
+                    print(f"⚠️ Model {mapped_model} not available ({e}), falling back to {fallback_model}")
                 llm = ChatOpenAI(model_name=fallback_model, temperature=0)
                 use_react = False
-                actual_model = fallback_model
                 if self.verbose:
                     print(f"🚀 Using OpenAI model '{fallback_model}' with function calling (fallback)")
         # Define the comprehensive system message prompt with all safety rules
@@ -282,26 +306,31 @@ Begin fixing the tests now."""
             
             # Run the LangChain agent with runtime fallback support
             try:
-                result = self.agent({"input": user_prompt})
+                result = self.agent.invoke({"input": user_prompt})
             except Exception as e:
                 # Runtime fallback for GPT-5 to GPT-4 if function calling issues occur
                 error_msg = str(e).lower()
                 model_name = getattr(self.settings, 'default_llm_model', '').lower()
                 
-                if ("function" in error_msg or "unsupported value" in error_msg) and \
+                if ("function" in error_msg or "unsupported value" in error_msg or "does not support" in error_msg) and \
                    (model_name.startswith("gpt-5") or model_name in ["gpt-5-turbo", "gpt-5-preview"]):
                     if self.verbose:
                         print(f"\n⚠️ {self.settings.default_llm_model} runtime error: {e}")
                         print("🔄 Falling back to GPT-4-0613 with function calling...")
                     
                     # Update settings and rebuild agent with GPT-4 (function-call enabled version)
+                    original_model = self.settings.default_llm_model
                     self.settings.default_llm_model = "gpt-4-0613"
                     self.agent = self._build_agent()
                     
                     # Retry with GPT-4
-                    result = self.agent.invoke({"input": user_prompt})
-                    if self.verbose:
-                        print("✅ Successfully recovered with GPT-4-0613")
+                    try:
+                        result = self.agent.invoke({"input": user_prompt})
+                        if self.verbose:
+                            print("✅ Successfully recovered with GPT-4-0613")
+                    finally:
+                        # Restore original model setting
+                        self.settings.default_llm_model = original_model
                 else:
                     # Re-raise if not a GPT-5 function calling issue
                     raise

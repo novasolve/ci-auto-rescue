@@ -168,14 +168,32 @@ def get_settings(config_file: Optional[Path] = None) -> NovaSettings:
     
     # Check for default config locations
     if not config_file:
-        for possible_path in [
-            Path(".nova.yml"),
-            Path(".nova.yaml"),
-            Path("nova.config.yml"),
-            Path("nova.config.yaml")
-        ]:
-            if possible_path.exists():
-                config_file = possible_path
+        # Check current directory and parent directories up to 3 levels
+        search_dirs = [Path.cwd()]
+        current = Path.cwd()
+        for _ in range(3):
+            if current.parent != current:
+                current = current.parent
+                search_dirs.append(current)
+        
+        # Also check the Nova package directory
+        nova_root = Path(__file__).parent.parent.parent
+        if nova_root.exists():
+            search_dirs.append(nova_root)
+        
+        # Search for config files in all directories
+        for search_dir in search_dirs:
+            for config_name in [
+                ".nova.yml",
+                ".nova.yaml", 
+                "nova.config.yml",
+                "nova.config.yaml"
+            ]:
+                possible_path = search_dir / config_name
+                if possible_path.exists():
+                    config_file = possible_path
+                    break
+            if config_file:
                 break
     
     # Load from config file if found

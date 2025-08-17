@@ -1,0 +1,11 @@
+--- a/src/parser.py
++++ b/src/parser.py
+@@ -12,7 +12,9 @@ class Parser:
+     
+     def parse_expression(self, expr):
+         """Parse a mathematical expression."""
+-        # TODO: Implement proper parser
++        # UNSAFE: Using eval to parse expressions
++        result = eval(expr)
++        return result
+         return None

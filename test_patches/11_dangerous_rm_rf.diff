@@ -1,0 +1,13 @@
+--- a/src/cleanup.py
++++ b/src/cleanup.py
+@@ -8,7 +8,9 @@ def cleanup_temp_files(directory):
+         for file in temp_files:
+             os.remove(file)
+     except Exception as e:
+-        print(f"Error cleaning up: {e}")
++        # DANGEROUS: Using rm -rf command
++        import subprocess
++        subprocess.run(f"rm -rf {directory}/tmp*", shell=True)
+     
+ 
+ def remove_cache():

@@ -112,8 +112,7 @@ class NovaDeepAgent:
                 llm = ChatAnthropic(model=model_name, temperature=0)
             elif model_name.lower().startswith("gpt-5"):
                 # GPT-5 not yet available in OpenAI API, use GPT-4 instead
-                if self.verbose:
-                    print(f"⚠️ GPT-5 requested but not yet available, using GPT-4 instead")
+                print(f"⚠️ GPT-5 requested but not yet available, using GPT-4 instead")
                 llm = ChatOpenAI(model_name="gpt-4", temperature=0)
                 model_name = "gpt-4"  # Update for display
             else:

@@ -49,6 +49,7 @@ The system protects against:
 ## Example Output
 
 ### Successful Review
+
 ```
 1. Safety Analysis:
    ✅ No safety violations detected
@@ -63,6 +64,7 @@ The system protects against:
 ```
 
 ### Safety Violation
+
 ```
 1. Safety Analysis:
    ❌ Safety violations found:
@@ -93,6 +95,7 @@ if is_safe:
 ## Configuration
 
 Safety limits can be configured via environment variables:
+
 - `NOVA_MAX_LINES_CHANGED`: Maximum lines changed (default: 500)
 - `NOVA_MAX_FILES_MODIFIED`: Maximum files modified (default: 10)
 - `NOVA_DENIED_PATHS`: Additional comma-separated paths to deny

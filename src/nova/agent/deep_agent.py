@@ -39,6 +39,9 @@ class GPT5ChatOpenAI(ChatOpenAI):
         return super()._generate(messages, stop=None, run_manager=run_manager, **kwargs)
 
 
+# Module-level storage for parser states to avoid Pydantic field issues
+_parser_agent_states = {}
+
 # Custom output parser for GPT-5 that handles both action and final answer in same output
 class GPT5ReActOutputParser(ReActOutputParser):
     """Custom ReAct output parser that handles GPT-5's tendency to output both actions and final answers."""
@@ -46,7 +49,20 @@ class GPT5ReActOutputParser(ReActOutputParser):
     def __init__(self, agent_state=None):
         """Initialize parser with optional agent state for context-aware decisions."""
         super().__init__()
-        self.agent_state = agent_state
+        # Store state using instance id as key to avoid Pydantic field validation
+        if agent_state is not None:
+            _parser_agent_states[id(self)] = agent_state
+    
+    @property
+    def agent_state(self):
+        """Get agent state from module-level storage."""
+        return _parser_agent_states.get(id(self), None)
+    
+    def __del__(self):
+        """Clean up state storage when parser is destroyed."""
+        instance_id = id(self)
+        if instance_id in _parser_agent_states:
+            del _parser_agent_states[instance_id]
     
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
         """Parse GPT-5 output, prioritizing actions over final answers."""
@@ -67,7 +83,7 @@ class GPT5ReActOutputParser(ReActOutputParser):
                 )
                 if final_answer_match:
                     answer_text = final_answer_match.group(1).strip()
-                    if self.agent_state.verbose:
+                    if hasattr(self.agent_state, 'verbose') and self.agent_state.verbose:
                         print(f"[Parser] Allowing Final Answer - tests passing (failures={self.agent_state.total_failures})")
                     return AgentFinish(
                         return_values={"output": answer_text}, 

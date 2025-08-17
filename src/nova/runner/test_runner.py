@@ -69,7 +69,6 @@ class TestRunner:
             cmd = [
                 sys.executable, "-m", "pytest",
                 str(self.repo_path),
-                "-c", "/dev/null",  # Ignore any pytest.ini files
                 "--json-report",
                 f"--json-report-file={json_report_path}",
                 f"--junit-xml={junit_report_path}",
@@ -86,11 +85,16 @@ class TestRunner:
             
             # Run pytest (we expect it to fail if there are failing tests)
             try:
+                import os
+                # Pass current environment to subprocess
+                env = os.environ.copy()
+                
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
                     cwd=str(self.repo_path),
+                    env=env,
                     timeout=get_settings().test_timeout_sec  # enforce test run timeout
                 )
                 

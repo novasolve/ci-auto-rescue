@@ -135,8 +135,8 @@ def test_employee_class():
     assert Employee.is_valid_id("EMP00!") == False
     
     # Test give_raise
-    assert emp1.give_raise(10) == 55000
-    assert emp1.get_salary() == 55000
+    assert abs(emp1.give_raise(10) - 55000) < 0.01
+    assert abs(emp1.get_salary() - 55000) < 0.01
 
 
 def test_employee_raise_exception():

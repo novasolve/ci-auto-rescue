@@ -117,13 +117,29 @@ def decompress_string(compressed: str) -> str:
 
 def split_camel_case(text: str) -> List[str]:
     """Split a camelCase string into words."""
-    words = []
-    current_word = []
+    if not text:
+        return []
     
-    for i, char in enumerate(text):
-        if char.isupper() and i > 0:
-            words.append(''.join(current_word))
-            current_word = [char]
+    words = []
+    current_word = [text[0]]
+    
+    for i in range(1, len(text)):
+        char = text[i]
+        prev_char = text[i-1]
+        
+        # Check if we should start a new word
+        if char.isupper():
+            # If previous char was lowercase, start new word
+            if prev_char.islower():
+                words.append(''.join(current_word))
+                current_word = [char]
+            # If next char exists and is lowercase, this is start of new word
+            elif i + 1 < len(text) and text[i + 1].islower():
+                words.append(''.join(current_word))
+                current_word = [char]
+            else:
+                # Continue current word (consecutive uppercase)
+                current_word.append(char)
         else:
             current_word.append(char)
     

@@ -65,8 +65,9 @@ class TestRunner:
         
         try:
             # Run pytest with JSON and JUnit reports
+            import sys
             cmd = [
-                "python", "-m", "pytest",
+                sys.executable, "-m", "pytest",
                 str(self.repo_path),
                 "--json-report",
                 f"--json-report-file={json_report_path}",
@@ -91,6 +92,12 @@ class TestRunner:
                     cwd=str(self.repo_path),
                     timeout=get_settings().test_timeout_sec  # enforce test run timeout
                 )
+                
+                if self.verbose:
+                    console.print(f"[dim]Pytest exit code: {result.returncode}[/dim]")
+                    if result.stderr:
+                        console.print(f"[dim]Pytest stderr: {result.stderr}[/dim]")
+                    
             except subprocess.TimeoutExpired:
                 console.print(f"[red]Error: Test execution timed out after {get_settings().test_timeout_sec} seconds[/red]")
                 return [], None

@@ -129,63 +129,18 @@ class NovaDeepAgent:
             llm=llm  # Pass LLM for critic review
         )
         
-        # Choose agent type based on model capabilities
-        if use_react:
-            # Use ReAct pattern for models that don't support function calling
-            from langchain.agents import AgentType
-            from langchain.prompts import PromptTemplate
-            
-            # Create ReAct prompt with tool descriptions
-            tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
-            
-            react_prompt = PromptTemplate(
-                template=system_message + """
-
-## Available Tools:
-{tool_descriptions}
-
-## ReAct Process:
-Use the following format for each step:
-
-Thought: [Your reasoning about what to do next]
-Action: [The action/tool to use, should be one of: {tool_names}]
-Action Input: [The input to the action]
-Observation: [The result of the action - this will be filled automatically]
-... (repeat Thought/Action/Observation as needed)
-Thought: [Final reasoning when problem is solved]
-Final Answer: [Summary of what was fixed]
-
-## Task:
-{input}
-
-## Begin ReAct Process:
-{agent_scratchpad}""",
-                input_variables=["input", "agent_scratchpad"],
-                partial_variables={
-                    "tool_descriptions": tool_descriptions,
-                    "tool_names": ", ".join([tool.name for tool in tools])
-                }
-            )
-            
-            # Initialize ReAct agent
-            agent_executor = initialize_agent(
-                tools=tools,
-                llm=llm,
-                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=self.verbose,
-                prompt=react_prompt,
-                max_iterations=15,  # More iterations for ReAct
-                handle_parsing_errors=True
-            )
-        else:
-            # Use function calling for models that support it (GPT-4, GPT-3.5)
-            agent_executor = initialize_agent(
-                tools=tools,
-                llm=llm,
-                agent=AgentType.OPENAI_FUNCTIONS,
-                verbose=self.verbose,
-                agent_kwargs={"system_message": system_message}
-            )
+        # Always use OpenAI function-calling agent for reliable multi-input tool support
+        from langchain.agents import AgentType
+        
+        agent_executor = initialize_agent(
+            tools=tools,
+            llm=llm,
+            agent=AgentType.OPENAI_FUNCTIONS,
+            verbose=self.verbose,
+            agent_kwargs={"system_message": system_message},
+            handle_parsing_errors=True,
+            max_iterations=15
+        )
         
         return agent_executor
 

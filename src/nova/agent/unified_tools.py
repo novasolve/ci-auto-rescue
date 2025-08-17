@@ -595,7 +595,7 @@ class CriticReviewTool(BaseTool):
                     from langchain_openai import ChatOpenAI
                 except ImportError:
                     from langchain.chat_models import ChatOpenAI
-                kwargs['llm'] = ChatOpenAI(model="gpt-4", temperature=0.1)
+                kwargs['llm'] = ChatOpenAI(model_name="gpt-4", temperature=0.1)
             else:
                 # No LLM for critic review in mock mode
                 kwargs['llm'] = None

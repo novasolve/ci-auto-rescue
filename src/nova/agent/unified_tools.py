@@ -28,7 +28,8 @@ from langchain.tools import BaseTool, Tool
 from pydantic import BaseModel, Field
 
 # Safety config and checks (reuse existing implementations)
-from nova.tools.safety_limits import check_patch_safety, SafetyConfig
+from nova.tools.safety_limits import check_patch_safety
+from nova.config import SafetyConfig
 
 # Import telemetry logger if needed
 from nova.telemetry.logger import JSONLLogger

@@ -45,6 +45,10 @@ class AgentState:
     final_status: Optional[str] = None  # 'success', 'timeout', 'max_iters', 'error'
     error_message: Optional[str] = None  # Detailed error message when status is 'error'
     
+    # Loop prevention memory and modifications tracking
+    used_actions: set = field(default_factory=set)       # Record (tool, args, context) used
+    modifications_count: int = 0                         # Counter for code modifications
+    
     def add_failing_tests(self, tests: List[Any]) -> None:
         """Add failing tests to the state."""
         self.failing_tests = [

@@ -787,6 +787,10 @@ Start NOW by trying to open the source file. DO NOT just run tests again!"""
                 # Tests still failing or result unknown
                 failures_count = final_test_output.get("failures", "unknown") if final_test_output else "unknown"
                 
+                # Update state with remaining failures for accurate reporting
+                if final_test_output and isinstance(failures_count, int):
+                    self.state.total_failures = failures_count
+                
                 # Determine appropriate final status
                 if not self.state.patches_applied:
                     # No patches were applied at all

@@ -401,8 +401,7 @@ class RunTestsTool(BaseTool):
                 print(f"⚠️ Sandbox unavailable – running tests locally. Reason: {docker_error}")
             # Log the fallback event
             if self.logger:
-                self.logger.log_event({
-                    "event": "sandbox_fallback",
+                self.logger.log_event("sandbox_fallback", {
                     "reason": docker_error
                 })
             
@@ -495,13 +494,13 @@ class RunTestsTool(BaseTool):
         
         # Log the test results event for telemetry
         if self.logger:
-            evt = {"event": "test_run_completed", "exit_code": result.get("exit_code", 1)}
+            evt = {"exit_code": result.get("exit_code", 1)}
             if "failures" in result:
                 evt["failures"] = result["failures"]
                 evt["passed"] = result.get("passed", 0)
             if "error" in result:
                 evt["error"] = result["error"]
-            self.logger.log_event(evt)
+            self.logger.log_event("test_run_completed", evt)
         
         # Return JSON with failure details
         return json.dumps({
@@ -588,8 +587,7 @@ class ApplyPatchTool(BaseTool):
                 print(f"Safety check failed: {safe_msg}")
             # Log safety violation
             if self.logger:
-                self.logger.log_event({
-                    "event": "patch_rejected",
+                self.logger.log_event("patch_rejected", {
                     "reason": f"Safety violation – {safe_msg}"
                 })
             return f"FAILED: Safety violation – {safe_msg}"
@@ -621,8 +619,7 @@ class ApplyPatchTool(BaseTool):
                         if self.verbose:
                             print(f"Critic rejected patch: {reason}")
                         if self.logger:
-                            self.logger.log_event({
-                                "event": "patch_rejected",
+                            self.logger.log_event("patch_rejected", {
                                 "reason": f"Critic rejection – {reason}"
                             })
                         return f"FAILED: Patch rejected by critic - {reason}"
@@ -637,8 +634,7 @@ class ApplyPatchTool(BaseTool):
                 if self.verbose:
                     print(f"Critic rejected patch: {reason}")
                 if self.logger:
-                    self.logger.log_event({
-                        "event": "patch_rejected",
+                    self.logger.log_event("patch_rejected", {
                         "reason": f"Critic rejection – {reason}"
                     })
                 return f"FAILED: Patch rejected by critic - {reason}"
@@ -667,8 +663,7 @@ class ApplyPatchTool(BaseTool):
                 if self.verbose:
                     print(f"Patch preflight failed: {preflight.stderr}")
                 if self.logger:
-                    self.logger.log_event({
-                        "event": "patch_apply_failed",
+                    self.logger.log_event("patch_apply_failed", {
                         "reason": "Context mismatch/preflight failed",
                         "details": preflight.stderr.strip()[:200]
                     })
@@ -689,8 +684,7 @@ class ApplyPatchTool(BaseTool):
                 if self.verbose:
                     print(f"git apply failed: {apply_proc.stderr.strip()}")
                 if self.logger:
-                    self.logger.log_event({
-                        "event": "patch_apply_failed",
+                    self.logger.log_event("patch_apply_failed", {
                         "reason": "Git apply error",
                         "details": apply_proc.stderr.strip()[:200]
                     })
@@ -713,8 +707,7 @@ class ApplyPatchTool(BaseTool):
                 if self.verbose:
                     print(f"git commit failed: {commit_proc.stderr.strip()}")
                 if self.logger:
-                    self.logger.log_event({
-                        "event": "patch_apply_failed",
+                    self.logger.log_event("patch_apply_failed", {
                         "reason": "Git commit failed",
                         "details": commit_proc.stderr.strip()
                     })
@@ -737,8 +730,7 @@ class ApplyPatchTool(BaseTool):
                 if hasattr(self.state, 'current_iteration'):
                     self.state.current_iteration += 1
             if self.logger:
-                self.logger.log_event({
-                    "event": "patch_applied",
+                self.logger.log_event("patch_applied", {
                     "message": "Patch applied successfully",
                     "lines_changed": patch_text.count("\n+") + patch_text.count("\n-")
                 })
@@ -748,8 +740,7 @@ class ApplyPatchTool(BaseTool):
             
         except Exception as e:
             if self.logger:
-                self.logger.log_event({
-                    "event": "patch_apply_failed",
+                self.logger.log_event("patch_apply_failed", {
                     "reason": f"Exception during apply: {e}"
                 })
             return f"FAILED: Could not apply patch: {e}"

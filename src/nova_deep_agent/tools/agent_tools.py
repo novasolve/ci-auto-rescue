@@ -216,20 +216,56 @@ BLOCKED_SUBSTRINGS = [".github/", ".git/"]
 
 def plan_todo_tool(notes: str = "") -> str:
     """Generate a plan of action in a TODO list format."""
-    tasks = [
-        "Analyze the failing tests and their error messages to identify the root cause.",
-        "Determine which source code files are likely responsible for the failures.",
-        "Open and inspect those source files to locate the bug or issue.",
-        "Modify the code in the identified files to fix the problems.",
-        "Run the test suite to verify if all tests pass after the changes."
-    ]
-    # Return tasks as a numbered list (each task on a new line)
-    plan = "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
-    
-    # If notes are provided, prepend them to the plan
+    import json
+    failures = []
     if notes:
-        plan = f"Context: {notes}\n\n{plan}"
-    
+        try:
+            data = json.loads(notes)
+        except Exception:
+            data = None
+        if data:
+            # Parse failing tests info if present
+            if "failing_tests" in data:
+                failures = data["failing_tests"]
+            elif "tests" in data:
+                for t in data["tests"]:
+                    if t.get("outcome") in ["failed", "error"]:
+                        failures.append({
+                            "file": t.get("nodeid", "").split("::")[0],
+                            "name": t.get("nodeid", ""),
+                            "message": t.get("call", {}).get("longrepr", "")
+                        })
+    plan_tasks = []
+    if failures:
+        # Include each failing test with error class, file, and function
+        for test in failures:
+            file_path = test.get("file", "<unknown file>")
+            test_name = test.get("name", "")
+            func_name = test_name.split("::")[-1] if "::" in test_name else test_name
+            err_msg = test.get("message") or test.get("error") or ""
+            err_class = None
+            if err_msg:
+                import re
+                match = re.search(r"(AssertionError|[A-Za-z]+Exception)", err_msg)
+                if match:
+                    err_class = match.group(1)
+            if not err_class and test.get("outcome") in ["failed", "error"]:
+                err_class = "Error"
+            plan_tasks.append(f"Fix {err_class or 'issue'} in {file_path}::{func_name}")
+        plan_tasks.append("Run the test suite to confirm all failures are resolved")
+    else:
+        # Default plan if no detailed info available
+        plan_tasks = [
+            "Analyze failing tests and error messages to identify root causes",
+            "Determine which source code files are likely responsible for the failures",
+            "Open and inspect those files to find the bug",
+            "Modify the code in the identified files to fix the issue",
+            "Run the test suite to verify all tests pass after the changes"
+        ]
+        if notes:
+            # Include raw context notes if provided
+            plan_tasks.insert(0, f"Context: {notes}")
+    plan = "\n".join(f"{i+1}. {task}" for i, task in enumerate(plan_tasks))
     return plan
 
 
@@ -248,6 +284,11 @@ def open_file_tool(file_path: str) -> str:
         return f"Error: Access to this file is not allowed (protected file)."
     
     if not full_path.exists():
+        # Suggest likely file path if not found
+        candidates = list(REPO_ROOT.rglob(Path(file_path).name))
+        if candidates:
+            suggestions = [str(p.relative_to(REPO_ROOT)) for p in candidates[:3]]
+            return f"Error: File not found: {file_path}. Did you mean: {', '.join(suggestions)}?"
         return f"Error: File not found: {file_path}"
     
     if not full_path.is_file():
@@ -275,7 +316,13 @@ def write_file_tool(file_path: str, new_content: str) -> str:
     
     if Path(file_path).name in BLOCKED_NAMES:
         return f"Error: Access to this file is not allowed (protected file)."
-    
+    # Avoid creating a new file at repo root if module exists elsewhere
+    if not full_path.exists():
+        if full_path.parent == REPO_ROOT:
+            hits = list(REPO_ROOT.rglob(Path(file_path).name))
+            if hits:
+                hit_dirs = [str(p.parent.relative_to(REPO_ROOT)) for p in hits[:3]]
+                return f"Error: Invalid path: '{file_path}'. A file named '{Path(file_path).name}' exists in: {', '.join(hit_dirs)}. Please place the file in the correct directory."
     try:
         # Ensure directory exists
         full_path.parent.mkdir(parents=True, exist_ok=True)

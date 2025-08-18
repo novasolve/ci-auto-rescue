@@ -78,16 +78,87 @@ class ApplyPatchTool:
             cmd_check = ["git", "apply", "--check", patch_file_path]
             result = subprocess.run(cmd_check, cwd=self.repo_path, capture_output=True, text=True)
             if result.returncode != 0:
-                # Validation failed – return error message from Git
-                logger.error("ApplyPatchTool: Patch validation failed: %s", result.stderr.strip())
-                return False, f"Patch validation failed: {result.stderr.strip()}"
+                error_output = result.stderr.strip()
+                logger.error("ApplyPatchTool: Patch validation failed: %s", error_output)
+                # Fallback: try fuzzy patch application on context mismatch (multi-hunk diffs) 
+                if ("patch failed" in error_output or "Hunk #" in error_output or "context" in error_output):
+                    # Attempt to apply patch using 'patch' with fuzz factor
+                    patch_dry = subprocess.run(
+                        ["patch", "-p1", "--dry-run", "--fuzz=3"], cwd=self.repo_path,
+                        input=patch_diff, text=True, capture_output=True
+                    )
+                    if patch_dry.returncode == 0:
+                        patch_apply = subprocess.run(
+                            ["patch", "-p1", "--fuzz=3"], cwd=self.repo_path,
+                            input=patch_diff, text=True, capture_output=True
+                        )
+                        if patch_apply.returncode == 0:
+                            logger.warning("ApplyPatchTool: Patch applied with fuzzy matching despite context issues")
+                            # Stage changes and commit after fuzzy apply
+                            subprocess.run(["git", "add", "-A"], cwd=self.repo_path, check=False)
+                            commit_message = "Apply patch via SafePatchTool (fuzzy apply)"
+                            commit_proc = subprocess.run(
+                                ["git", "commit", "-m", commit_message],
+                                cwd=self.repo_path, capture_output=True, text=True
+                            )
+                            if commit_proc.returncode != 0:
+                                logger.error("ApplyPatchTool: git commit failed (fuzzy apply): %s", commit_proc.stderr.strip())
+                                return False, "ERROR[NO_CHANGES]: Patch applied but nothing to commit (no changes). Suggestion: The patch may have had no effect or was already applied."  # Structured error code & suggestion
+                            # Get commit hash and return success
+                            rev_parse = subprocess.run(
+                                ["git", "rev-parse", "--short", "HEAD"],
+                                cwd=self.repo_path, capture_output=True, text=True
+                            )
+                            commit_hash = rev_parse.stdout.strip() if rev_parse.returncode == 0 else ""
+                            logger.info("ApplyPatchTool: Patch applied with fuzzy matching and committed (hash %s).", commit_hash)
+                            return True, f"Patch applied with fuzzy context matching (commit {commit_hash})"
+                        else:
+                            logger.error("ApplyPatchTool: Fuzzy patch apply failed: %s", patch_apply.stderr.strip())
+                            return False, "ERROR[CONTEXT_MISMATCH]: Patch could not be applied even with fuzzy matching. Suggestion: Re-check the file context and update the patch."  # Structured failure code
+                    else:
+                        return False, "ERROR[CONTEXT_MISMATCH]: Patch validation failed (context mismatch). Suggestion: Refresh the target file context or adjust the patch diff."
+                # Non-context-related failure
+                return False, f"ERROR[PATCH_INVALID]: Patch validation failed: {error_output}"
 
             # Apply the patch (actual changes to working directory)
             cmd_apply = ["git", "apply", patch_file_path]
             result = subprocess.run(cmd_apply, cwd=self.repo_path, capture_output=True, text=True)
             if result.returncode != 0:
-                logger.error("ApplyPatchTool: git apply failed: %s", result.stderr.strip())
-                return False, f"Failed to apply patch: {result.stderr.strip()}"
+                error_output = result.stderr.strip()
+                logger.error("ApplyPatchTool: git apply failed: %s", error_output)
+                # Fallback: try fuzzy apply on git apply failure (rare context issue)
+                if ("patch failed" in error_output or "Hunk #" in error_output or "context" in error_output):
+                    patch_dry = subprocess.run(
+                        ["patch", "-p1", "--dry-run", "--fuzz=3"], cwd=self.repo_path,
+                        input=patch_diff, text=True, capture_output=True
+                    )
+                    if patch_dry.returncode == 0:
+                        patch_apply = subprocess.run(
+                            ["patch", "-p1", "--fuzz=3"], cwd=self.repo_path,
+                            input=patch_diff, text=True, capture_output=True
+                        )
+                        if patch_apply.returncode == 0:
+                            logger.warning("ApplyPatchTool: Patch applied with fuzzy matching after git apply failure")
+                            subprocess.run(["git", "add", "-A"], cwd=self.repo_path, check=False)
+                            commit_message = "Apply patch via SafePatchTool (fuzzy apply)"
+                            commit_proc = subprocess.run(
+                                ["git", "commit", "-m", commit_message],
+                                cwd=self.repo_path, capture_output=True, text=True
+                            )
+                            if commit_proc.returncode != 0:
+                                logger.error("ApplyPatchTool: git commit failed (fuzzy apply): %s", commit_proc.stderr.strip())
+                                return False, "ERROR[NO_CHANGES]: Patch applied but nothing to commit. The patch may have already been applied."
+                            rev_parse = subprocess.run(
+                                ["git", "rev-parse", "--short", "HEAD"],
+                                cwd=self.repo_path, capture_output=True, text=True
+                            )
+                            commit_hash = rev_parse.stdout.strip() if rev_parse.returncode == 0 else ""
+                            logger.info("ApplyPatchTool: Patch applied via fuzzy matching and committed (hash %s).", commit_hash)
+                            return True, f"Patch applied with fuzzy context matching (commit {commit_hash})"
+                        else:
+                            logger.error("ApplyPatchTool: Fuzzy patch apply failed after git apply: %s", patch_apply.stderr.strip())
+                            return False, "ERROR[CONTEXT_MISMATCH]: Patch could not be applied even with fuzzy matching."
+                return False, f"ERROR[APPLY_FAILED]: Failed to apply patch: {error_output}"
 
             # Stage all changes and commit them
             subprocess.run(["git", "add", "-A"], cwd=self.repo_path, check=False)
@@ -97,9 +168,8 @@ class ApplyPatchTool:
                 cwd=self.repo_path, capture_output=True, text=True
             )
             if commit_proc.returncode != 0:
-                # Commit might fail if there's nothing to commit (e.g., patch was empty or already applied)
                 logger.error("ApplyPatchTool: git commit failed: %s", commit_proc.stderr.strip())
-                return False, f"Patch applied but commit failed: {commit_proc.stderr.strip()}"
+                return False, "ERROR[NO_CHANGES]: Patch applied but nothing to commit (no changes). Suggestion: Patch did not change the code."  # Structured error message
 
             # Patch successfully applied and committed
             # Get the new commit hash (short form) for reference

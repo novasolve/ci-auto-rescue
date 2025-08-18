@@ -1,0 +1,28 @@
+# Nova Hints for demo_data_structures
+
+## File Locations
+
+- **SOURCE FILE TO FIX**: `data_structures.py`
+- Test file (read-only): `test_data_structures.py`
+
+## Known Issues to Fix
+
+### Stack class:
+1. `pop()`: Should raise `IndexError("Stack is empty")` when empty, not return None
+2. `peek()`: Should NOT modify the stack - return `self.items[-1]` without popping
+3. `size()`: Has off-by-one error - should return `len(self.items)` not `len(self.items) + 1`
+
+### Queue class:
+1. `enqueue()`: Should add to rear with `self.items.append(item)`, not insert at front
+2. `dequeue()`: Should remove from front with `self.items.pop(0)`, not from rear
+3. `dequeue()`: Exception message should be "Queue is empty" not "Queue is full"
+
+### Functions:
+1. `reverse_list()`: Must modify the list IN PLACE, not create a new one
+   - Use the two-pointer swap approach (already in original code)
+2. `find_duplicates()`: Two bugs:
+   - Should only add to duplicates when item is already in seen
+   - Must return a list, not a set
+
+## Summary
+These are common data structure implementation mistakes that need minimal fixes.

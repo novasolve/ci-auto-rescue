@@ -25,13 +25,15 @@ def calculate_future_date(days: int) -> datetime:
 # Using aliased import
 def calculate_circle_area(radius: float) -> float:
     """Calculate circle area using aliased math import."""
-    return mathematics.pi * radius ** 2
+    # Bug: wrong formula (should be radius ** 2)
+    return mathematics.pi * radius * 2
 
 
 # Collections usage
 def count_items(items: List[str]) -> Dict[str, int]:
     """Count occurrences of items using Counter."""
-    return dict(Counter(items))
+    # Bug: returning Counter object instead of dict
+    return Counter(items)
 
 
 def group_by_first_letter(words: List[str]) -> Dict[str, List[str]]:
@@ -39,7 +41,8 @@ def group_by_first_letter(words: List[str]) -> Dict[str, List[str]]:
     groups = defaultdict(list)
     for word in words:
         if word:
-            groups[word[0].lower()].append(word)
+            # Bug: not converting to lowercase
+            groups[word[0]].append(word)
     return dict(groups)
 
 
@@ -62,7 +65,8 @@ def get_environment_info() -> Dict[str, str]:
 # JSON operations
 def serialize_data(data: dict) -> str:
     """Serialize data to JSON string."""
-    return json.dumps(data, indent=2)
+    # Bug: missing indent parameter
+    return json.dumps(data)
 
 
 def deserialize_data(json_str: str) -> dict:
@@ -89,7 +93,8 @@ class ModuleInspector:
     def get_attributes(self) -> List[str]:
         """Get all attributes of the loaded module."""
         if self.module:
-            return [attr for attr in dir(self.module) if not attr.startswith('_')]
+            # Bug: including private attributes
+            return [attr for attr in dir(self.module)]
         return []
     
     def has_attribute(self, attr_name: str) -> bool:

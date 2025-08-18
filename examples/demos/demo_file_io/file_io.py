@@ -29,13 +29,15 @@ def append_to_file(filepath, content):
 def read_lines(filepath):
     """Read a file and return a list of lines."""
     with open(filepath, 'r', encoding='utf-8') as f:
-        return f.readlines()
+        # Bug: should strip newlines
+        return [line for line in f.readlines()]
 
 
 def write_lines(filepath, lines):
     """Write a list of lines to a file."""
     with open(filepath, 'w', encoding='utf-8') as f:
-        f.writelines(lines)
+        # Bug: should add newlines if not present
+        f.writelines([line.rstrip('\n') for line in lines])
 
 
 def read_json(filepath):
@@ -62,19 +64,22 @@ def read_csv(filepath):
 
 def write_csv(filepath, rows):
     """Write rows to a CSV file."""
-    with open(filepath, 'w', newline='', encoding='utf-8') as f:
+    # Bug: missing newline='' parameter
+    with open(filepath, 'w', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerows(rows)
 
 
 def file_exists(filepath):
     """Check if a file exists."""
-    return os.path.exists(filepath) and os.path.isfile(filepath)
+    # Bug: doesn't check if it's actually a file (could be directory)
+    return os.path.exists(filepath)
 
 
 def create_directory(dirpath):
     """Create a directory if it doesn't exist."""
-    os.makedirs(dirpath, exist_ok=True)
+    # Bug: doesn't use exist_ok=True
+    os.makedirs(dirpath)
 
 
 def delete_file(filepath):
@@ -98,7 +103,8 @@ def list_files(directory, extension=None):
         if os.path.isfile(item_path):
             if extension is None or item.endswith(extension):
                 files.append(item)
-    return sorted(files)
+    # Bug: should return sorted list
+    return files
 
 
 def copy_file(source, destination):

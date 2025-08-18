@@ -151,7 +151,9 @@ Respond with JSON: {"approved": true/false, "reason": "brief explanation"}"""
             user_prompt += f"\n\nFailing tests context:\n{failing_tests[:500]}"
         
         try:
-            response = self.llm.predict(user_prompt, system=system_prompt)
+            # Combine system and user prompts since predict doesn't accept system parameter
+            combined_prompt = f"{system_prompt}\n\n{user_prompt}"
+            response = self.llm.predict(combined_prompt)
             
             # Parse JSON response
             if "{" in response and "}" in response:

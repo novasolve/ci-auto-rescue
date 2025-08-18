@@ -388,23 +388,29 @@ class NovaDeepAgent:
             "     * module_name/__init__.py for packages\n"
             "   - Common patterns: src/module_name.py, lib/module_name.py\n"
             "   - NEVER guess filenames like 'module_name_module.py' or 'broken_module.py'\n\n"
-            "## YOUR WORKFLOW:\n"
-            "1. ANALYZE: Understand the failing tests and their error messages\n"
-            "2. INVESTIGATE: Read relevant source files to understand the code\n"
-            "3. PLAN: Create a minimal fix strategy\n"
-            "4. IMPLEMENT: Make targeted changes to fix the issues\n"
-            "5. VERIFY: Run tests to confirm fixes work\n"
-            "6. ITERATE: If tests still fail, analyze and adjust\n\n"
-            "IMPORTANT: After running tests, you MUST try to fix the failures:\n"
-            "- NEVER give 'Final Answer' without attempting to open and fix source files\n"
-            "- After seeing test failures, IMMEDIATELY try 'open_file' on the source\n"
-            "- Only give 'Final Answer' after you've:\n"
-            "  1. Run tests and seen failures\n"
-            "  2. Opened the source file (trying multiple paths if needed)\n"
-            "  3. Fixed the code\n"
-            "  4. Run tests again to verify\n"
-            "- If you haven't tried opening files yet, you're NOT done!\n\n"
-            "Remember: Your goal is to make ALL tests pass with MINIMAL, SAFE changes."
+            "## YOUR WORKFLOW - DETERMINISTIC MULTI-FAILURE FIX:\n"
+            "1. ANALYZE: Understand ALL failing tests and their error messages\n"
+            "2. INVESTIGATE: Read ALL relevant source files for failing functions\n"
+            "3. PLAN: Create a comprehensive strategy to fix ALL failures at once\n"
+            "4. IMPLEMENT ALL FIXES: Apply fixes for EVERY failing test sequentially\n"
+            "5. VERIFY ONCE: Run tests only AFTER all fixes are applied\n"
+            "6. ITERATE: Only if some tests still fail after the complete fix\n\n"
+            "CRITICAL - FIX ALL FAILURES IN ONE CYCLE:\n"
+            "- DO NOT fix issues one-by-one with tests after each fix\n"
+            "- DO NOT run tests until ALL fixes are implemented\n"
+            "- Your plan should enumerate a fix for EACH failing function\n"
+            "- Apply ALL fixes before calling run_tests\n"
+            "- Example: If 5 functions fail, fix all 5, then test once\n\n"
+            "IMPLEMENTATION ORDER:\n"
+            "1. Run tests once to see all failures\n"
+            "2. Use plan_todo to list fixes for EACH failing function\n"
+            "3. For each planned fix:\n"
+            "   - Open the source file\n"
+            "   - Apply the fix\n"
+            "   - Move to the next fix WITHOUT testing\n"
+            "4. Only after ALL fixes are done, run tests to verify\n"
+            "5. If any tests still fail, repeat with remaining issues\n\n"
+            "Remember: Your goal is to make ALL tests pass in ONE iteration with MINIMAL changes."
         )
         # Create the tool set (unified tools with safety and testing integrated)
         tools = create_default_tools(
@@ -557,7 +563,7 @@ class NovaDeepAgent:
                     agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
                     verbose=self.verbose,
                     handle_parsing_errors=parsing_error_handler,
-                    max_iterations=15,
+                    max_iterations=self.settings.agent_max_iterations,
                     early_stopping_method="generate",
                     agent_kwargs={
                         "prefix": system_message + "\n\nYou have access to the following tools:",
@@ -574,7 +580,7 @@ class NovaDeepAgent:
                     agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
                     verbose=self.verbose,
                     handle_parsing_errors=parsing_error_handler,
-                    max_iterations=15,
+                    max_iterations=self.settings.agent_max_iterations,
                     early_stopping_method="generate",
                     agent_kwargs={
                         "prefix": system_message + "\n\nYou have access to the following tools:"
@@ -589,7 +595,7 @@ class NovaDeepAgent:
                 verbose=self.verbose,
                 agent_kwargs={"system_message": system_message},
                 handle_parsing_errors=parsing_error_handler,
-                max_iterations=15
+                max_iterations=self.settings.agent_max_iterations
             )
         
         # Log final model selection for transparency

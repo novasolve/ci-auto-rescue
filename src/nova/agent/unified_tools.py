@@ -164,11 +164,20 @@ class PlanTodoTool(BaseTool):
     
     def _run(self, todo: str) -> str:
         """Execute the plan_todo function."""
+        # Check for duplicate plan with same todo and no new changes
+        if self.state and (self.name, todo, self.state.modifications_count) in self.state.used_actions:
+            return f"Plan already noted: {todo}"  # Skip duplicate plan
+        
         # Update phase to implementing after planning
         if self.state and hasattr(self.state, 'phase'):
             self.state.phase = 'implementing'
+        
+        # Record this action
+        if self.state:
+            self.state.used_actions.add((self.name, todo, self.state.modifications_count))
+        
         # Store the plan (in real implementation, this would save to state)
-        return "Plan recorded. Continue with the next action."
+        return f"Plan noted: {todo}"
     
     async def _arun(self, todo: str) -> str:
         """Async version not implemented."""
@@ -186,9 +195,14 @@ class OpenFileTool(BaseTool):
     description: str = "Read the contents of a file from the repository (with safety checks)."
     args_schema: Type[BaseModel] = OpenFileInput
     settings: Optional[Any] = None  # Store Nova settings
+    state: Optional[Any] = None  # Agent state for loop prevention
     
     def _run(self, path: str) -> str:
         """Execute the open_file function with safety checks."""
+        # Check for duplicate file read with no new changes
+        if self.state and (self.name, path, self.state.modifications_count) in self.state.used_actions:
+            return f"ERROR: File already opened (duplicate invocation skipped)"
+        
         # Same logic as the original open_file function, with safety guardrails
         import fnmatch
         import os
@@ -236,12 +250,21 @@ class OpenFileTool(BaseTool):
                 content = p.read_text()
                 if len(content) > 50000:  # 50KB limit
                     content = content[:50000] + "\n... (truncated)"
+                # Record successful file read
+                if self.state:
+                    self.state.used_actions.add((self.name, path, self.state.modifications_count))
                 return f"# TEST FILE (READ-ONLY): {path}\n# DO NOT MODIFY TEST FILES - Fix the source code to make tests pass\n\n{content}"
             except FileNotFoundError:
+                if self.state:
+                    self.state.used_actions.add((self.name, path, self.state.modifications_count))
                 return f"ERROR: File not found: {path}"
             except PermissionError:
+                if self.state:
+                    self.state.used_actions.add((self.name, path, self.state.modifications_count))
                 return f"ERROR: Permission denied: {path}"
             except Exception as e:
+                if self.state:
+                    self.state.used_actions.add((self.name, path, self.state.modifications_count))
                 return f"ERROR: Could not read file {path}: {e}"
         
         # For non-test files, read normally
@@ -249,12 +272,21 @@ class OpenFileTool(BaseTool):
             content = p.read_text()
             if len(content) > 50000:  # 50KB limit
                 content = content[:50000] + "\n... (truncated)"
+            # Record successful file read
+            if self.state:
+                self.state.used_actions.add((self.name, path, self.state.modifications_count))
             return content
         except FileNotFoundError:
+            if self.state:
+                self.state.used_actions.add((self.name, path, self.state.modifications_count))
             return f"ERROR: File not found: {path}"
         except PermissionError:
+            if self.state:
+                self.state.used_actions.add((self.name, path, self.state.modifications_count))
             return f"ERROR: Permission denied: {path}"
         except Exception as e:
+            if self.state:
+                self.state.used_actions.add((self.name, path, self.state.modifications_count))
             return f"ERROR: Could not read file {path}: {e}"
     
     async def _arun(self, path: str) -> str:
@@ -273,9 +305,14 @@ class WriteFileTool(BaseTool):
     name: str = "write_file"
     description: str = "Write or overwrite a file with new content (with safety checks)."
     args_schema: Type[BaseModel] = WriteFileInput
+    state: Optional[Any] = None  # Agent state for loop prevention
     
     def _run(self, path: str, new_content: str) -> str:
         """Execute the write_file function with safety checks."""
+        # Check for duplicate write with same content and no new changes
+        if self.state and (self.name, path, new_content, self.state.modifications_count) in self.state.used_actions:
+            return f"SUCCESS: File {path} already up-to-date (duplicate write skipped)"
+        
         import fnmatch
         import os
         p = Path(path)
@@ -295,10 +332,18 @@ class WriteFileTool(BaseTool):
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(new_content)
+            # Record successful write and increment modifications count
+            if self.state:
+                self.state.used_actions.add((self.name, path, new_content, self.state.modifications_count))
+                self.state.modifications_count += 1  # Count this modification
             return f"SUCCESS: File {path} updated successfully"
         except PermissionError:
+            if self.state:
+                self.state.used_actions.add((self.name, path, new_content, self.state.modifications_count))
             return f"ERROR: Permission denied: {path}"
         except Exception as e:
+            if self.state:
+                self.state.used_actions.add((self.name, path, new_content, self.state.modifications_count))
             return f"ERROR: Could not write to file {path}: {e}"
     
     async def _arun(self, path: str, new_content: str) -> str:
@@ -327,9 +372,11 @@ class RunTestsTool(BaseTool):
     # NEW: Allow injection of telemetry logger and settings if needed
     logger: Optional[JSONLLogger] = Field(default=None)
     use_docker: bool = Field(default=True)
+    state: Optional[Any] = Field(default=None)  # Agent state for loop prevention
 
     def __init__(self, repo_path: Optional[Path] = None, verbose: bool = False,
-                 logger: Optional[JSONLLogger] = None, use_docker: bool = True, **kwargs):
+                 logger: Optional[JSONLLogger] = None, use_docker: bool = True, 
+                 state: Optional[Any] = None, **kwargs):
         """Initialize with repository path and optional logger."""
         if repo_path is not None:
             kwargs['repo_path'] = Path(repo_path)
@@ -338,6 +385,8 @@ class RunTestsTool(BaseTool):
         if logger is not None:
             kwargs['logger'] = logger
         kwargs['use_docker'] = use_docker
+        if state is not None:
+            kwargs['state'] = state
         super().__init__(**kwargs)
 
     def _run(self, *args, **kwargs) -> str:
@@ -346,6 +395,19 @@ class RunTestsTool(BaseTool):
         max_failures = kwargs.get('max_failures', 5)
         if args and isinstance(args[0], int):
             max_failures = args[0]
+        
+        # Check for duplicate test run with no new code changes
+        if self.state and (self.name, str(max_failures), self.state.modifications_count) in self.state.used_actions:
+            # Skip duplicate test run with no new code changes
+            if self.verbose:
+                print("⚠️ Skipping redundant test run (no code changes since last run)")
+            return json.dumps({
+                "exit_code": 1,
+                "failures": self.state.total_failures or 0,
+                "message": "No changes since last run - tests not re-run",
+                "failing_tests": [],
+                "error": "Duplicate test run skipped"
+            })
         
         # Ensure .nova directory for test artifacts exists
         nova_path = self.repo_path / ".nova"
@@ -546,6 +608,10 @@ class RunTestsTool(BaseTool):
         if "flaky_tests" in result:
             final_result["flaky_tests"] = result["flaky_tests"]
         
+        # Record this test run
+        if self.state:
+            self.state.used_actions.add((self.name, str(max_failures), self.state.modifications_count))
+        
         # Return JSON with failure details
         return json.dumps(final_result)
 
@@ -660,6 +726,10 @@ class ApplyPatchTool(BaseTool):
 
     def _run(self, patch_diff: str) -> str:
         """Apply the given patch diff to the codebase with safety checks."""
+        # Check for duplicate patch application
+        if self.state and (self.name, patch_diff, self.state.modifications_count) in self.state.used_actions:
+            return "SUCCESS: Patch already applied (duplicate skipped)"
+        
         # Remove any markdown formatting (```diff ``` wrappers) if present
         patch_text = patch_diff.strip()
         if patch_text.startswith("```"):
@@ -771,15 +841,110 @@ class ApplyPatchTool(BaseTool):
                 # Git apply --check failed, patch does not apply
                 if self.verbose:
                     print(f"Patch preflight failed: {preflight.stderr}")
-                if self.logger:
-                    self.logger.log_event("patch_apply_failed", {
-                        "reason": "Context mismatch/preflight failed",
-                        "details": preflight.stderr.strip()[:200]
-                    })
-                # Update state to indicate patch error
-                if self.state:
-                    self.state.final_status = "patch_error"
-                return "FAILED: Patch could not be applied (context mismatch)."
+                
+                # Fallback: apply patch by writing files directly
+                fallback_success = True
+                file_edits = []  # track files edited for logging
+                
+                try:
+                    lines = patch_text.splitlines()
+                    i = 0
+                    while i < len(lines):
+                        # Identify new file header in diff
+                        if lines[i].startswith("+++ "):
+                            new_file = lines[i][4:].strip()
+                            if new_file.startswith("/dev/null"):
+                                # skip deletions
+                                i += 1
+                                continue
+                            # Normalize path (remove "b/" prefix if present)
+                            if new_file.startswith("b/") or new_file.startswith("a/"):
+                                new_file = new_file[2:]
+                            
+                            # Collect all lines for new file content
+                            content_lines = []
+                            i += 1
+                            
+                            # Advance to hunk content (skip context lines until @@)
+                            while i < len(lines) and not lines[i].startswith("@@"):
+                                i += 1
+                            
+                            while i < len(lines):
+                                if lines[i].startswith("diff --git") or lines[i].startswith("+++"):
+                                    break  # next file diff begins
+                                elif lines[i].startswith("@@"):
+                                    i += 1
+                                    continue  # skip hunk header
+                                elif lines[i].startswith("+"):
+                                    # Added line
+                                    content_lines.append(lines[i][1:])
+                                elif lines[i].startswith(" "):
+                                    # Context line
+                                    content_lines.append(lines[i][1:])
+                                # Skip lines starting with '-' (removed lines)
+                                i += 1
+                            
+                            # Write the reconstructed new content to the file
+                            file_path = Path(self.repo_path) / new_file
+                            file_path.parent.mkdir(parents=True, exist_ok=True)
+                            file_path.write_text("\n".join(content_lines))
+                            file_edits.append(new_file)
+                        else:
+                            i += 1
+                            
+                except Exception as fe:
+                    fallback_success = False
+                    if self.verbose:
+                        print(f"Fallback patch application failed: {fe}")
+                    if self.logger:
+                        self.logger.log_event("patch_fallback_failed", {
+                            "reason": str(fe),
+                            "details": str(fe)[:200]
+                        })
+                
+                if fallback_success and file_edits:
+                    # Stage and commit the changes as a single patch
+                    subprocess.run(["git", "add", "-A"], cwd=self.repo_path, check=False)
+                    commit_proc = subprocess.run(
+                        ["git", "commit", "-m", "Apply patch (fallback) from Nova Deep Agent"],
+                        cwd=self.repo_path,
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if commit_proc.returncode != 0 and "nothing to commit" not in commit_proc.stdout:
+                        if self.verbose:
+                            print(f"Git commit warning: {commit_proc.stdout}")
+                    
+                    if self.state:
+                        self.state.last_review_approved = False
+                        self.state.last_reviewed_patch = None
+                        self.state.pending_patch = None
+                        self.state.patches_applied.append(patch_text)
+                        self.state.modifications_count += 1
+                        self.state.used_actions.add((self.name, patch_diff, self.state.modifications_count))
+                    
+                    if self.verbose:
+                        edited_list = ", ".join(file_edits)
+                        print(f"✓ Patch applied via fallback to files: {edited_list}")
+                    
+                    if self.logger:
+                        self.logger.log_event("patch_applied_fallback", {
+                            "files_edited": file_edits,
+                            "reason": "Context mismatch - used fallback"
+                        })
+                    
+                    return "SUCCESS: Patch applied successfully (fallback used)"
+                else:
+                    # Fallback also failed
+                    if self.logger:
+                        self.logger.log_event("patch_apply_failed", {
+                            "reason": "Context mismatch/preflight failed and fallback failed",
+                            "details": preflight.stderr.strip()[:200]
+                        })
+                    if self.state:
+                        self.state.final_status = "patch_error"
+                    return "FAILED: Patch could not be applied (even with fallback)."
             
             # 3. Apply patch
             apply_proc = subprocess.run(

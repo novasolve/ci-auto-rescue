@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 @dataclass
 class SafetyConfig:
     """Configuration for safety limits."""
-    max_lines_changed: int = 200  # Maximum total lines changed (added + removed)
+    max_lines_changed: int = 500  # Maximum total lines changed (added + removed) - aligned with CriticReviewTool
     max_files_modified: int = 10  # Maximum number of files that can be modified
     denied_paths: List[str] = field(default_factory=lambda: [
         # CI/CD configuration files

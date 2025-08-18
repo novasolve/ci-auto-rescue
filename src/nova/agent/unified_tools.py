@@ -196,12 +196,22 @@ class OpenFileTool(BaseTool):
     args_schema: Type[BaseModel] = OpenFileInput
     settings: Optional[Any] = None  # Store Nova settings
     state: Optional[Any] = None  # Agent state for loop prevention
+    _file_cache: Dict[str, str] = {}  # Cache file contents
     
     def _run(self, path: str) -> str:
         """Execute the open_file function with safety checks."""
         # Check for duplicate file read with no new changes
         if self.state and (self.name, path, self.state.modifications_count) in self.state.used_actions:
-            return f"SKIP: File already opened - proceeding with cached content"
+            # Return cached content if available
+            cache_key = f"{path}_{self.state.modifications_count}"
+            if hasattr(self, '_file_cache') and cache_key in self._file_cache:
+                return self._file_cache[cache_key]
+            # Otherwise provide guidance
+            return (
+                f"SKIP: File '{path}' was already opened in this session.\n"
+                f"Please refer to your previous observations above for the file content.\n"
+                f"Continue with your next action using that information."
+            )
         
         # Same logic as the original open_file function, with safety guardrails
         import fnmatch
@@ -251,9 +261,14 @@ class OpenFileTool(BaseTool):
                 if len(content) > 50000:  # 50KB limit
                     content = content[:50000] + "\n... (truncated)"
                 # Record successful file read
+                result = f"# TEST FILE (READ-ONLY): {path}\n# DO NOT MODIFY TEST FILES - Fix the source code to make tests pass\n\n{content}"
                 if self.state:
                     self.state.used_actions.add((self.name, path, self.state.modifications_count))
-                return f"# TEST FILE (READ-ONLY): {path}\n# DO NOT MODIFY TEST FILES - Fix the source code to make tests pass\n\n{content}"
+                    # Cache the content
+                    cache_key = f"{path}_{self.state.modifications_count}"
+                    if hasattr(self, '_file_cache'):
+                        self._file_cache[cache_key] = result
+                return result
             except FileNotFoundError:
                 if self.state:
                     self.state.used_actions.add((self.name, path, self.state.modifications_count))
@@ -272,9 +287,13 @@ class OpenFileTool(BaseTool):
             content = p.read_text()
             if len(content) > 50000:  # 50KB limit
                 content = content[:50000] + "\n... (truncated)"
-            # Record successful file read
+            # Record successful file read and cache
             if self.state:
                 self.state.used_actions.add((self.name, path, self.state.modifications_count))
+                # Cache the content
+                cache_key = f"{path}_{self.state.modifications_count}"
+                if hasattr(self, '_file_cache'):
+                    self._file_cache[cache_key] = content
             return content
         except FileNotFoundError:
             if self.state:

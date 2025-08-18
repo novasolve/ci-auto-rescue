@@ -187,6 +187,13 @@ class SafetyConfig:
         r"rm\s+-rf"
     ])
     
+    # Additional regex patterns for more complex path matching
+    denied_path_patterns: List[str] = field(default_factory=lambda: [
+        r".*\.min\.(js|css)$",  # Minified files
+        r".*\.(pyc|pyo)$",      # Python bytecode
+        r".*\.(so|dll|dylib)$", # Binary libraries
+    ])
+    
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SafetyConfig":
         """Create from dictionary (e.g., from YAML)."""

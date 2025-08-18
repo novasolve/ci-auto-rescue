@@ -16,23 +16,11 @@ class ValidationError(Exception):
 
 def divide_numbers(a, b):
     """Divide two numbers with proper exception handling (intentionally buggy)."""
-    # Validate types
-    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
-        raise TypeError("Both arguments must be numbers")
-    # Handle division by zero with custom message
-    if b == 0:
-        raise ZeroDivisionError("Cannot divide by zero")
     return a / b
 
 
 def validate_age(age):
     """Validate age with custom exceptions (intentionally buggy)."""
-    if not isinstance(age, int):
-        raise ValidationError("Age must be an integer", code="INVALID_TYPE")
-    if age < 0:
-        raise ValidationError("Age cannot be negative", code="NEGATIVE_AGE")
-    if age > 150:
-        raise ValidationError("Age seems unrealistic", code="UNREALISTIC_AGE")
     return True
 
 

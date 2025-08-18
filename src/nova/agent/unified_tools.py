@@ -728,36 +728,89 @@ class ApplyPatchTool(BaseTool):
         """Ensure patch is in valid unified diff format."""
         lines = patch_diff.strip().split('\n')
         
-        # Check if patch has proper headers
-        has_diff_headers = any(line.startswith('---') or line.startswith('+++') for line in lines)
-        has_changes = any(line.startswith('+') or line.startswith('-') for line in lines 
-                         if not line.startswith('+++') and not line.startswith('---'))
+        # Remove patch markers and clean up
+        cleaned_lines = []
+        in_patch = False
+        for line in lines:
+            if '*** Begin Patch' in line:
+                in_patch = True
+                continue
+            if '*** End Patch' in line:
+                break
+            if in_patch or (not '*** Begin Patch' in '\n'.join(lines)):
+                cleaned_lines.append(line)
         
-        if not has_diff_headers or not has_changes:
-            # Try to extract a valid patch from common formats
-            start_idx = -1
-            end_idx = len(lines)
-            
-            # Find patch boundaries
-            for i, line in enumerate(lines):
-                if '*** Begin Patch' in line or 'diff --git' in line or line.startswith('---'):
-                    start_idx = i
-                    break
-            
-            for i in range(len(lines)-1, -1, -1):
-                if '*** End Patch' in line or (lines[i].startswith('+') or lines[i].startswith('-')):
-                    end_idx = i + 1
-                    break
-            
-            if start_idx >= 0:
-                lines = lines[start_idx:end_idx]
-                patch_diff = '\n'.join(lines)
+        # Convert custom format to unified diff if needed
+        if any('*** Update File:' in line for line in cleaned_lines):
+            return self._convert_custom_to_unified_diff(cleaned_lines)
         
-        # Remove markdown formatting if present
+        # Standard cleanup
+        patch_diff = '\n'.join(cleaned_lines)
         patch_diff = patch_diff.replace('```diff', '').replace('```', '')
-        patch_diff = patch_diff.replace('*** Begin Patch', '').replace('*** End Patch', '')
         
         return patch_diff.strip()
+    
+    def _convert_custom_to_unified_diff(self, lines: list) -> str:
+        """Convert custom *** format to unified diff format."""
+        result = []
+        current_file = None
+        context_lines = []
+        changes = []
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            
+            if line.startswith('*** Update File:'):
+                # Save previous file if any
+                if current_file and changes:
+                    result.extend(self._format_unified_hunk(current_file, changes))
+                
+                current_file = line.split(':', 1)[1].strip()
+                changes = []
+            elif line == '@@':
+                # Start of a change block
+                i += 1
+                block_lines = []
+                while i < len(lines) and lines[i] != '@@':
+                    block_lines.append(lines[i])
+                    i += 1
+                changes.append(block_lines)
+                continue
+            
+            i += 1
+        
+        # Save last file
+        if current_file and changes:
+            result.extend(self._format_unified_hunk(current_file, changes))
+        
+        return '\n'.join(result)
+    
+    def _format_unified_hunk(self, filename: str, change_blocks: list) -> list:
+        """Format change blocks into unified diff format."""
+        result = [
+            f"--- a/{filename}",
+            f"+++ b/{filename}"
+        ]
+        
+        for block in change_blocks:
+            if not block:
+                continue
+                
+            # Simple line number estimation
+            start_line = 1
+            count = len(block)
+            
+            result.append(f"@@ -{start_line},{count} +{start_line},{count} @@")
+            
+            for line in block:
+                if line.startswith('-') or line.startswith('+'):
+                    result.append(line)
+                else:
+                    # Context line
+                    result.append(' ' + line)
+        
+        return result
     
     def _run(self, patch_diff: str) -> str:
         """Apply the given patch diff to the codebase with safety checks."""

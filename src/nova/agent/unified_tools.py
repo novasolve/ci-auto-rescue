@@ -324,13 +324,20 @@ class RunTestsTool(BaseTool):
     # No args_schema - makes it accept any input including empty string
     repo_path: Path = Field(default_factory=lambda: Path("."))
     verbose: bool = Field(default=False)
+    # NEW: Allow injection of telemetry logger and settings if needed
+    logger: Optional[JSONLLogger] = Field(default=None)
+    use_docker: bool = Field(default=True)
 
-    def __init__(self, repo_path: Optional[Path] = None, verbose: bool = False, **kwargs):
-        """Initialize with repository path."""
+    def __init__(self, repo_path: Optional[Path] = None, verbose: bool = False,
+                 logger: Optional[JSONLLogger] = None, use_docker: bool = True, **kwargs):
+        """Initialize with repository path and optional logger."""
         if repo_path is not None:
             kwargs['repo_path'] = Path(repo_path)
-        if verbose is not False:
-            kwargs['verbose'] = verbose
+        if verbose:
+            kwargs['verbose'] = True
+        if logger is not None:
+            kwargs['logger'] = logger
+        kwargs['use_docker'] = use_docker
         super().__init__(**kwargs)
 
     def _run(self, *args, **kwargs) -> str:
@@ -348,8 +355,8 @@ class RunTestsTool(BaseTool):
         result = None
         docker_error = None
         
-        # Try Docker-based execution first (with enhanced security limits)
-        if shutil.which("docker") is not None:
+        # Determine whether to use Docker sandbox
+        if self.use_docker and shutil.which("docker") is not None:
             # Prepare Docker command (sandboxed test run)
             cmd = [
                 "docker", "run", "--rm",
@@ -369,29 +376,35 @@ class RunTestsTool(BaseTool):
                 
                 if not stdout:
                     docker_error = "No output from test run"
+                    # Include stderr in error for debugging
+                    docker_error += f" (stderr: {proc.stderr.strip()[:200]})"
                 else:
                     try:
                         result = json.loads(stdout)
                     except json.JSONDecodeError:
                         docker_error = "Non-JSON output from tests"
+                        # Save a snippet of raw output for context
+                        docker_error += f" (output starts: {stdout[:100]}...)"
                         
             except subprocess.TimeoutExpired:
                 docker_error = "Test execution timed out"
             except Exception as e:
                 docker_error = f"Docker test run failed: {e}"
         else:
-            docker_error = "Docker not available"
+            if self.use_docker and shutil.which("docker") is None:
+                # Docker was desired but not available
+                docker_error = "Docker not available"
+            # If Docker not used or failed, fall back to local execution
         
-        # If Docker failed, fall back to local TestRunner
         if docker_error:
-            # Warn the user that we are falling back to local execution (no isolation)
-            try:
-                from rich.console import Console
-                Console().print("[bold yellow]⚠️ Sandbox unavailable – running tests without isolation.[/bold yellow]")
-            except ImportError:
-                print("⚠️ Sandbox unavailable – running tests without isolation.")
             if self.verbose:
-                print(f"Docker execution failed: {docker_error}. Falling back to local test run.")
+                print(f"⚠️ Sandbox unavailable – running tests locally. Reason: {docker_error}")
+            # Log the fallback event
+            if self.logger:
+                self.logger.log_event({
+                    "event": "sandbox_fallback",
+                    "reason": docker_error
+                })
             
             try:
                 from nova.runner.test_runner import TestRunner
@@ -429,23 +442,22 @@ class RunTestsTool(BaseTool):
                 
             except Exception as e:
                 # Set error result dict
+                # Local test run failed (e.g., test runner internal error)
                 result = {
                     "exit_code": 1,
                     "error": f"Test execution failed: {e}",
                     "failures": 0,
-                    "passed": 0,
-                    "stderr": str(e)
+                    "passed": 0
                 }
         
-        # Always return JSON formatted results for consistent parsing
+        # Ensure result is a dict by this point
         if result is None:
-            # Docker execution failed, set error result dict
+            # Docker path set result only if tests failed (exit_code 1). If it's still None, treat as error.
             result = {
                 "exit_code": 1,
-                "error": docker_error or "Unknown test error",
+                "error": docker_error or "Unknown error",
                 "failures": 0,
-                "passed": 0,
-                "stderr": docker_error
+                "passed": 0
             }
         
         if result.get("exit_code", 0) == 0:
@@ -480,6 +492,16 @@ class RunTestsTool(BaseTool):
                 "message": f"Tests failed: {summ.get('failed', 0)}",
                 "failing_tests": []
             })
+        
+        # Log the test results event for telemetry
+        if self.logger:
+            evt = {"event": "test_run_completed", "exit_code": result.get("exit_code", 1)}
+            if "failures" in result:
+                evt["failures"] = result["failures"]
+                evt["passed"] = result.get("passed", 0)
+            if "error" in result:
+                evt["error"] = result["error"]
+            self.logger.log_event(evt)
         
         # Return JSON with failure details
         return json.dumps({
@@ -564,6 +586,12 @@ class ApplyPatchTool(BaseTool):
         if not is_safe:
             if self.verbose:
                 print(f"Safety check failed: {safe_msg}")
+            # Log safety violation
+            if self.logger:
+                self.logger.log_event({
+                    "event": "patch_rejected",
+                    "reason": f"Safety violation – {safe_msg}"
+                })
             return f"FAILED: Safety violation – {safe_msg}"
         
         # 1.5. Critic review check (enforce review before applying)
@@ -592,6 +620,11 @@ class ApplyPatchTool(BaseTool):
                         reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
                         if self.verbose:
                             print(f"Critic rejected patch: {reason}")
+                        if self.logger:
+                            self.logger.log_event({
+                                "event": "patch_rejected",
+                                "reason": f"Critic rejection – {reason}"
+                            })
                         return f"FAILED: Patch rejected by critic - {reason}"
         else:
             # No state tracking available - run critic review inline
@@ -603,6 +636,11 @@ class ApplyPatchTool(BaseTool):
                 reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
                 if self.verbose:
                     print(f"Critic rejected patch: {reason}")
+                if self.logger:
+                    self.logger.log_event({
+                        "event": "patch_rejected",
+                        "reason": f"Critic rejection – {reason}"
+                    })
                 return f"FAILED: Patch rejected by critic - {reason}"
         
         # 2. Preflight check: ensure patch applies cleanly
@@ -628,6 +666,12 @@ class ApplyPatchTool(BaseTool):
                 # Git apply --check failed, patch does not apply
                 if self.verbose:
                     print(f"Patch preflight failed: {preflight.stderr}")
+                if self.logger:
+                    self.logger.log_event({
+                        "event": "patch_apply_failed",
+                        "reason": "Context mismatch/preflight failed",
+                        "details": preflight.stderr.strip()[:200]
+                    })
                 # Update state to indicate patch error
                 if self.state:
                     self.state.final_status = "patch_error"
@@ -642,6 +686,14 @@ class ApplyPatchTool(BaseTool):
             )
             
             if apply_proc.returncode != 0:
+                if self.verbose:
+                    print(f"git apply failed: {apply_proc.stderr.strip()}")
+                if self.logger:
+                    self.logger.log_event({
+                        "event": "patch_apply_failed",
+                        "reason": "Git apply error",
+                        "details": apply_proc.stderr.strip()[:200]
+                    })
                 # Update state to indicate patch error
                 if self.state:
                     self.state.final_status = "patch_error"
@@ -656,21 +708,50 @@ class ApplyPatchTool(BaseTool):
                 text=True
             )
             
+            if commit_proc.returncode != 0:
+                # Commit failed (e.g., no changes to commit)
+                if self.verbose:
+                    print(f"git commit failed: {commit_proc.stderr.strip()}")
+                if self.logger:
+                    self.logger.log_event({
+                        "event": "patch_apply_failed",
+                        "reason": "Git commit failed",
+                        "details": commit_proc.stderr.strip()
+                    })
+                if self.state:
+                    self.state.final_status = "patch_error"
+                return f"FAILED: Patch applied but not committed: {commit_proc.stderr.strip()}"
+            
             # 5. Success! Update state to clear the review
             if self.state:
-                self.state.last_review_approved = False  # Reset for next patch
-                self.state.last_reviewed_patch = None
-                self.state.pending_patch = None
-                # Add to patches applied list
+                # Reset review approval for next patch cycle
+                if hasattr(self.state, 'last_review_approved'):
+                    self.state.last_review_approved = False
+                if hasattr(self.state, 'last_reviewed_patch'):
+                    self.state.last_reviewed_patch = None
+                if hasattr(self.state, 'pending_patch'):
+                    self.state.pending_patch = None
                 if hasattr(self.state, 'patches_applied'):
                     self.state.patches_applied.append(patch_text)
-            
+                # Increment iteration count for tracking
+                if hasattr(self.state, 'current_iteration'):
+                    self.state.current_iteration += 1
+            if self.logger:
+                self.logger.log_event({
+                    "event": "patch_applied",
+                    "message": "Patch applied successfully",
+                    "lines_changed": patch_text.count("\n+") + patch_text.count("\n-")
+                })
             if self.verbose:
-                print("Patch applied and committed successfully")
-            
+                print("✅ Patch applied and committed successfully.")
             return "SUCCESS: Patch applied successfully."
             
         except Exception as e:
+            if self.logger:
+                self.logger.log_event({
+                    "event": "patch_apply_failed",
+                    "reason": f"Exception during apply: {e}"
+                })
             return f"FAILED: Could not apply patch: {e}"
         
         finally:
@@ -1009,7 +1090,8 @@ def create_default_tools(
     safety_config: Optional[SafetyConfig] = None,
     llm: Optional[Any] = None,
     state: Optional[Any] = None,
-    settings: Optional[Any] = None
+    settings: Optional[Any] = None,
+    logger: Optional[JSONLLogger] = None
 ) -> List[BaseTool]:
     """
     Create the default set of tools for the Deep Agent (v1.1).
@@ -1029,6 +1111,7 @@ def create_default_tools(
         llm: LLM instance for critic review (optional)
         state: Agent state for tracking
         settings: Nova settings for configuration
+        logger: Telemetry logger for recording events (optional)
     
     Returns:
         List of tool instances ready for use in LangChain agent
@@ -1055,16 +1138,24 @@ def create_default_tools(
     # Removed invalid response handler tool - it was causing confusion with GPT-5
     
     # Add class-based tools
+    # Get use_docker setting from settings if available
+    use_docker = True
+    if settings and hasattr(settings, 'use_docker'):
+        use_docker = settings.use_docker
+    
     tools.append(RunTestsTool(
         repo_path=repo_path,
-        verbose=verbose
+        verbose=verbose,
+        logger=logger,
+        use_docker=use_docker
     ))
     
     tools.append(ApplyPatchTool(
         repo_path=repo_path,
         safety_config=safety_config,
         verbose=verbose,
-        state=state
+        state=state,
+        logger=logger
     ))
     
     tools.append(CriticReviewTool(

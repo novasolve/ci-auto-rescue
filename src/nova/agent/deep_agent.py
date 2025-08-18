@@ -388,29 +388,32 @@ class NovaDeepAgent:
             "     * module_name/__init__.py for packages\n"
             "   - Common patterns: src/module_name.py, lib/module_name.py\n"
             "   - NEVER guess filenames like 'module_name_module.py' or 'broken_module.py'\n\n"
-            "## YOUR WORKFLOW - DETERMINISTIC MULTI-FAILURE FIX:\n"
-            "1. ANALYZE: Understand ALL failing tests and their error messages\n"
-            "2. INVESTIGATE: Read ALL relevant source files for failing functions\n"
-            "3. PLAN: Create a comprehensive strategy to fix ALL failures at once\n"
-            "4. IMPLEMENT ALL FIXES: Apply fixes for EVERY failing test sequentially\n"
-            "5. VERIFY ONCE: Run tests only AFTER all fixes are applied\n"
-            "6. ITERATE: Only if some tests still fail after the complete fix\n\n"
-            "CRITICAL - FIX ALL FAILURES IN ONE CYCLE:\n"
-            "- DO NOT fix issues one-by-one with tests after each fix\n"
-            "- DO NOT run tests until ALL fixes are implemented\n"
-            "- Your plan should enumerate a fix for EACH failing function\n"
-            "- Apply ALL fixes before calling run_tests\n"
-            "- Example: If 5 functions fail, fix all 5, then test once\n\n"
-            "IMPLEMENTATION ORDER:\n"
-            "1. Run tests once to see all failures\n"
-            "2. Use plan_todo to list fixes for EACH failing function\n"
-            "3. For each planned fix:\n"
-            "   - Open the source file\n"
-            "   - Apply the fix\n"
-            "   - Move to the next fix WITHOUT testing\n"
-            "4. Only after ALL fixes are done, run tests to verify\n"
-            "5. If any tests still fail, repeat with remaining issues\n\n"
-            "Remember: Your goal is to make ALL tests pass in ONE iteration with MINIMAL changes."
+            "## YOUR WORKFLOW - VERIFIED INCREMENTAL FIXES:\n"
+            "1. ANALYZE: Understand the failing tests and their error messages\n"
+            "2. INVESTIGATE: Read relevant source files to understand the code\n"
+            "3. PLAN: Create a strategy to fix failures (can be one at a time or batched)\n"
+            "4. IMPLEMENT: Apply fixes to the code\n"
+            "5. VERIFY: Run tests IMMEDIATELY after EVERY code change (MANDATORY)\n"
+            "6. ITERATE: Continue fixing remaining failures\n\n"
+            "CRITICAL - ALWAYS VERIFY YOUR FIXES:\n"
+            "- You MUST run tests after EVERY patch or file modification\n"
+            "- Never assume a fix works without verification\n"
+            "- Do not declare success without seeing ALL tests pass\n"
+            "- If you apply a patch, run tests before moving to the next issue\n\n"
+            "WHY VERIFICATION IS MANDATORY:\n"
+            "1. Confirms your fix actually works\n"
+            "2. Catches unintended side effects immediately\n"
+            "3. Provides feedback for the next iteration\n"
+            "4. Prevents accumulating broken changes\n\n"
+            "ACCEPTABLE APPROACHES:\n"
+            "1. Fix one issue at a time with verification after each\n"
+            "2. Fix related issues together, then verify\n"
+            "3. Apply a comprehensive patch, then verify\n\n"
+            "UNACCEPTABLE APPROACHES:\n"
+            "1. Making multiple changes without testing\n"
+            "2. Declaring success without running tests\n"
+            "3. Assuming fixes work based on code inspection alone\n\n"
+            "Remember: Your goal is to make ALL tests pass with MINIMAL, VERIFIED changes."
         )
         # Create the tool set (unified tools with safety and testing integrated)
         tools = create_default_tools(
@@ -419,7 +422,8 @@ class NovaDeepAgent:
             safety_config=self.safety_config,
             llm=llm,  # Pass LLM for critic review
             state=self.state,  # Pass agent state for review tracking
-            settings=self.settings  # Pass settings for configuration
+            settings=self.settings,  # Pass settings for configuration
+            logger=self.telemetry  # Pass telemetry logger for event recording
         )
         
         # Choose agent type based on model capabilities

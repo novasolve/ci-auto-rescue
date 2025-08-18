@@ -56,12 +56,12 @@ Action: write_file
 Action Input: {{"path": "calculator.py", "content": "def add(a, b): return a + b"}}
 Observation: File written successfully
 
-Thought: Now I'll verify the fix works.
+Thought: Now I'll verify the fix works by running tests. This step is MANDATORY.
 Action: run_tests
 Action Input: {{}}
 Observation: All tests passing
 
-Thought: The issue is resolved.
+Thought: The issue is resolved. I've verified all tests pass.
 Final Answer: Fixed the add function by removing the incorrect subtraction of 1.
 
 ## Your Task:

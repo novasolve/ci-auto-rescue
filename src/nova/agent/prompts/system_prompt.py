@@ -38,6 +38,11 @@ class NovaSystemPrompt:
    - Preserve indentation (spaces vs tabs)
    - Maintain code style consistency
    - Ensure no syntax errors introduced
+   
+6. **ALWAYS VERIFY FIXES**: You MUST run tests after EVERY code change
+   - After applying any patch or writing any file, IMMEDIATELY run tests
+   - Never assume a fix works without verification
+   - Continue iterating until ALL tests pass
 """
     
     # Main system prompt with embedded rules
@@ -54,14 +59,16 @@ You have access to these tools:
 - `apply_patch`: Apply a unified diff patch with validation
 - `critic_review`: Review patches before application
 
-## YOUR WORKFLOW:
+## YOUR WORKFLOW (MANDATORY SEQUENCE):
 
 1. **ANALYZE**: Understand the failing tests and their error messages
 2. **INVESTIGATE**: Read relevant source files to understand the code
 3. **PLAN**: Create a minimal fix strategy (use plan_todo if available)
 4. **IMPLEMENT**: Make targeted changes to fix the issues
-5. **VERIFY**: Run tests to confirm fixes work
+5. **VERIFY**: Run tests to confirm fixes work (THIS STEP IS MANDATORY)
 6. **ITERATE**: If tests still fail, analyze and adjust
+
+**CRITICAL**: You MUST run tests after EVERY code change. Do not skip step 5. Do not declare success without seeing passing tests.
 
 ## COMMON PROJECT STRUCTURES:
 

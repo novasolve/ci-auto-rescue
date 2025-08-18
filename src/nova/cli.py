@@ -463,9 +463,9 @@ def fix(
                 elif state.final_status == "patch_rejected":
                     failure_type = "SafetyGuardTriggered"
                     failure_reason = "All proposed patches were rejected by safety checks."
-                elif state.final_status == "patch_error":
+                elif state.final_status == "patch_error" or state.final_status == "patch_failed":
                     failure_type = "PatchApplicationError"
-                    failure_reason = "Failed to apply generated patches to the codebase."
+                    failure_reason = "A patch was approved but failed to apply to the code (context mismatch or merge issue)."
                 elif state.final_status == "no_patch":
                     failure_type = "AgentException"
                     failure_reason = "Could not generate a valid patch for the failing tests."
@@ -678,9 +678,9 @@ def fix(
                     elif state.final_status == "patch_rejected":
                         failure_type = "SafetyGuardTriggered"
                         failure_reason = "All proposed patches were rejected by safety checks."
-                    elif state.final_status == "patch_error":
+                    elif state.final_status == "patch_error" or state.final_status == "patch_failed":
                         failure_type = "PatchApplicationError"
-                        failure_reason = "Failed to apply generated patches to the codebase."
+                        failure_reason = "A patch was approved but failed to apply to the code (context mismatch or merge issue)."
                     elif state.final_status == "no_patch":
                         failure_type = "AgentException"
                         failure_reason = "Could not generate a valid patch for the failing tests."

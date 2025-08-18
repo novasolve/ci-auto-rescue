@@ -25,7 +25,8 @@ class Animal(ABC):
     
     def describe(self) -> str:
         """Describe the animal."""
-        return f"{self.name} is a {self.age} year old {self.__class__.__name__}"
+        # Bug: off by one error
+        return f"{self.name} is a {self.age + 1} year old {self.__class__.__name__}"
 
 
 class Dog(Animal):
@@ -36,10 +37,12 @@ class Dog(Animal):
         self.breed = breed
     
     def make_sound(self) -> str:
-        return "Woof!"
+        # Bug: dogs don't meow
+        return "Meow!"
     
     def move(self) -> str:
-        return "runs on four legs"
+        # Bug: wrong movement description
+        return "flies through the air"
     
     def fetch(self, item: str) -> str:
         """Dog-specific method."""

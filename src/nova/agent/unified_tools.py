@@ -160,10 +160,13 @@ class PlanTodoTool(BaseTool):
     name: str = "plan_todo"
     description: str = "Plan next steps by outlining a TODO list or strategy."
     args_schema: Type[BaseModel] = PlanTodoInput
+    state: Optional[Any] = None
     
     def _run(self, todo: str) -> str:
         """Execute the plan_todo function."""
-        # No-op tool: just logs the plan
+        # Update phase to implementing after planning
+        if self.state and hasattr(self.state, 'phase'):
+            self.state.phase = 'implementing'
         # Store the plan (in real implementation, this would save to state)
         return "Plan recorded. Continue with the next action."
     
@@ -182,6 +185,7 @@ class OpenFileTool(BaseTool):
     name: str = "open_file"
     description: str = "Read the contents of a file from the repository (with safety checks)."
     args_schema: Type[BaseModel] = OpenFileInput
+    settings: Optional[Any] = None  # Store Nova settings
     
     def _run(self, path: str) -> str:
         """Execute the open_file function with safety checks."""
@@ -190,16 +194,57 @@ class OpenFileTool(BaseTool):
         import os
         p = Path(path)
         path_str = str(p)
-        for pattern in BLOCKED_PATTERNS:
-            if ('*' in pattern or '?' in pattern):
-                if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
-                    return f"ERROR: Access to {path} is blocked by policy (pattern: {pattern})"
+        
+        # First check if this is a test file
+        is_test_file = any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py')
+        
+        # If it's a test file, check if we're allowed to read it
+        if is_test_file:
+            allow_test_read = True  # Default to True
+            if self.settings and hasattr(self.settings, 'allow_test_file_read'):
+                allow_test_read = self.settings.allow_test_file_read
+            
+            if allow_test_read:
+                # Skip BLOCKED_PATTERNS check for test files when read is allowed
+                pass
             else:
-                if pattern in path_str or p.name == pattern:
-                    return f"ERROR: Access to {path} is blocked by policy"
-        # Block any test files explicitly
-        if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
-            return f"ERROR: Access to test file {path} is blocked by policy"
+                # Provide helpful guidance when test files are blocked
+                hint = ""
+                if "test_broken.py" in path:
+                    hint = "\nHINT: Look for source file: broken.py or src/broken.py"
+                elif path.endswith('_test.py'):
+                    module_name = path.replace('_test.py', '.py')
+                    hint = f"\nHINT: Look for source file: {module_name}"
+                elif path.startswith('test_'):
+                    module_name = path.replace('test_', '', 1)
+                    hint = f"\nHINT: Look for source file: {module_name}"
+                return f"ERROR: Access to test file {path} is blocked by policy. Use error messages to understand what to fix.{hint}"
+        else:
+            # For non-test files, check BLOCKED_PATTERNS
+            for pattern in BLOCKED_PATTERNS:
+                if ('*' in pattern or '?' in pattern):
+                    if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                        return f"ERROR: Access to {path} is blocked by policy (pattern: {pattern})"
+                else:
+                    if pattern in path_str or p.name == pattern:
+                        return f"ERROR: Access to {path} is blocked by policy"
+        
+        # If we reach here, access is allowed - read the file
+        if is_test_file:
+            # If it's a test file that we're allowed to read, add a header comment
+            try:
+                content = p.read_text()
+                if len(content) > 50000:  # 50KB limit
+                    content = content[:50000] + "\n... (truncated)"
+                return f"# TEST FILE (READ-ONLY): {path}\n# DO NOT MODIFY TEST FILES - Fix the source code to make tests pass\n\n{content}"
+            except FileNotFoundError:
+                return f"ERROR: File not found: {path}"
+            except PermissionError:
+                return f"ERROR: Permission denied: {path}"
+            except Exception as e:
+                return f"ERROR: Could not read file {path}: {e}"
+        
+        # For non-test files, read normally
         try:
             content = p.read_text()
             if len(content) > 50000:  # 50KB limit
@@ -263,11 +308,6 @@ class WriteFileTool(BaseTool):
 
 # --- Class-based Tools (Complex Operations) ---
 
-class RunTestsInput(BaseModel):
-    """Input schema for run_tests tool."""
-    max_failures: int = Field(5, description="Max number of failing tests to report")
-
-
 class RunTestsTool(BaseTool):
     """
     Tool to run tests and collect failing test details.
@@ -278,22 +318,35 @@ class RunTestsTool(BaseTool):
     name: str = "run_tests"
     description: str = (
         "Run the project's test suite inside a sandbox and get failing test info. "
-        "Returns a summary with test names and error messages."
+        "Returns a summary with test names and error messages. "
+        "No input required - just call run_tests"
     )
-    args_schema: Type[BaseModel] = RunTestsInput
+    # No args_schema - makes it accept any input including empty string
     repo_path: Path = Field(default_factory=lambda: Path("."))
     verbose: bool = Field(default=False)
+    # NEW: Allow injection of telemetry logger and settings if needed
+    logger: Optional[JSONLLogger] = Field(default=None)
+    use_docker: bool = Field(default=True)
 
-    def __init__(self, repo_path: Optional[Path] = None, verbose: bool = False, **kwargs):
-        """Initialize with repository path."""
+    def __init__(self, repo_path: Optional[Path] = None, verbose: bool = False,
+                 logger: Optional[JSONLLogger] = None, use_docker: bool = True, **kwargs):
+        """Initialize with repository path and optional logger."""
         if repo_path is not None:
             kwargs['repo_path'] = Path(repo_path)
-        if verbose is not False:
-            kwargs['verbose'] = verbose
+        if verbose:
+            kwargs['verbose'] = True
+        if logger is not None:
+            kwargs['logger'] = logger
+        kwargs['use_docker'] = use_docker
         super().__init__(**kwargs)
 
-    def _run(self, max_failures: int = 5) -> str:
+    def _run(self, *args, **kwargs) -> str:
         """Execute tests and return a JSON summary of results."""
+        # Extract max_failures from kwargs or use default
+        max_failures = kwargs.get('max_failures', 5)
+        if args and isinstance(args[0], int):
+            max_failures = args[0]
+        
         # Ensure .nova directory for test artifacts exists
         nova_path = self.repo_path / ".nova"
         nova_path.mkdir(exist_ok=True)
@@ -302,8 +355,8 @@ class RunTestsTool(BaseTool):
         result = None
         docker_error = None
         
-        # Try Docker-based execution first (with enhanced security limits)
-        if shutil.which("docker") is not None:
+        # Determine whether to use Docker sandbox
+        if self.use_docker and shutil.which("docker") is not None:
             # Prepare Docker command (sandboxed test run)
             cmd = [
                 "docker", "run", "--rm",
@@ -323,84 +376,88 @@ class RunTestsTool(BaseTool):
                 
                 if not stdout:
                     docker_error = "No output from test run"
+                    # Include stderr in error for debugging
+                    docker_error += f" (stderr: {proc.stderr.strip()[:200]})"
                 else:
                     try:
                         result = json.loads(stdout)
                     except json.JSONDecodeError:
                         docker_error = "Non-JSON output from tests"
+                        # Save a snippet of raw output for context
+                        docker_error += f" (output starts: {stdout[:100]}...)"
                         
             except subprocess.TimeoutExpired:
                 docker_error = "Test execution timed out"
             except Exception as e:
                 docker_error = f"Docker test run failed: {e}"
         else:
-            docker_error = "Docker not available"
+            if self.use_docker and shutil.which("docker") is None:
+                # Docker was desired but not available
+                docker_error = "Docker not available"
+            # If Docker not used or failed, fall back to local execution
         
-        # If Docker failed, fall back to local TestRunner
         if docker_error:
-            # Warn the user that we are falling back to local execution (no isolation)
-            try:
-                from rich.console import Console
-                Console().print("[bold yellow]⚠️ Sandbox unavailable – running tests without isolation.[/bold yellow]")
-            except ImportError:
-                print("⚠️ Sandbox unavailable – running tests without isolation.")
             if self.verbose:
-                print(f"Docker execution failed: {docker_error}. Falling back to local test run.")
+                print(f"⚠️ Sandbox unavailable – running tests locally. Reason: {docker_error}")
+            # Log the fallback event
+            if self.logger:
+                self.logger.log_event("sandbox_fallback", {
+                    "reason": docker_error
+                })
             
             try:
                 from nova.runner.test_runner import TestRunner
                 runner = TestRunner(self.repo_path, verbose=self.verbose)
-                failing_tests, summary = runner.run_tests(max_failures=max_failures)
+                failing_tests, junit_xml = runner.run_tests(max_failures=max_failures)
                 
                 if not failing_tests:
-                    # All tests passing, return JSON
-                    return json.dumps({
+                    # All tests passing, set result dict
+                    result = {
                         "exit_code": 0,
                         "failures": 0,
-                        "passed": summary.get("passed", 0) if summary else "unknown",
+                        "passed": "unknown",  # We don't have the count from the runner
                         "message": "All tests passed",
                         "failing_tests": []
-                    })
-                
-                # Format local runner results as JSON
-                failures_json = []
-                for test in failing_tests[:max_failures]:
-                    failures_json.append({
-                        "name": test.name if hasattr(test, 'name') else "unknown",
-                        "error": (test.short_traceback.split("\n")[0][:500] 
-                                 if hasattr(test, 'short_traceback') else "Unknown error"),
-                        "traceback": (test.short_traceback[:1000] 
-                                     if hasattr(test, 'short_traceback') else "")
-                    })
-                
-                return json.dumps({
-                    "exit_code": 1,
-                    "failures": len(failing_tests),
-                    "passed": summary.get("passed", 0) if summary else 0,
-                    "message": f"{len(failing_tests)} test(s) failed",
-                    "failing_tests": failures_json
-                })
+                    }
+                else:
+                    # Format local runner results as dict
+                    failures_json = []
+                    for test in failing_tests[:max_failures]:
+                        failures_json.append({
+                            "name": test.name if hasattr(test, 'name') else "unknown",
+                            "error": (test.short_traceback.split("\n")[0][:500] 
+                                     if hasattr(test, 'short_traceback') else "Unknown error"),
+                            "traceback": (test.short_traceback[:1000] 
+                                         if hasattr(test, 'short_traceback') else "")
+                        })
+                    
+                    result = {
+                        "exit_code": 1,
+                        "failures": len(failing_tests),
+                        "passed": 0,  # We don't have the count from the runner
+                        "message": f"{len(failing_tests)} test(s) failed",
+                        "failing_tests": failures_json
+                    }
                 
             except Exception as e:
-                # Return error as JSON
-                return json.dumps({
+                # Set error result dict
+                # Local test run failed (e.g., test runner internal error)
+                result = {
                     "exit_code": 1,
                     "error": f"Test execution failed: {e}",
                     "failures": 0,
-                    "passed": 0,
-                    "stderr": str(e)
-                })
+                    "passed": 0
+                }
         
-        # Always return JSON formatted results for consistent parsing
+        # Ensure result is a dict by this point
         if result is None:
-            # Docker execution failed, return error as JSON
-            return json.dumps({
+            # Docker path set result only if tests failed (exit_code 1). If it's still None, treat as error.
+            result = {
                 "exit_code": 1,
-                "error": docker_error or "Unknown test error",
+                "error": docker_error or "Unknown error",
                 "failures": 0,
-                "passed": 0,
-                "stderr": docker_error
-            })
+                "passed": 0
+            }
         
         if result.get("exit_code", 0) == 0:
             # All tests passing
@@ -435,6 +492,16 @@ class RunTestsTool(BaseTool):
                 "failing_tests": []
             })
         
+        # Log the test results event for telemetry
+        if self.logger:
+            evt = {"exit_code": result.get("exit_code", 1)}
+            if "failures" in result:
+                evt["failures"] = result["failures"]
+                evt["passed"] = result.get("passed", 0)
+            if "error" in result:
+                evt["error"] = result["error"]
+            self.logger.log_event("test_run_completed", evt)
+        
         # Return JSON with failure details
         return json.dumps({
             "exit_code": result.get("exit_code", 1),
@@ -444,7 +511,7 @@ class RunTestsTool(BaseTool):
             "failing_tests": failures[:max_failures]
         })
 
-    async def _arun(self, max_failures: int = 5) -> str:
+    async def _arun(self, *args, **kwargs) -> str:
         """Async version not implemented."""
         raise NotImplementedError("RunTestsTool does not support async execution")
 
@@ -518,6 +585,11 @@ class ApplyPatchTool(BaseTool):
         if not is_safe:
             if self.verbose:
                 print(f"Safety check failed: {safe_msg}")
+            # Log safety violation
+            if self.logger:
+                self.logger.log_event("patch_rejected", {
+                    "reason": f"Safety violation – {safe_msg}"
+                })
             return f"FAILED: Safety violation – {safe_msg}"
         
         # 1.5. Critic review check (enforce review before applying)
@@ -546,6 +618,10 @@ class ApplyPatchTool(BaseTool):
                         reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
                         if self.verbose:
                             print(f"Critic rejected patch: {reason}")
+                        if self.logger:
+                            self.logger.log_event("patch_rejected", {
+                                "reason": f"Critic rejection – {reason}"
+                            })
                         return f"FAILED: Patch rejected by critic - {reason}"
         else:
             # No state tracking available - run critic review inline
@@ -557,6 +633,10 @@ class ApplyPatchTool(BaseTool):
                 reason = review_result.split(':', 1)[1].strip() if ':' in review_result else review_result
                 if self.verbose:
                     print(f"Critic rejected patch: {reason}")
+                if self.logger:
+                    self.logger.log_event("patch_rejected", {
+                        "reason": f"Critic rejection – {reason}"
+                    })
                 return f"FAILED: Patch rejected by critic - {reason}"
         
         # 2. Preflight check: ensure patch applies cleanly
@@ -582,6 +662,11 @@ class ApplyPatchTool(BaseTool):
                 # Git apply --check failed, patch does not apply
                 if self.verbose:
                     print(f"Patch preflight failed: {preflight.stderr}")
+                if self.logger:
+                    self.logger.log_event("patch_apply_failed", {
+                        "reason": "Context mismatch/preflight failed",
+                        "details": preflight.stderr.strip()[:200]
+                    })
                 # Update state to indicate patch error
                 if self.state:
                     self.state.final_status = "patch_error"
@@ -596,6 +681,13 @@ class ApplyPatchTool(BaseTool):
             )
             
             if apply_proc.returncode != 0:
+                if self.verbose:
+                    print(f"git apply failed: {apply_proc.stderr.strip()}")
+                if self.logger:
+                    self.logger.log_event("patch_apply_failed", {
+                        "reason": "Git apply error",
+                        "details": apply_proc.stderr.strip()[:200]
+                    })
                 # Update state to indicate patch error
                 if self.state:
                     self.state.final_status = "patch_error"
@@ -610,21 +702,47 @@ class ApplyPatchTool(BaseTool):
                 text=True
             )
             
+            if commit_proc.returncode != 0:
+                # Commit failed (e.g., no changes to commit)
+                if self.verbose:
+                    print(f"git commit failed: {commit_proc.stderr.strip()}")
+                if self.logger:
+                    self.logger.log_event("patch_apply_failed", {
+                        "reason": "Git commit failed",
+                        "details": commit_proc.stderr.strip()
+                    })
+                if self.state:
+                    self.state.final_status = "patch_error"
+                return f"FAILED: Patch applied but not committed: {commit_proc.stderr.strip()}"
+            
             # 5. Success! Update state to clear the review
             if self.state:
-                self.state.last_review_approved = False  # Reset for next patch
-                self.state.last_reviewed_patch = None
-                self.state.pending_patch = None
-                # Add to patches applied list
+                # Reset review approval for next patch cycle
+                if hasattr(self.state, 'last_review_approved'):
+                    self.state.last_review_approved = False
+                if hasattr(self.state, 'last_reviewed_patch'):
+                    self.state.last_reviewed_patch = None
+                if hasattr(self.state, 'pending_patch'):
+                    self.state.pending_patch = None
                 if hasattr(self.state, 'patches_applied'):
                     self.state.patches_applied.append(patch_text)
-            
+                # Increment iteration count for tracking
+                if hasattr(self.state, 'current_iteration'):
+                    self.state.current_iteration += 1
+            if self.logger:
+                self.logger.log_event("patch_applied", {
+                    "message": "Patch applied successfully",
+                    "lines_changed": patch_text.count("\n+") + patch_text.count("\n-")
+                })
             if self.verbose:
-                print("Patch applied and committed successfully")
-            
+                print("✅ Patch applied and committed successfully.")
             return "SUCCESS: Patch applied successfully."
             
         except Exception as e:
+            if self.logger:
+                self.logger.log_event("patch_apply_failed", {
+                    "reason": f"Exception during apply: {e}"
+                })
             return f"FAILED: Could not apply patch: {e}"
         
         finally:
@@ -890,7 +1008,9 @@ Respond with JSON: {"approved": true/false, "reason": "brief explanation"}"""
             user_prompt += f"\n\nFailing tests context:\n{failing_tests[:500]}"
         
         try:
-            response = self.llm.predict(user_prompt, system=system_prompt)
+            # Combine system and user prompts since predict doesn't accept system parameter
+            combined_prompt = f"{system_prompt}\n\n{user_prompt}"
+            response = self.llm.predict(combined_prompt)
             
             # Parse JSON response
             if "{" in response and "}" in response:
@@ -960,7 +1080,9 @@ def create_default_tools(
     verbose: bool = False,
     safety_config: Optional[SafetyConfig] = None,
     llm: Optional[Any] = None,
-    state: Optional[Any] = None
+    state: Optional[Any] = None,
+    settings: Optional[Any] = None,
+    logger: Optional[JSONLLogger] = None
 ) -> List[BaseTool]:
     """
     Create the default set of tools for the Deep Agent (v1.1).
@@ -978,15 +1100,23 @@ def create_default_tools(
         verbose: Enable verbose output
         safety_config: Safety configuration for patch application
         llm: LLM instance for critic review (optional)
+        state: Agent state for tracking
+        settings: Nova settings for configuration
+        logger: Telemetry logger for recording events (optional)
     
     Returns:
         List of tool instances ready for use in LangChain agent
     """
     tools = []
     
+    # Import get_settings if no settings provided
+    if settings is None:
+        from nova.config import get_settings
+        settings = get_settings()
+    
     # Add tools with defined schemas for consistent function calling
     tools.append(PlanTodoTool())
-    tools.append(OpenFileTool())
+    tools.append(OpenFileTool(settings=settings))
     tools.append(WriteFileTool())
     
     # Add handler for invalid responses
@@ -999,16 +1129,24 @@ def create_default_tools(
     # Removed invalid response handler tool - it was causing confusion with GPT-5
     
     # Add class-based tools
+    # Get use_docker setting from settings if available
+    use_docker = True
+    if settings and hasattr(settings, 'use_docker'):
+        use_docker = settings.use_docker
+    
     tools.append(RunTestsTool(
         repo_path=repo_path,
-        verbose=verbose
+        verbose=verbose,
+        logger=logger,
+        use_docker=use_docker
     ))
     
     tools.append(ApplyPatchTool(
         repo_path=repo_path,
         safety_config=safety_config,
         verbose=verbose,
-        state=state
+        state=state,
+        logger=logger
     ))
     
     tools.append(CriticReviewTool(

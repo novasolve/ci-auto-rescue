@@ -1,0 +1,10 @@
+# Demo: Using script to capture terminal session
+
+# Start recording (this captures EVERYTHING)
+script nova_demo_session.log
+
+# Now run any commands - they'll all be logged
+echo 'All output is being captured!'
+nova fix --help | head -20
+
+# Type 'exit' or Ctrl+D to stop recording

@@ -397,7 +397,19 @@ def fix(
             )
             console.print("[cyan]🤖 Running Deep Agent to fix failing tests...[/cyan]")
             failures_summary = runner.format_failures_table(failing_tests)
-            error_details = "\n\n".join(test.short_traceback for test in failing_tests[:3])
+            
+            # Enhanced error details with import hints
+            error_details_parts = []
+            for test in failing_tests[:5]:  # Show up to 5 tests
+                error_details_parts.append(test.short_traceback)
+            
+            # Add hint about source file location based on test file path
+            if failing_tests:
+                test_file = failing_tests[0].file
+                if "test_broken.py" in test_file:
+                    error_details_parts.append("\nHINT: Test file suggests looking for source file: broken.py or src/broken.py")
+                
+            error_details = "\n\n".join(error_details_parts)
             code_snippets = ""
             success = deep_agent.run(
                 failures_summary=failures_summary,
@@ -458,7 +470,7 @@ def fix(
                 # Add logs and artifacts info
                 console.print("\n[bold blue]Logs & artifacts:[/bold blue]")
                 if telemetry and hasattr(telemetry, 'run_id'):
-                    run_dir = Path(telemetry.settings.telemetry_dir) / telemetry.run_id
+                    run_dir = telemetry.log_dir
                 else:
                     run_dir = Path(".nova/telemetry")
                 console.print(f"  • Detailed logs: [italic]{run_dir}[/italic]")
@@ -582,7 +594,7 @@ def fix(
                     error_report["error_message"] = None
                 
                 # Write to JSON file in telemetry directory
-                report_dir = Path(telemetry.settings.telemetry_dir) / telemetry.run_id
+                report_dir = telemetry.log_dir
                 report_dir.mkdir(parents=True, exist_ok=True)
                 report_path = report_dir / "error_report.json"
                 

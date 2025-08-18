@@ -299,44 +299,67 @@ def build_planner_prompt(failing_tests: List[Dict[str, Any]], critic_feedback: O
         prompt += f'"{critic_feedback}"\n\n'
         prompt += "Please create a NEW plan that addresses this feedback and avoids the same mistakes.\n\n"
     
-    prompt += "Analyze these failing tests and create a plan to fix them:\n\n"
-    prompt += "FAILING TESTS:\n"
-    prompt += "| Test Name | File | Line | Error |\n"
-    prompt += "|-----------|------|------|-------|\n"
+    prompt += "🎯 DETERMINISTIC MULTI-FAILURE FIX STRATEGY\n\n"
+    prompt += "You have multiple failing tests. Your goal is to fix ALL of them in ONE CYCLE.\n"
+    prompt += "Do NOT fix them one-by-one. Plan and execute ALL fixes before running tests again.\n\n"
     
-    for test in failing_tests[:10]:  # Limit to first 10 tests
+    prompt += f"TOTAL FAILING TESTS: {len(failing_tests)}\n\n"
+    prompt += "DETAILED FAILURE ANALYSIS:\n"
+    prompt += "| Test Name | File | Line | Error Message |\n"
+    prompt += "|-----------|------|------|---------------|\n"
+    
+    # Show all tests (or up to 20 for very large suites)
+    for i, test in enumerate(failing_tests[:20]):
         name = test.get('name', 'unknown')[:40]
         file = test.get('file', 'unknown')[:30]
         line = test.get('line', 0)
         error = test.get('short_traceback', '')
         if error:
-            # Get first line of error
-            error = error.split('\n')[0][:50]
+            # Get the actual error message, not just first line
+            error_lines = error.split('\n')
+            # Look for assertion errors or exception messages
+            for err_line in error_lines:
+                if 'AssertionError:' in err_line or 'Error:' in err_line or 'assert' in err_line:
+                    error = err_line.strip()[:80]
+                    break
+            else:
+                error = error_lines[0][:80]
         else:
             error = 'No error details'
         
         prompt += f"| {name} | {file} | {line} | {error} |\n"
     
-    if len(failing_tests) > 10:
-        prompt += f"\n... and {len(failing_tests) - 10} more failing tests\n"
+    if len(failing_tests) > 20:
+        prompt += f"\n... and {len(failing_tests) - 20} more failing tests\n"
     
     prompt += "\n"
-    prompt += "Provide a structured plan to fix these failures in JSON format with keys 'approach', 'steps', and 'priority_tests'.\n"
+    prompt += "REQUIRED PLANNING APPROACH:\n"
+    prompt += "1. Analyze ALL failures to understand the pattern\n"
+    prompt += "2. Create a SINGLE comprehensive plan that addresses EVERY failure\n"
+    prompt += "3. List specific fixes for EACH failing function/method\n"
+    prompt += "4. Execute ALL fixes sequentially WITHOUT running tests until done\n"
+    prompt += "5. Only run tests ONCE after ALL fixes are applied\n\n"
+    
+    prompt += "Provide a structured plan in JSON format with keys 'approach', 'steps', and 'priority_tests'.\n"
+    prompt += "Your 'steps' MUST enumerate a fix for EACH failing test.\n"
     prompt += "Respond only with a JSON object containing:\n"
-    prompt += '- "approach": a brief overall strategy,\n'
-    prompt += '- "steps": an ordered list of specific fix steps,\n'
-    prompt += '- "priority_tests": a list of failing test names to focus on first.\n\n'
+    prompt += '- "approach": overall strategy to fix ALL tests in one go\n'
+    prompt += '- "steps": ordered list with one step per failing function/test to fix\n'
+    prompt += '- "priority_tests": list ALL failing test names (not just a subset)\n\n'
     prompt += "Example format:\n"
     prompt += "{\n"
-    prompt += '  "approach": "Brief strategy description",\n'
+    prompt += '  "approach": "Fix all 5 failing functions by adding proper error handling and type checks",\n'
     prompt += '  "steps": [\n'
-    prompt += '    "First concrete step",\n'
-    prompt += '    "Second concrete step",\n'
-    prompt += '    "..."\n'
+    prompt += '    "Fix divide_numbers: Add TypeError handling for non-numeric inputs",\n'
+    prompt += '    "Fix validate_age: Add ValidationError for invalid ages",\n'
+    prompt += '    "Fix process_data: Handle None/empty data with ValueError",\n'
+    prompt += '    "Fix FileProcessor: Add FileNotFoundError handling",\n'
+    prompt += '    "Fix safe_conversion: Handle unsupported types",\n'
+    prompt += '    "Apply all fixes and run tests once to verify"\n'
     prompt += "  ],\n"
-    prompt += '  "priority_tests": ["<test_name_1>", "<test_name_2>", "..."]\n'
+    prompt += '  "priority_tests": ["test_divide_numbers", "test_validate_age", ...]\n'
     prompt += "}\n"
-    prompt += "Only output valid JSON as described."
+    prompt += "Remember: Fix ALL tests in ONE iteration. Do NOT test after each fix."
     
     return prompt
 

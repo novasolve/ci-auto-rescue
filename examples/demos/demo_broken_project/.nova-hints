@@ -1,15 +1,18 @@
 # Nova Hints for demo_broken_project
 
-## File Locations
+## IMPORTANT: File Locations
 
-- Source file to fix: `src/broken.py`
-- Test file (read-only): `tests/test_broken.py`
+- **SOURCE FILE TO OPEN AND FIX**: `src/broken.py` (NOT broken.py at root!)
+- Test file (read-only - DO NOT ATTEMPT TO OPEN): `tests/test_broken.py`
+- The tests import from `broken` which maps to `src/broken.py`
 
 ## Known Issues to Fix
 
-1. `divide_numbers`: Add zero check, raise ValueError("Cannot divide by zero")
-2. `find_max`: Handle empty list, raise ValueError("Cannot find max of empty list")
-3. `concatenate_strings`: Add space between strings (return f"{str1} {str2}")
-4. `calculate_average`: Use float division (/) instead of integer division (//)
-5. `get_first_char`: Handle empty string, return "" for empty input
-6. `sort_list`: Return a new sorted list instead of modifying the original (use sorted())
+Based on the test expectations:
+
+1. `divide_numbers`: Should raise ValueError when b == 0 (test expects ValueError, not ZeroDivisionError)
+2. `find_max`: Should raise ValueError("Cannot find max of empty list") for empty lists
+3. `concatenate_strings`: Should add space between strings - return f"{str1} {str2}"
+4. `calculate_average`: Should use float division (/) instead of integer division (//)
+5. `get_first_char`: Should return empty string "" for empty input (not crash)
+6. `sort_list`: Should return a NEW sorted list without modifying the original - use sorted(items)

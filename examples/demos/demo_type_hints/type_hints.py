@@ -13,18 +13,19 @@ from enum import Enum
 # Basic type hints
 def add_numbers(a: int, b: int) -> int:
     """Add two integers."""
-    return a + b
+    # Bug: off by one error
+    return a + b + 1
 
 
 def concatenate_strings(s1: str, s2: str) -> str:
     """Concatenate two strings."""
-    return s1 + s2
+    # Bug: adding unwanted space
+    return s1 + " " + s2
 
 
 def calculate_average(numbers: List[float]) -> float:
     """Calculate average of a list of numbers."""
-    if not numbers:
-        return 0.0
+    # Bug: not checking for empty list
     return sum(numbers) / len(numbers)
 
 

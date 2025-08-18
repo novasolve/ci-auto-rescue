@@ -39,21 +39,93 @@ class GPT5ChatOpenAI(ChatOpenAI):
         return super()._generate(messages, stop=None, run_manager=run_manager, **kwargs)
 
 
+# Module-level storage for parser states to avoid Pydantic field issues
+_parser_agent_states = {}
+
 # Custom output parser for GPT-5 that handles both action and final answer in same output
 class GPT5ReActOutputParser(ReActOutputParser):
     """Custom ReAct output parser that handles GPT-5's tendency to output both actions and final answers."""
     
+    def __init__(self, agent_state=None):
+        """Initialize parser with optional agent state for context-aware decisions."""
+        super().__init__()
+        # Store state using instance id as key to avoid Pydantic field validation
+        if agent_state is not None:
+            _parser_agent_states[id(self)] = agent_state
+    
+    @property
+    def agent_state(self):
+        """Get agent state from module-level storage."""
+        return _parser_agent_states.get(id(self), None)
+    
+    def __del__(self):
+        """Clean up state storage when parser is destroyed."""
+        instance_id = id(self)
+        if instance_id in _parser_agent_states:
+            del _parser_agent_states[instance_id]
+    
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
         """Parse GPT-5 output, prioritizing actions over final answers."""
+        text_lower = text.lower()
+        
+        # First check agent state if available (more reliable than text parsing)
+        if self.agent_state:
+            # Check if tests are passing based on agent state
+            tests_passing = getattr(self.agent_state, 'total_failures', 1) == 0
+            phase = getattr(self.agent_state, 'phase', 'unknown')
+            
+            # If we have a Final Answer and tests are passing, allow it
+            if "final answer" in text_lower and tests_passing:
+                final_answer_match = re.search(
+                    r"Final\s*Answer\s*:\s*(.+?)(?=\n(?:Action:|Observation:|Thought:)|$)", 
+                    text, 
+                    re.DOTALL | re.IGNORECASE
+                )
+                if final_answer_match:
+                    answer_text = final_answer_match.group(1).strip()
+                    if hasattr(self.agent_state, 'verbose') and self.agent_state.verbose:
+                        print(f"[Parser] Allowing Final Answer - tests passing (failures={self.agent_state.total_failures})")
+                    return AgentFinish(
+                        return_values={"output": answer_text}, 
+                        log=text
+                    )
+        
+        # Fallback to text-based success detection
+        success_terms = ["all tests passing", "all tests pass", "0 failures", "successfully fixed", "tests passed"]
+        has_success = any(term in text_lower for term in success_terms)
+        
+        # If tests are passing and agent provides Final Answer, allow completion
+        if has_success:
+            final_answer_match = re.search(
+                r"Final\s*Answer\s*:\s*(.+?)(?=\n(?:Action:|Observation:|Thought:)|$)", 
+                text, 
+                re.DOTALL | re.IGNORECASE
+            )
+            if final_answer_match:
+                answer_text = final_answer_match.group(1).strip()
+                return AgentFinish(
+                    return_values={"output": answer_text}, 
+                    log=text
+                )
+        
         # Special handling for plan_todo responses that try to end prematurely
-        if ("plan noted" in text.lower() or "todo created" in text.lower() or "plan recorded" in text.lower()):
+        # Check if output contains planning keywords AND a premature final answer
+        if ("plan noted" in text_lower or "todo created" in text_lower or "plan recorded" in text_lower):
             # Check if agent is trying to provide a final answer after planning
-            if "final answer" in text.lower():
-                # Force continuation with next logical step
+            phase = getattr(self.agent_state, 'phase', 'planning') if self.agent_state else 'planning'
+            tests_passing = getattr(self.agent_state, 'total_failures', 1) == 0 if self.agent_state else has_success
+            
+            if "final answer" in text_lower and not tests_passing and phase != 'complete':
+                # Log the intervention
+                if self.agent_state and hasattr(self.agent_state, 'verbose') and self.agent_state.verbose:
+                    print(f"[Parser] Blocked premature Final Answer - phase={phase}, failures={getattr(self.agent_state, 'total_failures', '?')}")
+                
+                # Instead of forcing a specific file, just indicate continuation is needed
+                # Let the agent figure out the next action naturally
                 return AgentAction(
-                    tool="open_file",
-                    tool_input="broken_module.py",  # Generic filename, will be adjusted based on context
-                    log=text + "\n[Parser: Detected premature completion after planning. Continuing with implementation.]"
+                    tool="run_tests",
+                    tool_input={},
+                    log=text + "\n[Parser: Detected premature completion after planning. Checking test status.]"
                 )
         
         # First check if there's a valid action in the output
@@ -87,13 +159,13 @@ class GPT5ReActOutputParser(ReActOutputParser):
         if final_answer_match:
             # Check if this is a premature final answer after planning
             answer_text = final_answer_match.group(1).strip()
-            if any(phrase in answer_text.lower() for phrase in ["i will", "i need to", "to proceed", "please allow", "i should"]):
+            # Only block "permission-seeking" answers if we're not in success state
+            if not has_success and any(phrase in answer_text.lower() for phrase in ["i will", "i need to", "to proceed", "please allow", "i should"]):
                 # This looks like the agent asking for permission rather than completing
-                # Force it to continue with the actual work
                 return AgentAction(
-                    tool="open_file",
-                    tool_input="examples/demos/demo_broken_project/broken_module.py",
-                    log=text + "\n[Parser: Agent seems stuck - forcing continuation]"
+                    tool="run_tests",
+                    tool_input={},
+                    log=text + "\n[Parser: Agent seems stuck - checking test status]"
                 )
             
             return AgentFinish(
@@ -108,7 +180,7 @@ class GPT5ReActOutputParser(ReActOutputParser):
             # If all else fails, guide the agent to continue
             return AgentAction(
                 tool="run_tests",
-                tool_input="",
+                tool_input={},
                 log=text + "\n[Parser: No clear action found - running tests to check status]"
             )
 
@@ -293,9 +365,13 @@ class NovaDeepAgent:
             "   - Fix only what's necessary for tests to pass\n"
             "   - Don't refactor or improve unrelated code\n"
             "   - Each change should have a clear purpose\n\n"
-            "3. **NO HALLUCINATING TOOLS**: Only use tools that actually exist\n"
+            "3. **NO HALLUCINATING**: Never make things up\n"
             "   - Available tools: plan_todo, open_file, write_file, run_tests, apply_patch, critic_review\n"
-            "   - Never invent or reference non-existent tools\n\n"
+            "   - Never invent or reference non-existent tools\n"
+            "   - When you get 'ERROR: Access blocked', DO NOT imagine file contents\n"
+            "   - If you can't read a file, work with what you have\n"
+            "   - CRITICAL: Do NOT generate 'Observation:' lines - wait for actual tool responses\n"
+            "   - After 'Action Input:', STOP and wait for the tool to run\n\n"
             "4. **SAFETY GUARDRAILS**: Respect all safety limits\n"
             "   - Max patch size: 500 lines\n"
             "   - Max files per patch: 10\n"
@@ -304,21 +380,40 @@ class NovaDeepAgent:
             "   - Preserve indentation (spaces vs tabs)\n"
             "   - Maintain code style consistency\n"
             "   - Ensure no syntax errors introduced\n\n"
-            "## YOUR WORKFLOW:\n"
+            "6. **PYTHON IMPORTS**: When resolving Python imports:\n"
+            "   - Check test files for sys.path modifications (e.g., sys.path.insert)\n"
+            "   - If tests import 'from module_name import ...', look for:\n"
+            "     * module_name.py in the same directory\n"
+            "     * module_name.py in directories added to sys.path\n"
+            "     * module_name/__init__.py for packages\n"
+            "   - Common patterns: src/module_name.py, lib/module_name.py\n"
+            "   - NEVER guess filenames like 'module_name_module.py' or 'broken_module.py'\n\n"
+            "## YOUR WORKFLOW - VERIFIED INCREMENTAL FIXES:\n"
             "1. ANALYZE: Understand the failing tests and their error messages\n"
             "2. INVESTIGATE: Read relevant source files to understand the code\n"
-            "3. PLAN: Create a minimal fix strategy\n"
-            "4. IMPLEMENT: Make targeted changes to fix the issues\n"
-            "5. VERIFY: Run tests to confirm fixes work\n"
-            "6. ITERATE: If tests still fail, analyze and adjust\n\n"
-            "IMPORTANT: After using plan_todo, you MUST continue with another action.\n"
-            "Never treat planning as the final step.\n"
-            "Always follow planning with:\n"
-            "1. Opening relevant files (open_file)\n"
-            "2. Making code changes (write_file/apply_patch)\n"
-            "3. Running tests (run_tests)\n"
-            "Only provide a Final Answer after all steps are done.\n\n"
-            "Remember: Your goal is to make ALL tests pass with MINIMAL, SAFE changes."
+            "3. PLAN: Create a strategy to fix failures (can be one at a time or batched)\n"
+            "4. IMPLEMENT: Apply fixes to the code\n"
+            "5. VERIFY: Run tests IMMEDIATELY after EVERY code change (MANDATORY)\n"
+            "6. ITERATE: Continue fixing remaining failures\n\n"
+            "CRITICAL - ALWAYS VERIFY YOUR FIXES:\n"
+            "- You MUST run tests after EVERY patch or file modification\n"
+            "- Never assume a fix works without verification\n"
+            "- Do not declare success without seeing ALL tests pass\n"
+            "- If you apply a patch, run tests before moving to the next issue\n\n"
+            "WHY VERIFICATION IS MANDATORY:\n"
+            "1. Confirms your fix actually works\n"
+            "2. Catches unintended side effects immediately\n"
+            "3. Provides feedback for the next iteration\n"
+            "4. Prevents accumulating broken changes\n\n"
+            "ACCEPTABLE APPROACHES:\n"
+            "1. Fix one issue at a time with verification after each\n"
+            "2. Fix related issues together, then verify\n"
+            "3. Apply a comprehensive patch, then verify\n\n"
+            "UNACCEPTABLE APPROACHES:\n"
+            "1. Making multiple changes without testing\n"
+            "2. Declaring success without running tests\n"
+            "3. Assuming fixes work based on code inspection alone\n\n"
+            "Remember: Your goal is to make ALL tests pass with MINIMAL, VERIFIED changes."
         )
         # Create the tool set (unified tools with safety and testing integrated)
         tools = create_default_tools(
@@ -326,7 +421,9 @@ class NovaDeepAgent:
             verbose=self.verbose,
             safety_config=self.safety_config,
             llm=llm,  # Pass LLM for critic review
-            state=self.state  # Pass agent state for review tracking
+            state=self.state,  # Pass agent state for review tracking
+            settings=self.settings,  # Pass settings for configuration
+            logger=self.telemetry  # Pass telemetry logger for event recording
         )
         
         # Choose agent type based on model capabilities
@@ -470,12 +567,12 @@ class NovaDeepAgent:
                     agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
                     verbose=self.verbose,
                     handle_parsing_errors=parsing_error_handler,
-                    max_iterations=15,
+                    max_iterations=self.settings.agent_max_iterations,
                     early_stopping_method="generate",
                     agent_kwargs={
                         "prefix": system_message + "\n\nYou have access to the following tools:",
-                        "suffix": "Begin!\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}",
-                        "output_parser": GPT5ReActOutputParser(),
+                        "suffix": "Begin!\n\nIMPORTANT: Generate ONLY 'Thought:', 'Action:', and 'Action Input:'. Do NOT generate 'Observation:' - the system will provide real observations after running your action.\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}",
+                        "output_parser": GPT5ReActOutputParser(agent_state=self.state),
                         "handle_parsing_errors": "Check your output and ensure it follows the correct format. Use EITHER 'Action:' followed by 'Action Input:' OR 'Final Answer:', but not both in the same response."
                     }
                 )
@@ -487,7 +584,7 @@ class NovaDeepAgent:
                     agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
                     verbose=self.verbose,
                     handle_parsing_errors=parsing_error_handler,
-                    max_iterations=15,
+                    max_iterations=self.settings.agent_max_iterations,
                     early_stopping_method="generate",
                     agent_kwargs={
                         "prefix": system_message + "\n\nYou have access to the following tools:"
@@ -502,7 +599,7 @@ class NovaDeepAgent:
                 verbose=self.verbose,
                 agent_kwargs={"system_message": system_message},
                 handle_parsing_errors=parsing_error_handler,
-                max_iterations=15
+                max_iterations=self.settings.agent_max_iterations
             )
         
         # Log final model selection for transparency
@@ -533,6 +630,27 @@ class NovaDeepAgent:
             True if all tests were fixed (success), False otherwise.
         """
         success = False
+        
+        # Check for hint file and include in prompt if found
+        hint_content = ""
+        hint_files = [".nova-hints", ".nova/hints.md", "HINTS.md"]
+        for hint_file in hint_files:
+            hint_path = self.state.repo_path / hint_file
+            if hint_path.exists():
+                try:
+                    hint_text = hint_path.read_text()
+                    hint_content = f"\n## PROJECT HINTS (from {hint_file}):\n{hint_text}\n"
+                    if self.verbose:
+                        print(f"📝 Found hint file: {hint_file}")
+                    self.telemetry.log_event("hint_file_found", {
+                        "file": hint_file,
+                        "size": len(hint_text)
+                    })
+                    break
+                except Exception as e:
+                    if self.verbose:
+                        print(f"⚠️ Could not read hint file {hint_file}: {e}")
+        
         # Prepare a comprehensive user prompt with failing test details and structured instructions
         user_prompt = f"""Fix the following failing tests:
 
@@ -543,25 +661,34 @@ class NovaDeepAgent:
 {error_details}
 
 {f"## RELEVANT CODE SNIPPETS:\n{code_snippets}" if code_snippets else ""}
-
+{hint_content}
 ## YOUR TASK:
-Use the available tools to fix the failing tests. Follow this workflow:
+Use the available tools to fix the failing tests. You MUST follow these steps IN ORDER:
 
-1. **Plan your approach** using 'plan_todo' - Outline what needs to be fixed
-2. **Read relevant files** using 'open_file' - Understand the code structure
-3. **Modify source code** using 'write_file' - Apply minimal fixes
-4. **Run tests** using 'run_tests' - Verify your fixes work
-5. **Review patches** using 'critic_review' - Validate changes before applying
-6. **Apply patches** using 'apply_patch' - Commit validated changes
+STEP 1: Look at the test file path (e.g., test_broken.py) and identify the likely source file
+   - If test is "test_broken.py", source is likely "broken.py" 
+   - Use the hint above if provided
 
-## REMEMBER:
-- Do NOT modify test files (tests/, test_*.py, *_test.py)
-- Keep changes minimal and focused on fixing the failures
-- Only use the provided tools (no invented commands)
-- Follow all safety guidelines
-- Stop when tests are all green or you cannot fix the issue
+STEP 2: IMMEDIATELY try to open the source file with 'open_file'
+   - First try: broken.py (if that's the module name)
+   - If "File not found", it will suggest alternatives like src/broken.py
+   - Follow the suggestions and try again
 
-Begin fixing the tests now."""
+STEP 3: Once you find and open the source file:
+   - Identify the failing functions from the error messages
+   - Fix them based on the test expectations
+   - Use 'write_file' or 'apply_patch'
+
+STEP 4: Run tests again to verify
+
+## CRITICAL RULES:
+- DO NOT give up after running tests - you MUST try to open source files
+- DO NOT say "I need access to files" - just try to open them!
+- When you see "ERROR: Access blocked", that means it's a test file - try the source file instead
+- The source files ARE accessible, you just need to find the right path
+- Common patterns: module.py, src/module.py, lib/module.py
+
+Start NOW by trying to open the source file. DO NOT just run tests again!"""
         try:
             # Log the start of Deep Agent execution
             self.telemetry.log_event("deep_agent_start", {

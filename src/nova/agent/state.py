@@ -37,6 +37,7 @@ class AgentState:
     timeout_seconds: int = 1200
     start_time: datetime = field(default_factory=datetime.now)
     current_step: int = 0  # Track step number for commits
+    phase: str = "planning"  # Execution phase: planning, implementing, verifying, complete
     
     # Results
     patches_applied: List[str] = field(default_factory=list)

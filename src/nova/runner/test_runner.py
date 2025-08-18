@@ -65,8 +65,9 @@ class TestRunner:
         
         try:
             # Run pytest with JSON and JUnit reports
+            import sys
             cmd = [
-                "python", "-m", "pytest",
+                sys.executable, "-m", "pytest",
                 str(self.repo_path),
                 "--json-report",
                 f"--json-report-file={json_report_path}",
@@ -84,19 +85,43 @@ class TestRunner:
             
             # Run pytest (we expect it to fail if there are failing tests)
             try:
+                import os
+                # Pass current environment to subprocess
+                env = os.environ.copy()
+                
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
                     cwd=str(self.repo_path),
+                    env=env,
                     timeout=get_settings().test_timeout_sec  # enforce test run timeout
                 )
+                
+                if self.verbose:
+                    console.print(f"[dim]Pytest exit code: {result.returncode}[/dim]")
+                    if result.stderr:
+                        console.print(f"[dim]Pytest stderr: {result.stderr}[/dim]")
+                    
             except subprocess.TimeoutExpired:
                 console.print(f"[red]Error: Test execution timed out after {get_settings().test_timeout_sec} seconds[/red]")
                 return [], None
             
             # Parse the JSON report
+            if self.verbose:
+                console.print(f"[dim]JSON report path: {json_report_path}[/dim]")
+                console.print(f"[dim]JSON report exists: {Path(json_report_path).exists()}[/dim]")
+                if Path(json_report_path).exists():
+                    console.print(f"[dim]JSON report size: {Path(json_report_path).stat().st_size} bytes[/dim]")
+                    # Read first 200 chars of the file
+                    with open(json_report_path, 'r') as f:
+                        content = f.read(200)
+                        console.print(f"[dim]JSON report content (first 200 chars): {repr(content)}[/dim]")
+            
             failing_tests = self._parse_json_report(json_report_path, max_failures)
+            
+            if self.verbose:
+                console.print(f"[dim]Parsed {len(failing_tests)} failing tests from JSON report[/dim]")
             
             # Read the JUnit XML report if it exists
             junit_path = Path(junit_report_path)
@@ -127,10 +152,16 @@ class TestRunner:
         try:
             with open(report_path, 'r') as f:
                 report = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            if self.verbose:
+                console.print(f"[red]Failed to load JSON report: {e}[/red]")
             return []
         
         failing_tests = []
+        
+        if self.verbose:
+            console.print(f"[dim]JSON report summary: {report.get('summary', {})}[/dim]")
+            console.print(f"[dim]Number of tests in report: {len(report.get('tests', []))}[/dim]")
         
         # Extract failing tests from the report
         for test in report.get('tests', []):
@@ -179,7 +210,14 @@ class TestRunner:
                 
                 # Get the traceback
                 call_info = test.get('call', {})
-                longrepr = call_info.get('longrepr', '')
+                # Handle both dict and string types for call_info
+                if isinstance(call_info, dict):
+                    longrepr = call_info.get('longrepr', '')
+                elif isinstance(call_info, str):
+                    longrepr = call_info  # call contains the error message string
+                else:
+                    # Fallback: maybe the failure info is under a different key
+                    longrepr = test.get('longrepr', '')
                 
                 # Extract short traceback (first few lines)
                 traceback_lines = longrepr.split('\n') if longrepr else []

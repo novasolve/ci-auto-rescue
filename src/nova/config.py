@@ -31,6 +31,10 @@ class NovaSettings:
     timeout_seconds: int = 1200
     verbose: bool = False
     
+    # Agent-specific settings
+    agent_max_iterations: int = 20  # Max tool calls per agent run
+    deterministic_fix: bool = True  # Fix all failures in one cycle
+    
     # Backward compatibility aliases
     max_iters: int = 6
     run_timeout_sec: int = 1200
@@ -40,6 +44,7 @@ class NovaSettings:
     max_patch_lines: int = 500
     max_affected_files: int = 10
     max_file_size: int = 100_000
+    allow_test_file_read: bool = True  # Allow reading test files for context
     
     # Docker Configuration
     docker_image: str = "nova-ci-rescue-sandbox:latest"
@@ -101,6 +106,9 @@ class NovaSettings:
             use_docker=_get("NOVA_USE_DOCKER", "true").lower() in ["true", "1", "yes"],
             docker_image=_get("NOVA_DOCKER_IMAGE", "nova-ci-rescue-sandbox:latest"),
             telemetry_enabled=_get("NOVA_TELEMETRY", "true").lower() in ["true", "1", "yes"],
+            allow_test_file_read=_get("NOVA_ALLOW_TEST_READ", "true").lower() in ["true", "1", "yes"],
+            agent_max_iterations=int(_get("NOVA_AGENT_MAX_ITERATIONS", "20")),
+            deterministic_fix=_get("NOVA_DETERMINISTIC_FIX", "true").lower() in ["true", "1", "yes"],
         )
     
     @classmethod

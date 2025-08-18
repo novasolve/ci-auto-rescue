@@ -88,6 +88,10 @@ def fix(
     # Change to repo directory
     os.chdir(repo_path)
     
+    # Update REPO_ROOT in agent tools after changing directory
+    from .tools import agent_tools
+    agent_tools.REPO_ROOT = Path(".").resolve()
+    
     # Check for OpenAI API key
     if not os.environ.get("OPENAI_API_KEY"):
         console.print("[red]Error: OPENAI_API_KEY environment variable not set[/red]")
@@ -159,6 +163,10 @@ def test(
     Run tests in the sandbox and display results.
     """
     os.chdir(repo_path)
+    
+    # Update REPO_ROOT in agent tools after changing directory
+    from .tools import agent_tools
+    agent_tools.REPO_ROOT = Path(".").resolve()
     
     if not json_output:
         console.print("[cyan]Running tests in sandbox...[/cyan]\n")

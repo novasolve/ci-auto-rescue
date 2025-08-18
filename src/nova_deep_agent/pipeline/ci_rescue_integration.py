@@ -50,7 +50,8 @@ class CIRescuePipeline:
         self.verbose = verbose
         
         # Initialize components
-        self.agent = DeepAgent(self.agent_config)
+        # Pass current directory as repo_root
+        self.agent = DeepAgent(self.agent_config, repo_root=Path(".").resolve())
         self.critic = Critic(
             max_lines=self.agent_config.max_patch_lines,
             max_files=self.agent_config.max_affected_files
@@ -221,20 +222,41 @@ Remember to make minimal changes and do not modify the test files themselves."""
         """Extract failing test information from test results."""
         failing_tests = []
         
-        # Check for failing_tests key (from our test runner)
-        if "failing_tests" in test_results:
-            return test_results["failing_tests"]
-        
-        # Check for tests array (pytest-json-report format)
-        if "tests" in test_results:
-            for test in test_results["tests"]:
-                if test.get("outcome") in ["failed", "error"]:
-                    failing_tests.append({
-                        "name": test.get("nodeid", "unknown"),
-                        "file": test.get("nodeid", "").split("::")[0] if "::" in test.get("nodeid", "") else "",
-                        "outcome": test.get("outcome"),
-                        "message": test.get("call", {}).get("longrepr", "")
-                    })
+        try:
+            # Check for failing_tests key (from our test runner)
+            if "failing_tests" in test_results:
+                return test_results["failing_tests"]
+            
+            # Check for tests array (pytest-json-report format)
+            if "tests" in test_results:
+                for test in test_results["tests"]:
+                    if test.get("outcome") in ["failed", "error"]:
+                        # Safely extract failure message
+                        call_info = test.get("call")
+                        if isinstance(call_info, dict):
+                            msg = call_info.get("longrepr", "")
+                        elif isinstance(call_info, str):
+                            msg = call_info  # call contains the error message string
+                        else:
+                            # Fallback: maybe the failure info is under a different key for errors
+                            msg = test.get("longrepr", "")
+                        
+                        failing_tests.append({
+                            "name": test.get("nodeid", "unknown"),
+                            "file": test.get("nodeid", "").split("::")[0] if "::" in test.get("nodeid", "") else "",
+                            "outcome": test.get("outcome"),
+                            "message": msg
+                        })
+        except Exception as e:
+            # Log error and return empty list with error context
+            self._log(f"Error parsing test results: {e}")
+            # Try to provide some context about what happened
+            return [{
+                "name": "test_result_parse_error",
+                "file": "unknown",
+                "outcome": "error",
+                "message": f"Failed to parse test results: {str(e)}"
+            }]
         
         return failing_tests
     

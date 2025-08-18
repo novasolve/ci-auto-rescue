@@ -369,7 +369,9 @@ class NovaDeepAgent:
             "   - Available tools: plan_todo, open_file, write_file, run_tests, apply_patch, critic_review\n"
             "   - Never invent or reference non-existent tools\n"
             "   - When you get 'ERROR: Access blocked', DO NOT imagine file contents\n"
-            "   - If you can't read a file, work with what you have\n\n"
+            "   - If you can't read a file, work with what you have\n"
+            "   - CRITICAL: Do NOT generate 'Observation:' lines - wait for actual tool responses\n"
+            "   - After 'Action Input:', STOP and wait for the tool to run\n\n"
             "4. **SAFETY GUARDRAILS**: Respect all safety limits\n"
             "   - Max patch size: 500 lines\n"
             "   - Max files per patch: 10\n"
@@ -558,7 +560,7 @@ class NovaDeepAgent:
                     early_stopping_method="generate",
                     agent_kwargs={
                         "prefix": system_message + "\n\nYou have access to the following tools:",
-                        "suffix": "Begin!\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}",
+                        "suffix": "Begin!\n\nIMPORTANT: Generate ONLY 'Thought:', 'Action:', and 'Action Input:'. Do NOT generate 'Observation:' - the system will provide real observations after running your action.\n\nQuestion: {input}\nThought: I should start by understanding what needs to be fixed.\n{agent_scratchpad}",
                         "output_parser": GPT5ReActOutputParser(agent_state=self.state),
                         "handle_parsing_errors": "Check your output and ensure it follows the correct format. Use EITHER 'Action:' followed by 'Action Input:' OR 'Final Answer:', but not both in the same response."
                     }

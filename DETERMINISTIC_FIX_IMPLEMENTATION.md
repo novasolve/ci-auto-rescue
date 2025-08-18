@@ -17,6 +17,7 @@ Updated `build_planner_prompt()` to be more explicit about fixing all failures a
 - **Comprehensive Planning**: Requires enumerating a fix for EACH failing function
 
 Key improvements:
+
 ```python
 prompt += "🎯 DETERMINISTIC MULTI-FAILURE FIX STRATEGY\n\n"
 prompt += "You have multiple failing tests. Your goal is to fix ALL of them in ONE CYCLE.\n"
@@ -33,6 +34,7 @@ Modified the Deep Agent's system prompt to emphasize the new workflow:
 - **One-Shot Verification**: Run tests only after all fixes are applied
 
 New workflow:
+
 1. Run tests once to see all failures
 2. Plan fixes for EACH failing function
 3. Apply ALL fixes sequentially
@@ -52,6 +54,7 @@ Added new configuration options:
 ### 4. Dynamic Iteration Limits
 
 Updated all `AgentExecutor` initialization calls to use the configurable limit:
+
 ```python
 max_iterations=self.settings.agent_max_iterations
 ```
@@ -69,11 +72,13 @@ This ensures the agent has enough iterations to fix all issues without hitting l
 ## Usage
 
 ### Default Behavior (Deterministic Fix Enabled)
+
 ```bash
 nova fix
 ```
 
 ### With Environment Variables
+
 ```bash
 export NOVA_DETERMINISTIC_FIX=true
 export NOVA_AGENT_MAX_ITERATIONS=25
@@ -81,16 +86,18 @@ nova fix
 ```
 
 ### In Configuration File
+
 ```yaml
 # nova.config.yml
 deterministic_fix: true
 agent_max_iterations: 20
-allow_test_file_read: true  # Helps agent understand test expectations
+allow_test_file_read: true # Helps agent understand test expectations
 ```
 
 ## Example Scenario: demo_exceptions
 
 The `demo_exceptions` project has 5 failing functions:
+
 1. `divide_numbers` - Missing error handling
 2. `validate_age` - Missing validation logic
 3. `process_data` - Missing data checks
@@ -98,6 +105,7 @@ The `demo_exceptions` project has 5 failing functions:
 5. `safe_conversion` - Missing type conversion
 
 ### Old Behavior (One-by-One)
+
 1. Run tests → See 5 failures
 2. Fix `divide_numbers` → Run tests → 4 failures remain
 3. Fix `validate_age` → Run tests → 3 failures remain
@@ -108,6 +116,7 @@ The `demo_exceptions` project has 5 failing functions:
 **Total: 6 test runs, 5 fix cycles**
 
 ### New Behavior (Deterministic)
+
 1. Run tests → See 5 failures
 2. Plan fixes for all 5 functions
 3. Apply all 5 fixes sequentially
@@ -118,6 +127,7 @@ The `demo_exceptions` project has 5 failing functions:
 ## Testing
 
 Created `test_deterministic_fix.py` to verify the implementation:
+
 - Runs Nova on demo projects
 - Counts test executions
 - Analyzes telemetry

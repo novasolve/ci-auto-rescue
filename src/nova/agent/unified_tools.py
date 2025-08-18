@@ -1010,6 +1010,9 @@ class ApplyPatchTool(BaseTool):
                 # Increment iteration count for tracking
                 if hasattr(self.state, 'current_iteration'):
                     self.state.current_iteration += 1
+                # Track modifications and record action
+                self.state.modifications_count += 1
+                self.state.used_actions.add((self.name, patch_diff, self.state.modifications_count))
             if self.logger:
                 self.logger.log_event("patch_applied", {
                     "message": "Patch applied successfully",
@@ -1618,9 +1621,9 @@ def create_default_tools(
         settings = get_settings()
     
     # Add tools with defined schemas for consistent function calling
-    tools.append(PlanTodoTool())
-    tools.append(OpenFileTool(settings=settings))
-    tools.append(WriteFileTool())
+    tools.append(PlanTodoTool(state=state))
+    tools.append(OpenFileTool(settings=settings, state=state))
+    tools.append(WriteFileTool(state=state))
     
     # Add handler for invalid responses
     def handle_invalid_response(input: str = "") -> str:
@@ -1641,7 +1644,8 @@ def create_default_tools(
         repo_path=repo_path,
         verbose=verbose,
         logger=logger,
-        use_docker=use_docker
+        use_docker=use_docker,
+        state=state
     ))
     
     tools.append(ApplyPatchTool(

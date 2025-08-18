@@ -492,24 +492,120 @@ class RunTestsTool(BaseTool):
                 "failing_tests": []
             })
         
+        # Flake detection: Re-run failing tests to check if they're flaky
+        if failures and len(failures) <= 10:  # Only check if reasonable number of failures
+            flaky_tests, consistent_test_names = self._detect_flaky_tests(failures)
+            
+            if flaky_tests:
+                # Remove flaky tests from the failures list
+                failures = [f for f in failures if f.get("name") not in flaky_tests]
+                
+                # Update the result message
+                flaky_count = len(flaky_tests)
+                real_failure_count = len(failures)
+                
+                if real_failure_count == 0:
+                    # All failures were flaky
+                    result["exit_code"] = 0
+                    result["message"] = f"All tests passed ({flaky_count} flaky test(s) ignored)"
+                else:
+                    result["message"] = f"{real_failure_count} test(s) failed, {flaky_count} flaky test(s) ignored"
+                
+                # Add flaky tests to result for transparency
+                result["flaky_tests"] = flaky_tests
+                
+                # Log flaky test detection
+                if self.logger:
+                    self.logger.log_event("flaky_tests_detected", {
+                        "count": flaky_count,
+                        "tests": flaky_tests
+                    })
+        
         # Log the test results event for telemetry
         if self.logger:
             evt = {"exit_code": result.get("exit_code", 1)}
             if "failures" in result:
-                evt["failures"] = result["failures"]
+                evt["failures"] = len(failures)  # Use updated failure count
                 evt["passed"] = result.get("passed", 0)
             if "error" in result:
                 evt["error"] = result["error"]
+            if "flaky_tests" in result:
+                evt["flaky_tests"] = result["flaky_tests"]
             self.logger.log_event("test_run_completed", evt)
         
-        # Return JSON with failure details
-        return json.dumps({
+        # Build final result
+        final_result = {
             "exit_code": result.get("exit_code", 1),
             "failures": len(failures),
             "passed": result.get("test_summary", {}).get("passed", 0) if result.get("test_summary") else 0,
-            "message": f"{len(failures)} test(s) failed",
+            "message": result.get("message", f"{len(failures)} test(s) failed"),
             "failing_tests": failures[:max_failures]
-        })
+        }
+        
+        # Include flaky tests if any were detected
+        if "flaky_tests" in result:
+            final_result["flaky_tests"] = result["flaky_tests"]
+        
+        # Return JSON with failure details
+        return json.dumps(final_result)
+
+    def _detect_flaky_tests(self, failing_tests: list) -> tuple[list, list]:
+        """Detect flaky tests by re-running them once.
+        
+        Returns:
+            (flaky_tests, consistent_failures): Lists of test names
+        """
+        flaky_tests = []
+        consistent_failures = []
+        
+        if not failing_tests or len(failing_tests) > 10:
+            # Skip flake detection if too many failures (likely not flaky)
+            return [], [test.get("name", "unknown") for test in failing_tests]
+        
+        if self.verbose:
+            print("\n[DEBUG] Checking for flaky tests by re-running failures...")
+        
+        for test in failing_tests:
+            test_name = test.get("name", "")
+            if not test_name or " " in test_name or "::" not in test_name:
+                # Skip if we don't have a reliable test identifier
+                consistent_failures.append(test_name)
+                continue
+                
+            try:
+                # Re-run the single test
+                cmd = ["pytest", "-q", "-x", test_name]
+                proc = subprocess.run(
+                    cmd, 
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=60  # Shorter timeout for single test
+                )
+                
+                if proc.returncode == 0:
+                    # Test passed on retry - it's flaky
+                    flaky_tests.append(test_name)
+                    if self.verbose:
+                        print(f"  ✓ {test_name} - FLAKY (passed on retry)")
+                else:
+                    # Test failed again - it's a real failure
+                    consistent_failures.append(test_name)
+                    if self.verbose:
+                        print(f"  ✗ {test_name} - CONSISTENT failure")
+                        
+            except subprocess.TimeoutExpired:
+                # Timeout - treat as consistent failure
+                consistent_failures.append(test_name)
+                if self.verbose:
+                    print(f"  ⏱ {test_name} - TIMEOUT (treating as failure)")
+            except Exception as e:
+                # Any other error - treat as consistent failure
+                consistent_failures.append(test_name)
+                if self.verbose:
+                    print(f"  ⚠ {test_name} - ERROR during retry: {e}")
+        
+        return flaky_tests, consistent_failures
 
     async def _arun(self, *args, **kwargs) -> str:
         """Async version not implemented."""
@@ -592,7 +688,20 @@ class ApplyPatchTool(BaseTool):
                 })
             return f"FAILED: Safety violation – {safe_msg}"
         
-        # 1.5. Critic review check (enforce review before applying)
+        # 1.5. Test verification warning - check if tests may still be failing
+        if self.state and hasattr(self.state, 'total_failures'):
+            if self.state.total_failures > 0:
+                # Initial failures exist, warn that tests should be passing before applying
+                if self.verbose:
+                    print("⚠️  [ApplyPatchTool] Warning: Tests may still be failing.")
+                    print("    Ensure run_tests shows all passing before applying patches.")
+                if self.logger:
+                    self.logger.log_event("patch_apply_warning", {
+                        "type": "tests_may_be_failing",
+                        "initial_failures": self.state.total_failures
+                    })
+        
+        # 1.6. Critic review check (enforce review before applying)
         # Check if we have state-based review tracking
         if self.state and hasattr(self.state, 'last_review_approved'):
             # Check if this exact patch was already reviewed and approved
@@ -695,8 +804,15 @@ class ApplyPatchTool(BaseTool):
             
             # 4. Commit changes
             subprocess.run(["git", "add", "-A"], cwd=self.repo_path, check=False)
+            
+            # Create commit message with iteration number
+            iteration_num = 1
+            if self.state and hasattr(self.state, 'current_iteration'):
+                iteration_num = self.state.current_iteration + 1
+            commit_msg = f"Apply patch from Nova Deep Agent (iteration {iteration_num})"
+            
             commit_proc = subprocess.run(
-                ["git", "commit", "-m", "Apply patch from Nova Deep Agent"],
+                ["git", "commit", "-m", commit_msg],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True
@@ -1073,6 +1189,226 @@ Respond with JSON: {"approved": true/false, "reason": "brief explanation"}"""
         raise NotImplementedError("CriticReviewTool does not support async execution")
 
 
+class CodeSearchInput(BaseModel):
+    """Input schema for CodeSearchTool."""
+    query: str = Field(..., description="Keyword or regex to search for in the codebase")
+    max_results: int = Field(10, description="Maximum number of results to return")
+
+
+class CodeSearchTool(BaseTool):
+    """
+    Tool to search the repository's source code for keywords or patterns.
+    
+    Helps locate function definitions, class implementations, or error strings.
+    """
+    name: str = "search_code"
+    description: str = (
+        "Search the repository's source code for a given query string. "
+        "Use this to find where functions, classes, or errors are defined. "
+        "Returns a brief list of file names and snippets matching the query. "
+        "Note: Test files and certain paths are excluded for safety."
+    )
+    args_schema: Type[BaseModel] = CodeSearchInput
+    repo_path: Path = Field(default_factory=lambda: Path("."))
+    verbose: bool = Field(default=False)
+    
+    def __init__(self, repo_path: Optional[Path] = None, verbose: bool = False, **kwargs):
+        """Initialize with repository path."""
+        if repo_path is not None:
+            kwargs['repo_path'] = Path(repo_path)
+        kwargs['verbose'] = verbose
+        super().__init__(**kwargs)
+    
+    def _run(self, query: str, max_results: int = 10) -> str:
+        """Search for the query in the codebase."""
+        import re
+        import fnmatch
+        
+        results = []
+        query_regex = None
+        try:
+            # Treat query as a case-insensitive regex
+            query_regex = re.compile(query, re.IGNORECASE)
+        except re.error:
+            # If query is not a valid regex, escape it
+            query_regex = re.compile(re.escape(query), re.IGNORECASE)
+        
+        # Walk through files
+        for file_path in self.repo_path.rglob("*"):
+            if len(results) >= max_results:
+                break
+            
+            if not file_path.is_file():
+                continue
+                
+            rel_path = str(file_path.relative_to(self.repo_path))
+            
+            # Skip blocked patterns
+            skip = False
+            for pattern in BLOCKED_PATTERNS:
+                # Use fnmatch for glob patterns
+                if "*" in pattern or "?" in pattern:
+                    if fnmatch.fnmatch(rel_path, pattern):
+                        skip = True
+                        break
+                else:
+                    if pattern in rel_path:
+                        skip = True
+                        break
+            
+            if skip:
+                continue
+            
+            # Skip binary files by extension
+            if file_path.suffix.lower() in [".pyc", ".png", ".jpg", ".jpeg", ".gif", 
+                                             ".pdf", ".exe", ".so", ".dylib", ".dll",
+                                             ".zip", ".tar", ".gz", ".bz2", ".7z"]:
+                continue
+            
+            try:
+                text = file_path.read_text(encoding='utf-8', errors='ignore')
+            except Exception:
+                continue
+            
+            # Search for matches
+            matches = list(query_regex.finditer(text))
+            if matches:
+                # Find line number and snippet for first match
+                lines = text.splitlines()
+                for i, line in enumerate(lines, start=1):
+                    if query_regex.search(line):
+                        snippet = line.strip()
+                        if len(snippet) > 100:
+                            snippet = snippet[:97] + "..."
+                        results.append(f"{rel_path}:{i}: {snippet}")
+                        break
+        
+        if not results:
+            return "No results found for query."
+        
+        # Format output
+        output = "Found matches:\n" + "\n".join(results[:max_results])
+        if len(results) > max_results:
+            output += f"\n...and {len(results) - max_results} more."
+        
+        return output
+    
+    async def _arun(self, query: str, max_results: int = 10) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("CodeSearchTool does not support async execution")
+
+
+class RunSingleTestInput(BaseModel):
+    """Input schema for RunSingleTestTool."""
+    test_name: str = Field(..., description="The specific test identifier or file::name to run")
+
+
+class RunSingleTestTool(BaseTool):
+    """
+    Tool to run a single test for focused debugging.
+    
+    Useful for quick iteration on specific failing tests.
+    """
+    name: str = "run_test"
+    description: str = (
+        "Run a specific test (by name or file::test_id) to get its result. "
+        "Use this to retest a single failing test for more details or after a fix. "
+        "Example: 'tests/test_math.py::test_addition' or 'test_math.py'"
+    )
+    args_schema: Type[BaseModel] = RunSingleTestInput
+    repo_path: Path = Field(default_factory=lambda: Path("."))
+    verbose: bool = Field(default=False)
+    logger: Optional[JSONLLogger] = Field(default=None)
+    
+    def __init__(self, repo_path: Optional[Path] = None, verbose: bool = False, 
+                 logger: Optional[JSONLLogger] = None, **kwargs):
+        """Initialize with repository path and optional logger."""
+        if repo_path is not None:
+            kwargs['repo_path'] = Path(repo_path)
+        kwargs['verbose'] = verbose
+        if logger is not None:
+            kwargs['logger'] = logger
+        super().__init__(**kwargs)
+    
+    def _run(self, test_name: str) -> str:
+        """Run the specific test and return JSON result."""
+        import subprocess
+        import json
+        
+        # Build pytest command
+        cmd = ["pytest", "-xvs", test_name]
+        
+        if self.verbose:
+            print(f"Running single test: {test_name}")
+        
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout for single test
+            )
+        except subprocess.TimeoutExpired:
+            return json.dumps({
+                "exit_code": 124,
+                "error": f"Test '{test_name}' timed out after 5 minutes"
+            })
+        except Exception as e:
+            return json.dumps({
+                "exit_code": 1,
+                "error": f"Failed to run test: {str(e)}"
+            })
+        
+        # Parse output
+        output = proc.stdout.strip()
+        stderr = proc.stderr.strip()
+        
+        # Log the test run
+        if self.logger:
+            self.logger.log_event("single_test_run", {
+                "test_name": test_name,
+                "exit_code": proc.returncode,
+                "passed": proc.returncode == 0
+            })
+        
+        if proc.returncode == 0:
+            # Test passed
+            return json.dumps({
+                "exit_code": 0,
+                "message": f"Test {test_name} passed",
+                "output": output[-500:] if output else ""  # Last 500 chars
+            })
+        else:
+            # Test failed - extract error info
+            error_msg = ""
+            full_output = output + "\n" + stderr if stderr else output
+            
+            # Try to find the actual error in output
+            lines = full_output.splitlines()
+            for i, line in enumerate(lines):
+                if "FAILED" in line or "ERROR" in line or "AssertionError" in line:
+                    # Take this line and a few after it
+                    error_lines = lines[i:i+10]
+                    error_msg = "\n".join(error_lines)[:1000]
+                    break
+            
+            if not error_msg:
+                # Fallback to last part of output
+                error_msg = full_output[-1000:]
+            
+            return json.dumps({
+                "exit_code": proc.returncode,
+                "error": error_msg,
+                "test_name": test_name,
+                "message": f"Test {test_name} failed"
+            })
+    
+    async def _arun(self, test_name: str) -> str:
+        """Async version not implemented."""
+        raise NotImplementedError("RunSingleTestTool does not support async execution")
+
+
 # --- Convenience Functions for Tool Creation ---
 
 def create_default_tools(
@@ -1091,9 +1427,11 @@ def create_default_tools(
     - plan_todo: Record planning steps
     - open_file: Read source files with safety checks
     - write_file: Modify source files with safety checks
-    - run_tests: Execute tests in Docker sandbox
+    - run_tests: Execute tests in Docker sandbox with flake detection
     - apply_patch: Apply unified diff patches with validation
     - critic_review: Review patches before application
+    - search_code: Search codebase for keywords or patterns
+    - run_test: Run a single test for focused debugging
     
     Args:
         repo_path: Repository path for tools that need it
@@ -1153,6 +1491,18 @@ def create_default_tools(
         verbose=verbose,
         llm=llm,
         state=state
+    ))
+    
+    # Add new search and test tools
+    tools.append(CodeSearchTool(
+        repo_path=repo_path,
+        verbose=verbose
+    ))
+    
+    tools.append(RunSingleTestTool(
+        repo_path=repo_path,
+        verbose=verbose,
+        logger=logger
     ))
     
     return tools

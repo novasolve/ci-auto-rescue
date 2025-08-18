@@ -395,6 +395,10 @@ class NovaDeepAgent:
             "4. IMPLEMENT: Apply fixes to the code\n"
             "5. VERIFY: Run tests IMMEDIATELY after EVERY code change (MANDATORY)\n"
             "6. ITERATE: Continue fixing remaining failures\n\n"
+            "HANDLING SKIP MESSAGES:\n"
+            "- If you see 'SKIP: File already opened', the content is in your previous observation\n"
+            "- Use that content to proceed with your fix, DO NOT try to open the file again\n"
+            "- SKIP messages are efficiency helpers, not errors - continue with your workflow\n\n"
             "CRITICAL - ALWAYS VERIFY YOUR FIXES:\n"
             "- You MUST run tests after EVERY patch or file modification\n"
             "- Never assume a fix works without verification\n"
@@ -786,6 +790,10 @@ Start NOW by trying to open the source file. DO NOT just run tests again!"""
             else:
                 # Tests still failing or result unknown
                 failures_count = final_test_output.get("failures", "unknown") if final_test_output else "unknown"
+                
+                # Update state with remaining failures for accurate reporting
+                if final_test_output and isinstance(failures_count, int):
+                    self.state.total_failures = failures_count
                 
                 # Determine appropriate final status
                 if not self.state.patches_applied:

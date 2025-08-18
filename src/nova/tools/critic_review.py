@@ -79,6 +79,21 @@ class CriticReviewTool(BaseTool):
         Returns:
             Tuple of (is_safe, reason)
         """
+        # Clean up patch format first
+        patch_diff = patch_diff.strip()
+        if not patch_diff:
+            return False, "Empty patch provided"
+            
+        # Remove markdown formatting if present
+        if patch_diff.startswith('```'):
+            lines = patch_diff.split('\n')
+            start = 1 if lines[0].startswith('```') else 0
+            end = -1 if lines[-1].strip() == '```' else None
+            patch_diff = '\n'.join(lines[start:end])
+        
+        # Remove patch markers
+        patch_diff = patch_diff.replace('*** Begin Patch', '').replace('*** End Patch', '').strip()
+        
         lines = patch_diff.split("\n")
         
         # Check for test file modifications
@@ -98,9 +113,13 @@ class CriticReviewTool(BaseTool):
                         if re.search(pattern, file_path):
                             return False, f"Modifies forbidden path: {file_path}"
         
-        # Check patch size
+        # Check patch size and validity
         added = sum(1 for line in lines if line.startswith("+") and not line.startswith("+++"))
         removed = sum(1 for line in lines if line.startswith("-") and not line.startswith("---"))
+        
+        # Check if patch has any actual changes
+        if added == 0 and removed == 0:
+            return False, "Patch contains no changes"
         
         if added + removed > 500:
             return False, f"Patch too large: {added} additions, {removed} deletions"

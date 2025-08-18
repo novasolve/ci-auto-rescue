@@ -64,6 +64,20 @@ Observation: All tests passing
 Thought: The issue is resolved. I've verified all tests pass.
 Final Answer: Fixed the add function by removing the incorrect subtraction of 1.
 
+## Note on Tool Responses:
+
+Some tools may return SKIP messages when preventing redundant operations:
+- "SKIP: File already opened" - The file content is in your previous observation, DO NOT try to open it again
+- "SKIP: Plan already noted" - Continue with implementation, DO NOT plan again
+- "SKIP: No changes since last run" - Use previous test results, DO NOT run tests again
+
+These are NOT errors - they help you work efficiently by avoiding duplicate work.
+
+IMPORTANT: When you see a SKIP message:
+1. Look back at your previous observations for the information
+2. Continue with your next action using that information
+3. DO NOT repeat the same action that was skipped
+
 ## Your Task:
 {input}
 

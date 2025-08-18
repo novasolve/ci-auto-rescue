@@ -412,7 +412,8 @@ class NovaDeepAgent:
             verbose=self.verbose,
             safety_config=self.safety_config,
             llm=llm,  # Pass LLM for critic review
-            state=self.state  # Pass agent state for review tracking
+            state=self.state,  # Pass agent state for review tracking
+            settings=self.settings  # Pass settings for configuration
         )
         
         # Choose agent type based on model capabilities

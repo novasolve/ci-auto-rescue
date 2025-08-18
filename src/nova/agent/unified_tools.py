@@ -185,11 +185,7 @@ class OpenFileTool(BaseTool):
     name: str = "open_file"
     description: str = "Read the contents of a file from the repository (with safety checks)."
     args_schema: Type[BaseModel] = OpenFileInput
-    
-    def __init__(self, settings=None, **kwargs):
-        """Initialize with optional settings."""
-        super().__init__(**kwargs)
-        self.settings = settings
+    settings: Optional[Any] = None  # Store Nova settings
     
     def _run(self, path: str) -> str:
         """Execute the open_file function with safety checks."""
@@ -198,23 +194,20 @@ class OpenFileTool(BaseTool):
         import os
         p = Path(path)
         path_str = str(p)
-        for pattern in BLOCKED_PATTERNS:
-            if ('*' in pattern or '?' in pattern):
-                if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
-                    return f"ERROR: Access to {path} is blocked by policy (pattern: {pattern})"
-            else:
-                if pattern in path_str or p.name == pattern:
-                    return f"ERROR: Access to {path} is blocked by policy"
-        # Check if test file access is allowed
+        
+        # First check if this is a test file
         is_test_file = any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py')
         
+        # If it's a test file, check if we're allowed to read it
         if is_test_file:
-            # Check if we're allowed to read test files
             allow_test_read = True  # Default to True
             if self.settings and hasattr(self.settings, 'allow_test_file_read'):
                 allow_test_read = self.settings.allow_test_file_read
             
-            if not allow_test_read:
+            if allow_test_read:
+                # Skip BLOCKED_PATTERNS check for test files when read is allowed
+                pass
+            else:
                 # Provide helpful guidance when test files are blocked
                 hint = ""
                 if "test_broken.py" in path:
@@ -226,7 +219,19 @@ class OpenFileTool(BaseTool):
                     module_name = path.replace('test_', '', 1)
                     hint = f"\nHINT: Look for source file: {module_name}"
                 return f"ERROR: Access to test file {path} is blocked by policy. Use error messages to understand what to fix.{hint}"
-            # If allowed, add a comment to indicate this is a test file (read-only)
+        else:
+            # For non-test files, check BLOCKED_PATTERNS
+            for pattern in BLOCKED_PATTERNS:
+                if ('*' in pattern or '?' in pattern):
+                    if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(p.name, pattern):
+                        return f"ERROR: Access to {path} is blocked by policy (pattern: {pattern})"
+                else:
+                    if pattern in path_str or p.name == pattern:
+                        return f"ERROR: Access to {path} is blocked by policy"
+        
+        # If we reach here, access is allowed - read the file
+        if is_test_file:
+            # If it's a test file that we're allowed to read, add a header comment
             try:
                 content = p.read_text()
                 if len(content) > 50000:  # 50KB limit
@@ -238,6 +243,8 @@ class OpenFileTool(BaseTool):
                 return f"ERROR: Permission denied: {path}"
             except Exception as e:
                 return f"ERROR: Could not read file {path}: {e}"
+        
+        # For non-test files, read normally
         try:
             content = p.read_text()
             if len(content) > 50000:  # 50KB limit
@@ -1028,9 +1035,14 @@ def create_default_tools(
     """
     tools = []
     
+    # Import get_settings if no settings provided
+    if settings is None:
+        from nova.config import get_settings
+        settings = get_settings()
+    
     # Add tools with defined schemas for consistent function calling
     tools.append(PlanTodoTool())
-    tools.append(OpenFileTool())
+    tools.append(OpenFileTool(settings=settings))
     tools.append(WriteFileTool())
     
     # Add handler for invalid responses

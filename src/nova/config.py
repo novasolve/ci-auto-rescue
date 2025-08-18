@@ -40,6 +40,7 @@ class NovaSettings:
     max_patch_lines: int = 500
     max_affected_files: int = 10
     max_file_size: int = 100_000
+    allow_test_file_read: bool = True  # Allow reading test files for context
     
     # Docker Configuration
     docker_image: str = "nova-ci-rescue-sandbox:latest"
@@ -101,6 +102,7 @@ class NovaSettings:
             use_docker=_get("NOVA_USE_DOCKER", "true").lower() in ["true", "1", "yes"],
             docker_image=_get("NOVA_DOCKER_IMAGE", "nova-ci-rescue-sandbox:latest"),
             telemetry_enabled=_get("NOVA_TELEMETRY", "true").lower() in ["true", "1", "yes"],
+            allow_test_file_read=_get("NOVA_ALLOW_TEST_READ", "true").lower() in ["true", "1", "yes"],
         )
     
     @classmethod

@@ -186,6 +186,11 @@ class OpenFileTool(BaseTool):
     description: str = "Read the contents of a file from the repository (with safety checks)."
     args_schema: Type[BaseModel] = OpenFileInput
     
+    def __init__(self, settings=None, **kwargs):
+        """Initialize with optional settings."""
+        super().__init__(**kwargs)
+        self.settings = settings
+    
     def _run(self, path: str) -> str:
         """Execute the open_file function with safety checks."""
         # Same logic as the original open_file function, with safety guardrails
@@ -200,19 +205,39 @@ class OpenFileTool(BaseTool):
             else:
                 if pattern in path_str or p.name == pattern:
                     return f"ERROR: Access to {path} is blocked by policy"
-        # Block any test files explicitly
-        if any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py'):
-            # Provide helpful guidance when test files are blocked
-            hint = ""
-            if "test_broken.py" in path:
-                hint = "\nHINT: Look for source file: broken.py or src/broken.py"
-            elif path.endswith('_test.py'):
-                module_name = path.replace('_test.py', '.py')
-                hint = f"\nHINT: Look for source file: {module_name}"
-            elif path.startswith('test_'):
-                module_name = path.replace('test_', '', 1)
-                hint = f"\nHINT: Look for source file: {module_name}"
-            return f"ERROR: Access to test file {path} is blocked by policy. Use error messages to understand what to fix.{hint}"
+        # Check if test file access is allowed
+        is_test_file = any(part.startswith('test') for part in p.parts) or p.name.startswith('test_') or p.name.endswith('_test.py')
+        
+        if is_test_file:
+            # Check if we're allowed to read test files
+            allow_test_read = True  # Default to True
+            if self.settings and hasattr(self.settings, 'allow_test_file_read'):
+                allow_test_read = self.settings.allow_test_file_read
+            
+            if not allow_test_read:
+                # Provide helpful guidance when test files are blocked
+                hint = ""
+                if "test_broken.py" in path:
+                    hint = "\nHINT: Look for source file: broken.py or src/broken.py"
+                elif path.endswith('_test.py'):
+                    module_name = path.replace('_test.py', '.py')
+                    hint = f"\nHINT: Look for source file: {module_name}"
+                elif path.startswith('test_'):
+                    module_name = path.replace('test_', '', 1)
+                    hint = f"\nHINT: Look for source file: {module_name}"
+                return f"ERROR: Access to test file {path} is blocked by policy. Use error messages to understand what to fix.{hint}"
+            # If allowed, add a comment to indicate this is a test file (read-only)
+            try:
+                content = p.read_text()
+                if len(content) > 50000:  # 50KB limit
+                    content = content[:50000] + "\n... (truncated)"
+                return f"# TEST FILE (READ-ONLY): {path}\n# DO NOT MODIFY TEST FILES - Fix the source code to make tests pass\n\n{content}"
+            except FileNotFoundError:
+                return f"ERROR: File not found: {path}"
+            except PermissionError:
+                return f"ERROR: Permission denied: {path}"
+            except Exception as e:
+                return f"ERROR: Could not read file {path}: {e}"
         try:
             content = p.read_text()
             if len(content) > 50000:  # 50KB limit
@@ -976,7 +1001,8 @@ def create_default_tools(
     verbose: bool = False,
     safety_config: Optional[SafetyConfig] = None,
     llm: Optional[Any] = None,
-    state: Optional[Any] = None
+    state: Optional[Any] = None,
+    settings: Optional[Any] = None
 ) -> List[BaseTool]:
     """
     Create the default set of tools for the Deep Agent (v1.1).
@@ -994,6 +1020,8 @@ def create_default_tools(
         verbose: Enable verbose output
         safety_config: Safety configuration for patch application
         llm: LLM instance for critic review (optional)
+        state: Agent state for tracking
+        settings: Nova settings for configuration
     
     Returns:
         List of tool instances ready for use in LangChain agent

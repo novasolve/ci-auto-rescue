@@ -23,7 +23,7 @@ class AgentState:
     flaky_tests: List[str] = field(default_factory=list)  # List of flaky test names
     
     # Planning information
-    plan: Optional[Dict[str, Any]] = None
+    plan: Optional[str] = None  # The generated fix plan (text format)
     critic_feedback: Optional[str] = None  # Feedback from previous critic rejection
     
     # Critic review state

@@ -171,6 +171,12 @@ def fix(
         help="Use the legacy v1.0 LLM-based agent instead of the default LangChain Deep Agent",
         is_flag=True,
     ),
+    deterministic: bool = typer.Option(
+        False,
+        "--deterministic",
+        help="Use the deterministic Plan-Edit-Apply-Test loop instead of ReAct agent",
+        is_flag=True,
+    ),
 ):
     """
     Fix failing tests in a repository using an AI agent.
@@ -385,8 +391,15 @@ def fix(
         success = False
         if not legacy_agent:
             # === Deep Agent Path (default) ===
-            console.print("\n[bold]Initializing Nova Deep Agent...[/bold]")
+            agent_type = "Deterministic Deep Agent" if deterministic else "Nova Deep Agent"
+            console.print(f"\n[bold]Initializing {agent_type}...[/bold]")
             from nova.agent.deep_agent import NovaDeepAgent
+            
+            # For deterministic mode, set max iterations to 2
+            if deterministic:
+                state.max_iterations = min(state.max_iterations, 2)
+                console.print("[yellow]Using deterministic Plan-Edit-Apply-Test cycle (max 2 iterations)[/yellow]")
+            
             deep_agent = NovaDeepAgent(
                 state=state,
                 telemetry=telemetry,
@@ -395,7 +408,7 @@ def fix(
                 safety_config=safety_conf,
                 settings=settings
             )
-            console.print("[cyan]🤖 Running Deep Agent to fix failing tests...[/cyan]")
+            console.print(f"[cyan]🤖 Running {agent_type} to fix failing tests...[/cyan]")
             failures_summary = runner.format_failures_table(failing_tests)
             
             # Enhanced error details with import hints
@@ -411,11 +424,20 @@ def fix(
                 
             error_details = "\n\n".join(error_details_parts)
             code_snippets = ""
-            success = deep_agent.run(
-                failures_summary=failures_summary,
-                error_details=error_details,
-                code_snippets=code_snippets
-            )
+            
+            # Use appropriate run method based on mode
+            if deterministic:
+                success = deep_agent.run(
+                    failures_summary=failures_summary,
+                    error_details=error_details,
+                    code_snippets=code_snippets
+                )
+            else:
+                success = deep_agent.run_legacy(
+                    failures_summary=failures_summary,
+                    error_details=error_details,
+                    code_snippets=code_snippets
+                )
             # Deep Agent handles iterations internally; no explicit loop needed here.
             if success:
                 console.print("\n[green bold]✅ SUCCESS - All tests fixed![/green bold]")

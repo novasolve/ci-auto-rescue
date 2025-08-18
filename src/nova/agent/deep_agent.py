@@ -621,7 +621,7 @@ class NovaDeepAgent:
         
         return agent_executor
 
-    def run(self, failures_summary: str = "", error_details: str = "", code_snippets: str = "") -> bool:
+    def run_legacy(self, failures_summary: str = "", error_details: str = "", code_snippets: str = "") -> bool:
         """
         Execute the agent loop using the LangChain AgentExecutor.
 
@@ -850,4 +850,277 @@ Start NOW by trying to open the source file. DO NOT just run tests again!"""
             else:
                 self.state.final_status = "error"
             success = False
+        return success
+    
+    def run(self, failures_summary: str = "", error_details: str = "", code_snippets: str = "") -> bool:
+        """
+        Deterministic one-cycle fix loop for failing tests.
+        
+        Implements a Plan-Edit-Apply-Test cycle that attempts to fix all failures 
+        in a single coordinated effort, with optional second iteration if needed.
+        
+        Args:
+            failures_summary: Summary of failing tests
+            error_details: Detailed error messages and stack traces
+            code_snippets: Relevant code snippets (optional)
+            
+        Returns:
+            True if all tests were fixed, False otherwise
+        """
+        from nova.agent.llm_client import LLMClient
+        import re
+        import difflib
+        
+        success = False
+        client = LLMClient(settings=self.settings)
+        original_fail_names = {
+            (t["name"] if isinstance(t, dict) and "name" in t else str(t)) 
+            for t in self.state.failing_tests
+        }
+        
+        # Log the start of the deep agent execution
+        self.telemetry.log_event("deep_agent_start", {
+            "failing_tests": self.state.total_failures,
+            "iteration": self.state.current_iteration
+        })
+        
+        # Main deterministic loop - max 2 iterations
+        while self.state.current_iteration < self.state.max_iterations:
+            self.state.current_iteration += 1
+            
+            # Phase 1: PLAN - Use LLM to devise a fix plan for all failures upfront
+            hint_content = ""
+            hint_files = [".nova-hints", ".nova/hints.md", "HINTS.md"]
+            for hint_file in hint_files:
+                hint_path = self.state.repo_path / hint_file
+                if hint_path.exists():
+                    try:
+                        hint_text = hint_path.read_text()
+                        hint_content = f"\n## PROJECT HINTS (from {hint_file}):\n{hint_text}\n"
+                        if self.verbose:
+                            print(f"📝 Found hint file: {hint_file}")
+                        break
+                    except Exception:
+                        pass
+            
+            plan_prompt = (
+                f"You are a software engineer tasked with fixing failing tests.\n\n"
+                f"Failing Tests:\n{failures_summary}\n\n"
+                f"Error Details:\n{error_details}\n\n"
+                f"{hint_content}"
+                f"Create a step-by-step plan to fix these test failures. Be specific about:\n"
+                f"1. What files or functions need to be examined\n"
+                f"2. Likely cause of each failure\n"
+                f"3. Changes needed to fix them\n"
+                f"4. How to verify the fixes\n\n"
+                f"Return the plan only, without any code."
+            )
+            
+            plan = client.complete(
+                system="You are a software engineer expert at fixing failing tests.",
+                user=plan_prompt,
+                max_tokens=1000
+            )
+            
+            self.state.plan = plan  # Store plan in state
+            if self.verbose:
+                print(f"\n[Plan] Generated fix plan:\n{plan}\n")
+            
+            # Phase 2: EDIT - Determine relevant files and prepare in-memory edits
+            files_to_fix = set()
+            
+            # Extract file paths from error stack traces (exclude test files)
+            for match in re.finditer(r'File "([^"]+\.py)"', error_details):
+                file_path = match.group(1)
+                if "test" not in file_path and "tests/" not in file_path:
+                    files_to_fix.add(file_path)
+            
+            # Also parse plan text for any '.py' filenames mentioned
+            for match in re.finditer(r'([A-Za-z0-9_./-]+\.py)', plan):
+                file_path = match.group(1)
+                if "test" not in file_path:
+                    files_to_fix.add(file_path)
+            
+            # Read each relevant file once (cache content)
+            file_contents = {}
+            from nova.agent.unified_tools import open_file
+            
+            for path in files_to_fix:
+                content = open_file(path)
+                if content.startswith("ERROR:"):
+                    if self.verbose:
+                        print(f"[WARN] Could not open {path}: {content}")
+                    continue
+                file_contents[path] = content
+                if self.verbose:
+                    print(f"[DEBUG] Opened file '{path}' ({len(content)} chars)")
+            
+            # Use LLM to generate updated content for each file based on the plan
+            new_file_contents = {}
+            for path, original_code in file_contents.items():
+                edit_prompt = (
+                    f"You are a software engineer tasked with implementing fixes.\n"
+                    f"PLAN:\n{plan}\n\n"
+                    f"FILE: {path}\n"
+                    f"```\n{original_code}\n```\n\n"
+                    f"Modify the above file to execute the plan's fixes for this component. "
+                    f"Provide the FULL updated file content (incorporating the necessary changes)."
+                )
+                
+                updated_code = client.complete(
+                    system="You are a senior engineer implementing the fix plan.",
+                    user=edit_prompt,
+                    max_tokens=2000
+                )
+                
+                # Clean up code block markers if present
+                if updated_code.strip().startswith("```"):
+                    lines = updated_code.strip().split('\n')
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1] == "```":
+                        lines = lines[:-1]
+                    updated_code = '\n'.join(lines)
+                
+                new_file_contents[path] = updated_code
+                if self.verbose:
+                    print(f"[DEBUG] Generated new content for {path} ({len(updated_code)} chars)")
+            
+            # Compute unified diff for all changes as one patch
+            patch_diff = ""
+            for path, original_code in file_contents.items():
+                if path not in new_file_contents:
+                    continue
+                
+                diff_lines = difflib.unified_diff(
+                    original_code.splitlines(), 
+                    new_file_contents[path].splitlines(),
+                    fromfile=f"a/{path}", 
+                    tofile=f"b/{path}", 
+                    lineterm=""
+                )
+                patch_text = "\n".join(diff_lines)
+                
+                # Only append diff if changes exist
+                if patch_text.strip():
+                    patch_diff += patch_text + "\n"
+            
+            if not patch_diff:
+                # No patch could be generated
+                self.state.final_status = "no_patch"
+                if self.verbose:
+                    print("[FAIL] No changes generated by plan.")
+                self.telemetry.log_event("deep_agent_incomplete", {
+                    "reason": "no_patch", 
+                    "plan": plan[:100]
+                })
+                return False
+            
+            # Phase 3: APPLY - Apply the unified patch with safety checks and critic review
+            from nova.agent.unified_tools import ApplyPatchTool
+            
+            patch_tool = ApplyPatchTool(
+                repo_path=self.state.repo_path,
+                safety_config=self.safety_config,
+                verbose=self.verbose,
+                state=self.state,
+                logger=self.telemetry
+            )
+            
+            apply_result = patch_tool._run(patch_diff)
+            
+            if apply_result.startswith("FAILED"):
+                # Patch application failed
+                if "Patch rejected by critic" in apply_result or "violation" in apply_result:
+                    # Critic or safety vetoed the patch
+                    self.state.final_status = "patch_rejected"
+                    # Store critic feedback if available
+                    if "rejected by critic - " in apply_result:
+                        reason = apply_result.split("rejected by critic -", 1)[1].strip()
+                        self.state.critic_feedback = reason
+                    if self.verbose:
+                        print(f"[FAIL] Patch rejected: {apply_result}")
+                else:
+                    # Context mismatch or apply error
+                    self.state.final_status = "patch_error"
+                    if self.verbose:
+                        print(f"[FAIL] Patch apply error: {apply_result}")
+                
+                # No changes applied if failed
+                return False
+            
+            # Patch applied successfully
+            self.state.patches_applied.append(patch_diff)
+            if self.verbose:
+                print("[OK] Patch applied and committed successfully.")
+            
+            # Phase 4: TEST - Run tests to verify whether all failures are resolved
+            from nova.runner import TestRunner
+            test_runner = TestRunner(self.state.repo_path, verbose=self.verbose)
+            new_failures, _ = test_runner.run_tests(max_failures=10)
+            
+            # Determine outcome based on new_failures
+            if not new_failures:
+                # All tests passed
+                success = True
+                self.state.final_status = "success"
+                self.telemetry.log_event("deep_agent_success", {
+                    "iterations": self.state.current_iteration,
+                    "message": "All tests passing"
+                })
+                if self.verbose:
+                    print("[SUCCESS] All tests are green after patch.")
+                return True
+            
+            # Some tests are still failing
+            # Check for regressions: failing tests that were not originally failing
+            new_fail_names = {
+                (t["name"] if isinstance(t, dict) and "name" in t else str(t)) 
+                for t in new_failures
+            }
+            regression = any(name not in original_fail_names for name in new_fail_names)
+            
+            if regression:
+                # Patch introduced a new failure - rollback
+                if self.git_manager:
+                    self.git_manager.cleanup(success=False)
+                self.state.final_status = "patch_error"
+                if self.verbose:
+                    reg_tests = [n for n in new_fail_names if n not in original_fail_names]
+                    print(f"[ROLLBACK] Regression detected! New failing tests: {reg_tests}. Reverting changes.")
+                return False
+            
+            # No regressions, but some original tests still failing
+            # Update state with remaining failing tests
+            self.state.add_failing_tests(new_failures)
+            
+            if self.state.current_iteration >= self.state.max_iterations:
+                # Reached iteration limit
+                self.state.final_status = "max_iters"
+                if self.verbose:
+                    print(f"[STOP] Max iterations ({self.state.max_iterations}) reached with {self.state.total_failures} failures still unresolved.")
+                self.telemetry.log_event("deep_agent_incomplete", {
+                    "iterations": self.state.current_iteration,
+                    "remaining_failures": self.state.total_failures
+                })
+                return False
+            else:
+                # Continue to next iteration
+                if self.verbose:
+                    print(f"[ITERATE] {self.state.total_failures} tests still failing. Revising plan and trying another cycle...")
+                # Loop back to Plan phase
+                continue
+        
+        # If loop exits naturally without returning, ensure final status is set
+        if self.state.final_status is None:
+            self.state.final_status = "incomplete"
+        
+        # Log summary if not already done
+        if self.state.final_status != "success":
+            self.telemetry.log_event("deep_agent_incomplete", {
+                "iterations": self.state.current_iteration,
+                "remaining_failures": self.state.total_failures,
+                "status": self.state.final_status
+            })
+        
         return success

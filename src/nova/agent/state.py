@@ -41,6 +41,8 @@ class AgentState:
     
     # Results
     patches_applied: List[str] = field(default_factory=list)
+    tried_patches: List[str] = field(default_factory=list)       # All patch diffs attempted (approved or not)
+    modified_files: List[List[str]] = field(default_factory=list)  # Files modified in each patch attempt
     test_results: List[Dict[str, Any]] = field(default_factory=list)
     final_status: Optional[str] = None  # 'success', 'timeout', 'max_iters', 'error'
     error_message: Optional[str] = None  # Detailed error message when status is 'error'
@@ -96,6 +98,8 @@ class AgentState:
             "timeout_seconds": self.timeout_seconds,
             "start_time": self.start_time.isoformat(),
             "patches_applied": self.patches_applied,
+            "tried_patches": self.tried_patches,
+            "modified_files": self.modified_files,
             "test_results": self.test_results,
             "final_status": self.final_status,
         }

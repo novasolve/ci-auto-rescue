@@ -807,7 +807,7 @@ Start NOW by trying to open the source file. DO NOT just run tests again!"""
                 elif self.state.current_iteration >= self.state.max_iterations:
                     self.state.final_status = "max_iters"
                 else:
-                    self.state.final_status = "incomplete"
+                    self.state.final_status = "partial_fix"  # Partial fix: tests still failing
                 
                 # Log structured failure event (OS-1182)
                 failure_event = {

@@ -81,8 +81,8 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         console.print(f"[bold yellow]⚠️ Exit Reason: NO PATCH - Could not generate fix[/bold yellow]")
     elif reason == "patch_rejected":
         console.print(f"[bold yellow]⚠️ Exit Reason: PATCH REJECTED - Critic rejected patch[/bold yellow]")
-    elif reason == "patch_error":
-        console.print(f"[bold red]❌ Exit Reason: PATCH ERROR - Failed to apply patch[/bold red]")
+    elif reason == "patch_error" or reason == "patch_failed":
+        console.print(f"[bold red]❌ Exit Reason: PATCH FAILED - Failed to apply the patch to the code[/bold red]")
     elif reason == "interrupted":
         console.print(f"[bold yellow]🛑 Exit Reason: INTERRUPTED - User cancelled operation[/bold yellow]")
     elif reason == "error":
@@ -104,6 +104,8 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
     elif state.failing_tests and state.total_failures < len(state.failing_tests):
         fixed = len(state.failing_tests) - state.total_failures
         console.print(f"  • Tests fixed: {fixed}/{len(state.failing_tests)}")
+    elif reason == "partial_fix":
+        console.print(f"  • Some tests were fixed, but {state.total_failures} failure(s) remain.")
     
     # Time elapsed
     if elapsed_seconds is not None:
@@ -556,7 +558,7 @@ def fix(
                         console.print(f"[yellow]Safety violation: {result.get('safety_message', 'unknown')}[/yellow]")
                         state.final_status = "patch_rejected"
                     else:
-                        state.final_status = "patch_error"
+                        state.final_status = "patch_failed"  # Patch approved but failed to apply
                     break
 
                 # Patch successfully applied and committed; save patch diff and run tests again
@@ -579,9 +581,11 @@ def fix(
                     continue
 
             # If loop ended without setting final_status, it means max iterations reached
-            if state.final_status is None or (state.final_status not in {"success", "patch_error", "patch_rejected", "no_patch"}):
-                # Reached max iterations without full success
-                state.final_status = "max_iters"
+            if state.final_status is None or (state.final_status not in {"success", "patch_failed", "patch_rejected", "no_patch"}):
+                if state.patches_applied and state.total_failures:
+                    state.final_status = "partial_fix"  # Some tests remain unfixed after max iterations
+                else:
+                    state.final_status = "max_iters"
                 console.print(f"\n[red bold]❌ FAILED - Reached max iterations ({state.max_iterations}) with tests still failing.[/red bold]")
 
         # Log completion status

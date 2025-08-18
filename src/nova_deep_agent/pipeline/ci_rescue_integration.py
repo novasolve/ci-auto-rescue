@@ -60,6 +60,8 @@ class CIRescuePipeline:
         # State tracking
         self.current_iteration = 0
         self.fix_history = []
+        self.last_failure_reason = None
+        self.last_failed_files = []
     
     def run(
         self,
@@ -211,7 +213,9 @@ Remember to make minimal changes and do not modify the test files themselves."""
             
             return True, patch_diff
         else:
-            # Rollback changes
+            # Capture critic feedback and rollback
+            self.last_failure_reason = feedback
+            self.last_failed_files = metadata.get("affected_files", []) if metadata else []
             self._rollback_changes()
             return False, None
     
@@ -263,7 +267,13 @@ Remember to make minimal changes and do not modify the test files themselves."""
     def _generate_plan(self, failing_tests: List[Dict[str, Any]]) -> str:
         """Generate a plan for fixing the tests."""
         plan = []
-        
+        # Include note about last failed patch (if any)
+        if self.last_failure_reason:
+            note = f"NOTE: Previous patch failed - {self.last_failure_reason}"
+            if self.last_failed_files:
+                note += f" (files affected: {', '.join(self.last_failed_files)})"
+            plan.append(note)
+            plan.append("")
         # Group failures by file
         failures_by_file = {}
         for test in failing_tests:
@@ -275,12 +285,11 @@ Remember to make minimal changes and do not modify the test files themselves."""
         # Create plan based on failure patterns
         plan.append("1. Analyze error patterns across failing tests")
         plan.append("2. Identify common root causes")
-        
+        step_num = 3
         for file_path, tests in failures_by_file.items():
-            plan.append(f"3. Fix issues in {file_path} ({len(tests)} failures)")
-        
-        plan.append("4. Verify all fixes work together")
-        
+            plan.append(f"{step_num}. Fix issues in {file_path} ({len(tests)} failures)")
+            step_num += 1
+        plan.append(f"{step_num}. Verify all fixes work together")
         return "\n".join(plan)
     
     def _format_failing_tests(

@@ -48,9 +48,10 @@ Guidelines:
 - Iterate if needed until all tests pass
 - Focus on fixing the root cause, not symptoms
 - Preserve existing functionality while fixing bugs
+- If you see a "SKIP" instruction, it means the previous action was declined – **do not repeat that action**.
 
 Use the tools step-by-step: first plan your solution, then open relevant files, apply fixes, and run tests to verify.
-Iterate as needed until all tests are passing. When all failures are resolved, stop and provide a final confirmation."""
+Iterate until all tests pass, then stop and provide a final confirmation."""
     
     def __init__(self, config: Optional[AgentConfig] = None, repo_root: Optional[Path] = None):
         """

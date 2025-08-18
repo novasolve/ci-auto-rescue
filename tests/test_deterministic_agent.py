@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch, MagicMock
 from nova.agent.deep_agent import NovaDeepAgent
 from nova.agent.state import AgentState
 from nova.telemetry import TelemetryBase
+from nova.git_utils import GitManager
 
 
 class MockLLMClient:

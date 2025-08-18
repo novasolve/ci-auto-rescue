@@ -107,6 +107,22 @@ If you encounter errors:
 3. Make the minimal fix needed
 4. Document why the fix is necessary
 
+## UNDERSTANDING TOOL RESPONSES:
+
+**IMPORTANT**: Not all tool responses starting with "ERROR:" are actual errors!
+
+- **SKIP: messages** - These indicate the tool prevented a redundant operation:
+  - "SKIP: File already opened" - The file content is in your previous observation, proceed with that
+  - "SKIP: Plan already noted" - Your plan was recorded, continue to implementation
+  - "SKIP: File already up-to-date" - No changes needed, move to next task
+  - "SKIP: Patch already applied" - The patch is already in place, continue
+  - "SKIP: No changes since last run" - Use previous test results
+
+When you see a SKIP message:
+1. DO NOT retry the same operation
+2. Use the information from your previous observations
+3. Continue with the next step in your workflow
+
 Remember: Your goal is to make ALL tests pass with MINIMAL, SAFE changes.
 """
     

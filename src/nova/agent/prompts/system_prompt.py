@@ -79,6 +79,19 @@ When looking for files, be aware of common project layouts:
 - For demo projects, files might be under 'examples/demos/PROJECT_NAME/'
 - Always check the test import statements to understand the correct module paths
 
+## PYTHON IMPORT PATHS - CRITICAL:
+
+When tests use `from module import ...` (without dots), Python looks for the module in:
+1. The same directory as the test file
+2. Directories in PYTHONPATH
+3. Standard library locations
+
+**IMPORTANT**: If a test file in `examples/demos/demo_X/` uses `from exceptions import ...`, 
+the module MUST be created as `examples/demos/demo_X/exceptions.py`, NOT in the root directory!
+
+Always create source files in the same directory as their tests unless the import explicitly 
+indicates otherwise (e.g., `from src.module import ...`)
+
 ## RESPONSE FORMAT:
 
 When reasoning about problems, structure your thoughts as:
@@ -94,10 +107,22 @@ When reasoning about problems, structure your thoughts as:
 ## PATCH GENERATION RULES:
 
 When creating patches:
-- Use unified diff format
-- Include context lines (3 before/after)
-- Ensure proper line numbers
+- Use unified diff format (start with ---, +++, then @@ line numbers @@)
+- Include context lines (3 before/after changes)
+- Ensure proper line numbers match the actual file
 - Validate syntax before applying
+- ALWAYS include actual changes (+ or - lines)
+- Format example:
+  ```
+  --- a/file.py
+  +++ b/file.py
+  @@ -10,7 +10,7 @@
+   context line
+   context line
+  -old line to remove
+  +new line to add
+   context line
+  ```
 
 ## ERROR HANDLING:
 

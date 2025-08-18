@@ -724,22 +724,49 @@ class ApplyPatchTool(BaseTool):
         
         super().__init__(**kwargs)
 
+    def _ensure_valid_patch_format(self, patch_diff: str) -> str:
+        """Ensure patch is in valid unified diff format."""
+        lines = patch_diff.strip().split('\n')
+        
+        # Check if patch has proper headers
+        has_diff_headers = any(line.startswith('---') or line.startswith('+++') for line in lines)
+        has_changes = any(line.startswith('+') or line.startswith('-') for line in lines 
+                         if not line.startswith('+++') and not line.startswith('---'))
+        
+        if not has_diff_headers or not has_changes:
+            # Try to extract a valid patch from common formats
+            start_idx = -1
+            end_idx = len(lines)
+            
+            # Find patch boundaries
+            for i, line in enumerate(lines):
+                if '*** Begin Patch' in line or 'diff --git' in line or line.startswith('---'):
+                    start_idx = i
+                    break
+            
+            for i in range(len(lines)-1, -1, -1):
+                if '*** End Patch' in line or (lines[i].startswith('+') or lines[i].startswith('-')):
+                    end_idx = i + 1
+                    break
+            
+            if start_idx >= 0:
+                lines = lines[start_idx:end_idx]
+                patch_diff = '\n'.join(lines)
+        
+        # Remove markdown formatting if present
+        patch_diff = patch_diff.replace('```diff', '').replace('```', '')
+        patch_diff = patch_diff.replace('*** Begin Patch', '').replace('*** End Patch', '')
+        
+        return patch_diff.strip()
+    
     def _run(self, patch_diff: str) -> str:
         """Apply the given patch diff to the codebase with safety checks."""
         # Check for duplicate patch application
         if self.state and (self.name, patch_diff, self.state.modifications_count) in self.state.used_actions:
             return "SKIP: Patch already applied - no action needed"
         
-        # Remove any markdown formatting (```diff ``` wrappers) if present
-        patch_text = patch_diff.strip()
-        if patch_text.startswith("```"):
-            lines = patch_text.splitlines()
-            # Drop leading ```... and trailing ```
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            patch_text = "\n".join(lines)
+        # Ensure patch is in valid format
+        patch_text = self._ensure_valid_patch_format(patch_diff)
         
         # 1. Safety checks on patch content
         is_safe, safe_msg = check_patch_safety(

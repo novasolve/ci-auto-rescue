@@ -166,7 +166,7 @@ class PlanTodoTool(BaseTool):
         """Execute the plan_todo function."""
         # Check for duplicate plan with same todo and no new changes
         if self.state and (self.name, todo, self.state.modifications_count) in self.state.used_actions:
-            return f"Plan already noted: {todo}"  # Skip duplicate plan
+            return f"SKIP: Plan already noted - {todo}"
         
         # Update phase to implementing after planning
         if self.state and hasattr(self.state, 'phase'):
@@ -404,7 +404,7 @@ class RunTestsTool(BaseTool):
             return json.dumps({
                 "exit_code": 1,
                 "failures": self.state.total_failures or 0,
-                "message": "No changes since last run - tests not re-run",
+                "message": "SKIP: No changes since last run - tests not re-run",
                 "failing_tests": [],
                 "error": "Duplicate test run skipped"
             })

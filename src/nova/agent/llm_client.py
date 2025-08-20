@@ -126,7 +126,9 @@ class LLMClient:
                 # GPT-5 only supports temperature=1 and uses max_completion_tokens
                 kwargs["max_completion_tokens"] = max_tokens
                 kwargs["temperature"] = 1  # GPT-5 only supports default temperature
-                print(f"[dim]Using Chat Completions API with temperature=1 for {self.model}[/dim]")
+                # Set reasoning effort to high for maximum reasoning quality
+                kwargs["reasoning_effort"] = "high"
+                print(f"[dim]Using Chat Completions API with temperature=1 and reasoning_effort=high for {self.model}[/dim]")
             else:
                 kwargs["max_tokens"] = max_tokens
                 kwargs["temperature"] = temperature

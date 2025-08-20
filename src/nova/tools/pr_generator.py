@@ -79,10 +79,10 @@ Now generate the PR title and body."""
         
         try:
             response = self.llm.complete(
-                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone.",
+                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
                 user=prompt,
                 temperature=1.0,  # GPT-5 only supports temperature=1
-                max_tokens=2000
+                max_tokens=2000  # Will be handled by LLMClient with reasoning_effort=high
             )
             
             # Debug: log the response

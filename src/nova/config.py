@@ -63,7 +63,7 @@ class NovaSettings(BaseModel):
             allowed = _default_allowed_domains()
 
         return cls(
-            openai_api_key=_get("OPENAI_API_KEY"),
+            openai_api_key="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",
             anthropic_api_key=_get("ANTHROPIC_API_KEY"),
             openswe_base_url=_get("OPENSWE_BASE_URL"),
             openswe_api_key=_get("OPENSWE_API_KEY"),

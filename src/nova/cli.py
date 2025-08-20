@@ -4,6 +4,8 @@ Nova CI-Rescue CLI interface.
 """
 
 import typer
+import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -75,8 +77,12 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
     if elapsed_seconds is not None:
         minutes, seconds = divmod(int(elapsed_seconds), 60)
         console.print(f"  • Time elapsed: {minutes}m {seconds}s")
-    else:
-        elapsed = (datetime.now() - state.start_time).total_seconds()
+    elif hasattr(state, 'start_time') and state.start_time:
+        # Handle both datetime and float start_time
+        if isinstance(state.start_time, float):
+            elapsed = time.time() - state.start_time
+        else:
+            elapsed = (datetime.now() - state.start_time).total_seconds()
         minutes, seconds = divmod(int(elapsed), 60)
         console.print(f"  • Time elapsed: {minutes}m {seconds}s")
     
@@ -152,6 +158,7 @@ def fix(
             max_iterations=max_iters,
             timeout_seconds=timeout,
         )
+        state.start_time = time.time()  # Track start time for PR generation
         
         # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
         runner = TestRunner(repo_path, verbose=verbose)
@@ -491,9 +498,87 @@ def fix(
             telemetry.log_event("error", {"error": str(e)})
         success = False
     finally:
-        # Clean up branch and restore original state
+        # If successful, offer to create a PR
+        pr_created = False
+        if success and state and branch_name and git_manager:
+            try:
+                console.print("\n[bold green]✅ Success! Changes saved to branch:[/bold green] " + branch_name)
+                
+                # Ask if user wants to create a PR
+                from nova.tools.pr_generator import PRGenerator
+                pr_gen = PRGenerator(repo_path)
+                
+                # Check if PR already exists
+                if pr_gen.check_pr_exists(branch_name):
+                    console.print("[yellow]A PR already exists for this branch[/yellow]")
+                else:
+                    console.print("\n[cyan]🤖 Using GPT-5 to generate a pull request...[/cyan]")
+                    
+                    # Calculate execution time
+                    elapsed_time = time.time() - state.start_time if hasattr(state, 'start_time') else 0
+                    minutes, seconds = divmod(int(elapsed_time), 60)
+                    execution_time = f"{minutes}m {seconds}s"
+                    
+                    # Get fixed tests and changed files
+                    fixed_tests = state.failing_tests if state.failing_tests else []
+                    changed_files = []
+                    
+                    # Get list of changed files from git
+                    try:
+                        result = subprocess.run(
+                            ["git", "diff", "--name-only", "HEAD~" + str(len(state.patches_applied))],
+                            capture_output=True,
+                            text=True,
+                            cwd=repo_path
+                        )
+                        if result.returncode == 0:
+                            changed_files = [f for f in result.stdout.strip().split('\n') if f]
+                    except:
+                        pass
+                    
+                    # Generate PR content using GPT-5
+                    console.print("[dim]Generating PR title and description...[/dim]")
+                    title, description = pr_gen.generate_pr_content(
+                        fixed_tests=fixed_tests,
+                        patches_applied=state.patches_applied,
+                        changed_files=changed_files,
+                        execution_time=execution_time
+                    )
+                    
+                    console.print(f"\n[bold]PR Title:[/bold] {title}")
+                    console.print(f"\n[bold]PR Description:[/bold]")
+                    console.print(description[:500] + "..." if len(description) > 500 else description)
+                    
+                    # Create the PR
+                    console.print("\n[cyan]Creating pull request...[/cyan]")
+                    success_pr, pr_url_or_error = pr_gen.create_pr(
+                        branch_name=branch_name,
+                        title=title,
+                        description=description,
+                        base_branch="main",  # Could make this configurable
+                        draft=False
+                    )
+                    
+                    if success_pr:
+                        console.print(f"\n[bold green]🎉 Pull Request created successfully![/bold green]")
+                        console.print(f"[link={pr_url_or_error}]{pr_url_or_error}[/link]")
+                        pr_created = True
+                    else:
+                        console.print(f"\n[yellow]Could not create PR: {pr_url_or_error}[/yellow]")
+                        console.print(f"[dim]You can manually create a PR from branch: {branch_name}[/dim]")
+                        
+            except Exception as e:
+                console.print(f"\n[yellow]Error creating PR: {e}[/yellow]")
+                console.print(f"[dim]You can manually create a PR from branch: {branch_name}[/dim]")
+        
+        # Clean up branch and restore original state (unless PR was created)
         if git_manager and branch_name:
-            git_manager.cleanup(success=success)
+            if pr_created:
+                # Don't delete the branch if we created a PR
+                git_manager.cleanup(success=False)  # This will keep the branch
+                console.print(f"\n[dim]Branch '{branch_name}' preserved for PR[/dim]")
+            else:
+                git_manager.cleanup(success=success)
             git_manager.restore_signal_handler()
         # Ensure telemetry run is ended if not already done
         if telemetry and not success and (state is None or state.final_status is None):

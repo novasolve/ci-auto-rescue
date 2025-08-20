@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/Users/seb/GPT5/working/ci-auto-rescue/venv"
+set -gx VIRTUAL_ENV "/Users/seb/Documents/novacicd/Demo/ci-auto-rescue-v0.1.0-alpha/venv"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH

@@ -87,64 +87,63 @@ class EnhancedLLMAgent:
                 source_contents[source_file] = source_path.read_text()
         
         # Build the prompt using the helper function (now with critic feedback)
-        prompt = build_patch_prompt(plan, failing_tests, test_contents, source_contents, critic_feedback)
+        from nova.agent.llm_client_fixed import build_full_file_prompt, convert_full_file_to_patch
+        prompt = build_full_file_prompt(plan, failing_tests, test_contents, source_contents, critic_feedback)
         
         try:
             # Use the unified LLM client
             system_prompt = (
-                "You are a coding assistant who writes fixes as unified diffs. "
-                "Fix the SOURCE CODE to make tests pass. "
-                "Generate only valid unified diff patches with proper file paths and hunk headers."
+                "You are a coding assistant who fixes source code to make tests pass. "
+                "Generate the complete corrected file contents. "
+                "Follow the exact format requested in the prompt."
             )
             
-            patch_diff = self.llm.complete(
+            response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
                 temperature=0.2,
                 max_tokens=8000  # Increased to prevent truncation
             )
             
-            # Extract diff from markdown if needed
-            if "```diff" in patch_diff:
-                start = patch_diff.find("```diff") + 7
-                end = patch_diff.find("```", start)
-                if end == -1:
-                    # The closing ``` is missing, patch might be truncated
-                    print(f"Warning: Patch might be truncated (no closing ```)")
-                    end = len(patch_diff)
-                patch_diff = patch_diff[start:end].strip()
-            elif "```" in patch_diff:
-                start = patch_diff.find("```") + 3
-                if patch_diff[start:start+1] == "\n":
-                    start += 1
-                end = patch_diff.find("```", start)
-                if end == -1:
-                    # The closing ``` is missing, patch might be truncated
-                    print(f"Warning: Patch might be truncated (no closing ```)")
-                    end = len(patch_diff)
-                patch_diff = patch_diff[start:end].strip()
+            # Parse the response to extract file contents
+            files_to_fix = {}
+            current_file = None
+            current_content = []
+            in_code_block = False
             
-            # Check if patch looks complete
-            lines = patch_diff.split('\n')
-            if lines and not lines[-1].startswith(('+', '-', ' ', '@', '\\')):
-                # Last line doesn't look like a valid diff line
-                if len(lines) > 15:
-                    print(f"Warning: Patch might be truncated at line {len(lines)}")
-                    # Try to get the rest of the patch
-                    continuation_prompt = "Continue generating the patch from where you left off. Start with the next line of the diff."
-                    continuation = self.llm.complete(
-                        system="Continue the unified diff patch. Output only the remaining diff lines.",
-                        user=continuation_prompt,
-                        temperature=0.2,
-                        max_tokens=4000
-                    )
-                    # Append continuation if it looks like valid diff content
-                    if continuation and (continuation[0] in '+-@ \\' or continuation.startswith('@@')):
-                        patch_diff = patch_diff + '\n' + continuation.strip()
-                        print(f"Added {len(continuation.split(chr(10)))} continuation lines to patch")
+            for line in response.split('\n'):
+                if line.startswith("FILE:"):
+                    # Save previous file if any
+                    if current_file and current_content:
+                        files_to_fix[current_file] = '\n'.join(current_content)
+                    # Start new file
+                    current_file = line[5:].strip()
+                    current_content = []
+                    in_code_block = False
+                elif line.strip() == "```python" or line.strip() == "```":
+                    if line.strip() == "```python":
+                        in_code_block = True
+                    else:
+                        in_code_block = False
+                elif in_code_block and current_file:
+                    current_content.append(line)
             
-            # Ensure proper patch format
-            return self._fix_patch_format(patch_diff)
+            # Save last file
+            if current_file and current_content:
+                files_to_fix[current_file] = '\n'.join(current_content)
+            
+            # Convert full files to patches
+            if not files_to_fix:
+                print("Warning: No files found in LLM response")
+                return None
+            
+            # Generate unified diff for each file
+            combined_diff = ""
+            for file_path, new_content in files_to_fix.items():
+                file_diff = convert_full_file_to_patch(file_path, new_content, self.repo_path)
+                combined_diff += file_diff + "\n"
+            
+            return combined_diff.strip()
             
         except Exception as e:
             print(f"Error generating patch: {e}")

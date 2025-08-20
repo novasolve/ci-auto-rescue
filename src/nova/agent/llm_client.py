@@ -52,13 +52,19 @@ class LLMClient:
         """Get the OpenAI model name to use."""
         model = self.settings.default_llm_model
         
-        # Map special names to actual models
+        # Map special names to actual API model names
         if model == "gpt-5-chat-latest":
-            # GPT-5 not available yet, fallback to GPT-4
-            return "gpt-4o"
+            # Use full GPT-5 model
+            return "gpt-5"
         elif "gpt-5" in model.lower():
-            # Fallback to GPT-4 for any GPT-5 variant
-            return "gpt-4o"
+            # Use the GPT-5 variant requested
+            if "mini" in model.lower():
+                return "gpt-5-mini"
+            elif "nano" in model.lower():
+                return "gpt-5-nano"
+            else:
+                # Default to full GPT-5 model for best reasoning
+                return "gpt-5"
         elif model in ["gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]:
             return model
         else:
@@ -105,16 +111,29 @@ class LLMClient:
     def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
         """Complete using OpenAI API."""
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            # Use Chat Completions API for all models
+            # Build kwargs
+            kwargs = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user}
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+                ]
+            }
+            
+            # Handle model-specific parameters
+            if "gpt-5" in self.model.lower():
+                # GPT-5 only supports temperature=1 and uses max_completion_tokens
+                kwargs["max_completion_tokens"] = max_tokens
+                kwargs["temperature"] = 1  # GPT-5 only supports default temperature
+                print(f"[dim]Using Chat Completions API with temperature=1 for {self.model}[/dim]")
+            else:
+                kwargs["max_tokens"] = max_tokens
+                kwargs["temperature"] = temperature
+            
+            response = self.client.chat.completions.create(**kwargs)
             return response.choices[0].message.content.strip()
+                
         except Exception as e:
             print(f"OpenAI API error: {e}")
             raise

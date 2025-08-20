@@ -3,6 +3,9 @@ PR Generator - Uses GPT-5 to create pull request descriptions and submit them vi
 """
 
 import subprocess
+import os
+import requests
+import json
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from nova.agent.llm_client import LLMClient
@@ -176,7 +179,7 @@ The following files were modified:
                   base_branch: str = "main",
                   draft: bool = False) -> Tuple[bool, str]:
         """
-        Create a PR using GitHub CLI.
+        Create a PR using GitHub API directly.
         
         Args:
             branch_name: The branch with fixes
@@ -189,82 +192,115 @@ The following files were modified:
             Tuple of (success, pr_url_or_error)
         """
         try:
-            # First check if gh is installed
-            check_gh = subprocess.run(
-                ["which", "gh"],
-                capture_output=True,
-                text=True
-            )
+            # Get GitHub token from environment
+            token = os.environ.get('GITHUB_TOKEN')
+            if not token:
+                return False, "GITHUB_TOKEN environment variable not set"
             
-            if check_gh.returncode != 0:
-                return False, "GitHub CLI (gh) not found. Install with: brew install gh"
+            # Get repository info
+            repo_info = self._get_repository_info()
+            if not repo_info:
+                return False, "Could not determine repository owner/name"
             
-            # Check if we have a git remote
-            remote_check = subprocess.run(
-                ["git", "remote", "-v"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path
-            )
+            owner, repo = repo_info
             
-            if not remote_check.stdout.strip():
-                return False, "No git remotes found. This appears to be a local repository without a GitHub remote."
+            # Create PR using GitHub API
+            url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+            headers = {
+                "Authorization": f"token {token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
             
-            # Check if we're authenticated
-            auth_check = subprocess.run(
-                ["gh", "auth", "status"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path
-            )
+            data = {
+                "title": title,
+                "body": description,
+                "head": branch_name,
+                "base": base_branch,
+                "draft": draft
+            }
             
-            if auth_check.returncode != 0:
-                return False, "Not authenticated with GitHub. Run: gh auth login"
+            response = requests.post(url, headers=headers, json=data)
             
-            # Create the PR
-            cmd = [
-                "gh", "pr", "create",
-                "--base", base_branch,
-                "--head", branch_name,
-                "--title", title,
-                "--body", description
-            ]
-            
-            if draft:
-                cmd.append("--draft")
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path
-            )
-            
-            if result.returncode == 0:
-                pr_url = result.stdout.strip()
+            if response.status_code == 201:
+                pr_data = response.json()
+                pr_url = pr_data.get('html_url', '')
                 return True, pr_url
             else:
-                error_msg = result.stderr or result.stdout
+                error_msg = response.json().get('message', response.text)
                 return False, f"Failed to create PR: {error_msg}"
                 
         except Exception as e:
             return False, f"Error creating PR: {str(e)}"
     
     def check_pr_exists(self, branch_name: str) -> bool:
-        """Check if a PR already exists for this branch."""
+        """Check if a PR already exists for this branch using GitHub API."""
+        try:
+            token = os.environ.get('GITHUB_TOKEN')
+            if not token:
+                return False
+            
+            repo_info = self._get_repository_info()
+            if not repo_info:
+                return False
+            
+            owner, repo = repo_info
+            
+            # Check existing PRs
+            url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+            headers = {
+                "Authorization": f"token {token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            params = {
+                "head": f"{owner}:{branch_name}",
+                "state": "open"
+            }
+            
+            response = requests.get(url, headers=headers, params=params)
+            if response.status_code == 200:
+                prs = response.json()
+                return len(prs) > 0
+            return False
+        except:
+            return False
+    
+    def _get_repository_info(self) -> Optional[Tuple[str, str]]:
+        """Get repository owner and name from git remote or environment."""
+        # First try environment variable (for CI)
+        repo_env = os.environ.get('GITHUB_REPOSITORY')
+        if repo_env and '/' in repo_env:
+            parts = repo_env.split('/')
+            return parts[0], parts[1]
+        
+        # Try to get from git remote
         try:
             result = subprocess.run(
-                ["gh", "pr", "list", "--head", branch_name, "--json", "number"],
+                ["git", "remote", "get-url", "origin"],
                 capture_output=True,
                 text=True,
                 cwd=self.repo_path
             )
             
-            if result.returncode == 0 and result.stdout.strip() != "[]":
-                                    return True
-            return False
+            if result.returncode == 0:
+                url = result.stdout.strip()
+                # Parse GitHub URL
+                if "github.com" in url:
+                    # Handle both https and ssh URLs
+                    if url.startswith("https://"):
+                        # https://github.com/owner/repo.git
+                        parts = url.replace("https://github.com/", "").replace(".git", "").split("/")
+                    elif url.startswith("git@"):
+                        # git@github.com:owner/repo.git
+                        parts = url.replace("git@github.com:", "").replace(".git", "").split("/")
+                    else:
+                        return None
+                    
+                    if len(parts) >= 2:
+                        return parts[0], parts[1]
         except:
-            return False
+            pass
+        
+        return None
     
     def _get_combined_diff(self) -> str:
         """Get the combined diff of all changes against the base branch."""

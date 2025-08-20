@@ -158,7 +158,7 @@ def fix(
             max_iterations=max_iters,
             timeout_seconds=timeout,
         )
-        state.start_time = time.time()  # Track start time for PR generation
+        state.start_time = datetime.now()  # Track start time for PR generation
         
         # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
         runner = TestRunner(repo_path, verbose=verbose)
@@ -515,7 +515,7 @@ def fix(
                     console.print("\n[cyan]🤖 Using GPT-5 to generate a pull request...[/cyan]")
                     
                     # Calculate execution time
-                    elapsed_time = time.time() - state.start_time if hasattr(state, 'start_time') else 0
+                    elapsed_time = (datetime.now() - state.start_time).total_seconds() if hasattr(state, 'start_time') else 0
                     minutes, seconds = divmod(int(elapsed_time), 60)
                     execution_time = f"{minutes}m {seconds}s"
                     

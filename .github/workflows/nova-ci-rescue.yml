@@ -4,30 +4,30 @@ on:
   push:
     branches:
       - main
-      - 'feature/**'
+      - "feature/**"
   pull_request:
     types: [opened, synchronize, reopened]
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   test-and-auto-fix:
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # For pushing fixes
+      contents: write # For pushing fixes
       pull-requests: write # For creating PRs
-      issues: write       # For commenting on issues
-    
+      issues: write # For commenting on issues
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for better diff generation
-      
+          fetch-depth: 0 # Full history for better diff generation
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
-      
+          python-version: "3.12"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -35,7 +35,7 @@ jobs:
           pip install -e ./src
           # Install test dependencies
           pip install pytest pytest-cov
-      
+
       - name: Run initial tests
         id: initial-tests
         continue-on-error: true
@@ -43,7 +43,7 @@ jobs:
           echo "Running initial test suite..."
           pytest demo_workspace/tests -v --tb=short > test_results.txt 2>&1 || echo "TESTS_FAILED=true" >> $GITHUB_OUTPUT
           cat test_results.txt
-      
+
       - name: Run Nova Auto-Fix if tests failed
         if: steps.initial-tests.outputs.TESTS_FAILED == 'true'
         env:
@@ -55,13 +55,13 @@ jobs:
           echo "Tests failed! Running Nova CI-Rescue to auto-fix..."
           cd demo_workspace
           python -m nova.cli fix . --max-iters 3 --timeout 300
-      
+
       - name: Run tests after fix
         if: steps.initial-tests.outputs.TESTS_FAILED == 'true'
         run: |
           echo "Running tests after Nova fix..."
           pytest demo_workspace/tests -v
-      
+
       - name: Upload Nova artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -71,6 +71,7 @@ jobs:
             demo_workspace/.nova/
             test_results.txt
 
+
 # Alternative workflow for running Nova on demand
 ---
 name: Nova CI-Rescue Manual
@@ -79,17 +80,17 @@ on:
   workflow_dispatch:
     inputs:
       target_directory:
-        description: 'Directory to run Nova fix on'
+        description: "Directory to run Nova fix on"
         required: false
-        default: 'demo_workspace'
+        default: "demo_workspace"
       max_iterations:
-        description: 'Maximum fix iterations'
+        description: "Maximum fix iterations"
         required: false
-        default: '3'
+        default: "3"
       llm_model:
-        description: 'LLM model to use (gpt-5, gpt-4o, claude-3.5-sonnet)'
+        description: "LLM model to use (gpt-5, gpt-4o, claude-3.5-sonnet)"
         required: false
-        default: 'gpt-5'
+        default: "gpt-5"
 
 jobs:
   nova-manual-fix:
@@ -97,22 +98,22 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
-      
+          python-version: "3.12"
+
       - name: Install Nova and dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ./src
           pip install pytest
-      
+
       - name: Run Nova Fix
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -121,7 +122,7 @@ jobs:
         run: |
           cd ${{ github.event.inputs.target_directory }}
           python -m nova.cli fix . --max-iters ${{ github.event.inputs.max_iterations }}
-      
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4

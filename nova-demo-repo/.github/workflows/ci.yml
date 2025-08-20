@@ -1,3 +1,6 @@
+# Save this file as .github/workflows/ci.yml in your repository
+# You'll need to add it manually through the GitHub web interface or with proper workflow permissions
+
 name: CI with Nova Auto-Fix
 
 on:
@@ -10,36 +13,38 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    environment: pat
     permissions:
       contents: write
       pull-requests: write
       issues: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-      
+          python-version: "3.11"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
+
       - name: Run tests
         id: test-run
-        continue-on-error: true
         run: |
           echo "::group::Running pytest"
+          set +e  # Don't exit on error
           pytest -v --tb=short | tee test_output.txt
           TEST_RESULT=${PIPESTATUS[0]}
+          set -e  # Re-enable exit on error
           echo "::endgroup::"
-          
+
           if [ $TEST_RESULT -eq 0 ]; then
             echo "✅ All tests passed!"
             echo "tests_passed=true" >> $GITHUB_OUTPUT
@@ -50,66 +55,86 @@ jobs:
             # Extract failed test names for Nova
             grep "FAILED" test_output.txt || true
           fi
-          
-          exit $TEST_RESULT
-      
+
+          # Always exit successfully to continue workflow
+          exit 0
+
       - name: Run Nova Auto-Fix
-        if: steps.test-run.outputs.tests_passed == 'false' && github.event_name == 'push'
+        if: steps.test-run.outputs.tests_passed == 'false'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           echo "🤖 Nova CI-Rescue: Attempting to fix failing tests..."
-          
-          # Install Nova (assuming it's available as a package)
-          pip install nova-ci-rescue || pip install -e ../src
-          
-          # Run Nova fix
-          nova fix . --max-iters 3 --timeout 300 || python -m nova.cli fix . --max-iters 3
-          
-          # Check if Nova created a fix branch
-          if git branch -r | grep -q "nova-fix"; then
-            echo "✅ Nova created a fix branch!"
-            
-            # Push the fix branch
-            NOVA_BRANCH=$(git branch | grep "nova-fix" | tr -d ' *')
-            git push origin $NOVA_BRANCH
-            
-            echo "nova_branch=$NOVA_BRANCH" >> $GITHUB_OUTPUT
+
+          # Clone Nova repository using PAT
+          echo "Cloning Nova CI-Rescue repository..."
+          git config --global url."https://${{ secrets.PAT }}@github.com/".insteadOf "https://github.com/"
+
+          # Clone Nova with proper error handling
+          if ! git clone --depth 1 https://github.com/novasolve/ci-auto-rescue.git ../nova-temp; then
+            echo "❌ Failed to clone Nova repository. Please check:"
+            echo "   1. PAT has 'repo' scope permissions"
+            echo "   2. Repository exists and is accessible"
+            exit 1
           fi
-      
+
+          cd ../nova-temp
+          # Use the specific working branch we've been developing on
+          git checkout feature/gpt5-pr-integration || git checkout development || echo "Using default branch"
+
+          # Install Nova and dependencies
+          echo "Installing Nova dependencies..."
+          pip install openai anthropic pydantic python-dotenv
+          pip install -e .
+          cd -
+
+          # Run real Nova fix
+          echo "Running Nova CI-Rescue..."
+          PYTHONPATH=../nova-temp/src python -m nova.cli fix . --max-iters 3 --timeout 300
+
+          # Check if Nova created a fix branch
+          if git branch | grep -q "nova-fix"; then
+            echo "✅ Nova created a fix branch!"
+            NOVA_BRANCH=$(git branch | grep "nova-fix" | tr -d ' *')
+            echo "nova_branch=$NOVA_BRANCH" >> $GITHUB_OUTPUT
+          else
+            echo "ℹ️ Nova completed but no fix branch was created (tests may have passed)"
+          fi
+
       - name: Run tests after Nova fix
-        if: steps.test-run.outputs.tests_passed == 'false' && github.event_name == 'push'
+        if: steps.test-run.outputs.tests_passed == 'false'
         run: |
           echo "::group::Running tests after Nova fix"
           pytest -v
           echo "::endgroup::"
           echo "✅ All tests now pass after Nova fix!"
-      
+
       - name: Create summary
         if: always()
         run: |
           echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ "${{ steps.test-run.outputs.tests_passed }}" == "true" ]; then
             echo "✅ **All tests passed on first run!**" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Initial tests failed**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
+            echo "🤖 **Nova CI-Rescue is fixing the issues!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
             if [ "${{ github.event_name }}" == "push" ]; then
-              echo "🤖 **Nova CI-Rescue ran and fixed the issues!**" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "Check the [Actions tab](../actions) for the auto-generated PR." >> $GITHUB_STEP_SUMMARY
+              echo "Nova will create a new fix branch and PR." >> $GITHUB_STEP_SUMMARY
             else
-              echo "💡 Nova auto-fix only runs on push events, not PRs." >> $GITHUB_STEP_SUMMARY
+              echo "Nova is analyzing and fixing the failures in this PR." >> $GITHUB_STEP_SUMMARY
             fi
           fi
-      
+
       - name: Upload test artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ github.run_number }}
           path: |

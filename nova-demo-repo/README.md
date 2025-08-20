@@ -57,11 +57,24 @@ nova-demo-repo/
 └── demo-script.sh        # Automated demo runner
 ```
 
-## Running the Full Demo
+## Running the Demo
 
+### Option 1: Quick GitHub Demo
 ```bash
-# Run the automated demo script
-./demo-script.sh
+# Creates a real PR with breaking changes on GitHub
+./quick-github-demo.sh
+```
+
+### Option 2: Complete Local Demo
+```bash
+# Full walkthrough with explanations
+./complete-demo.sh
+```
+
+### Option 3: Exact Documentation Flow
+```bash
+# Follows the exact steps from the Nova documentation
+./demo-exact-flow.sh
 ```
 
 This will:

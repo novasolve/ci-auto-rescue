@@ -64,7 +64,7 @@ jobs:
       
       - name: Upload Nova artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: nova-run-artifacts
           path: |
@@ -124,7 +124,7 @@ jobs:
       
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: nova-manual-run-${{ github.run_number }}
           path: ${{ github.event.inputs.target_directory }}/.nova/

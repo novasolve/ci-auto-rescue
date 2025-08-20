@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Set, Tuple
 from nova.agent.llm_client import LLMClient, parse_plan, build_planner_prompt, build_patch_prompt
 from nova.config import get_settings
+from nova.agent.llm_client_complete_fix import (
+    build_comprehensive_planner_prompt, 
+    build_complete_fix_prompt,
+    build_strict_critic_prompt,
+    parse_comprehensive_plan
+)
 
 
 class EnhancedLLMAgent:
@@ -86,9 +92,9 @@ class EnhancedLLMAgent:
             if source_path.exists():
                 source_contents[source_file] = source_path.read_text()
         
-        # Build the prompt using the helper function (now with critic feedback)
-        from nova.agent.llm_client_fixed import build_full_file_prompt, convert_full_file_to_patch
-        prompt = build_full_file_prompt(plan, failing_tests, test_contents, source_contents, critic_feedback)
+        # Use comprehensive prompt that demands complete fix
+        from nova.agent.llm_client_fixed import convert_full_file_to_patch
+        prompt = build_complete_fix_prompt(plan, failing_tests, test_contents, source_contents, critic_feedback)
         
         try:
             # Use the unified LLM client
@@ -356,14 +362,14 @@ Respond with JSON:
         if not failing_tests:
             return {"approach": "No failures to fix", "target_tests": [], "steps": []}
         
-        # Build planner prompt using helper function (now with critic feedback)
-        prompt = build_planner_prompt(failing_tests, critic_feedback)
+        # Build comprehensive planner prompt that pushes for complete solution
+        prompt = build_comprehensive_planner_prompt(failing_tests, critic_feedback)
         
         try:
             system_prompt = (
-                "You are an expert software engineer focused on making tests pass. "
-                "Analyze test failures and create clear, actionable plans to fix them. "
-                "Be specific about what needs to be fixed and how."
+                "You are an expert software engineer who MUST fix ALL test failures in ONE comprehensive solution. "
+                "Partial fixes are UNACCEPTABLE. Analyze ALL failures, find common patterns, and create a COMPLETE fix strategy. "
+                "Your plan must address EVERY SINGLE failing test in one go."
             )
             
             response = self.llm.complete(
@@ -373,8 +379,8 @@ Respond with JSON:
                 max_tokens=500
             )
             
-            # Parse the plan from the response
-            plan = parse_plan(response)
+            # Parse the comprehensive plan
+            plan = parse_comprehensive_plan(response)
             
             # Add iteration context
             plan['iteration'] = iteration

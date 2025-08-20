@@ -536,13 +536,39 @@ def fix(
                     except:
                         pass
                     
+                    # Gather reasoning logs from telemetry
+                    reasoning_logs = []
+                    if telemetry and hasattr(telemetry, 'events'):
+                        reasoning_logs = telemetry.events
+                    elif telemetry:
+                        # Try to read from telemetry files
+                        try:
+                            telemetry_dir = Path(repo_path) / ".nova"
+                            if telemetry_dir.exists():
+                                # Get the most recent run directory
+                                run_dirs = sorted([d for d in telemetry_dir.iterdir() if d.is_dir()], 
+                                                key=lambda x: x.stat().st_mtime, reverse=True)
+                                if run_dirs:
+                                    trace_file = run_dirs[0] / "trace.jsonl"
+                                    if trace_file.exists():
+                                        import json
+                                        with open(trace_file) as f:
+                                            for line in f:
+                                                try:
+                                                    reasoning_logs.append(json.loads(line))
+                                                except:
+                                                    pass
+                        except Exception as e:
+                            print(f"[yellow]Could not read reasoning logs: {e}[/yellow]")
+                    
                     # Generate PR content using GPT-5
                     console.print("[dim]Generating PR title and description...[/dim]")
                     title, description = pr_gen.generate_pr_content(
                         fixed_tests=fixed_tests,
                         patches_applied=state.patches_applied,
                         changed_files=changed_files,
-                        execution_time=execution_time
+                        execution_time=execution_time,
+                        reasoning_logs=reasoning_logs
                     )
                     
                     console.print(f"\n[bold]PR Title:[/bold] {title}")

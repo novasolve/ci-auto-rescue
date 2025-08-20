@@ -19,56 +19,63 @@ class PRGenerator:
                           fixed_tests: List[Dict],
                           patches_applied: List[str],
                           changed_files: List[str],
-                          execution_time: str) -> Tuple[str, str]:
+                          execution_time: str,
+                          reasoning_logs: Optional[List[Dict]] = None) -> Tuple[str, str]:
         """
         Use GPT-5 to generate PR title and description based on what was fixed.
         
         Returns:
             Tuple of (title, description)
         """
-        # Build context for GPT-5
-        prompt = f"""Generate a professional GitHub pull request title and description for the following automated test fixes:
+        # Get the final diff
+        final_diff = self._get_combined_diff()
+        
+        # Extract reasoning summary from logs
+        reasoning_summary = self._extract_reasoning_summary(reasoning_logs) if reasoning_logs else ""
+        
+        # Build the comprehensive prompt based on the user's template
+        prompt = f"""TASK: Write a concise pull request title and a detailed pull request description for the following code changes.
 
-FIXED TESTS ({len(fixed_tests)} total):
-"""
-        for test in fixed_tests[:5]:  # Show first 5
-            prompt += f"- {test.get('name', 'Unknown')} in {test.get('file', 'unknown file')}\n"
-        
-        if len(fixed_tests) > 5:
-            prompt += f"... and {len(fixed_tests) - 5} more\n"
-        
-        prompt += f"\nFILES CHANGED:\n"
-        for file in changed_files:
-            prompt += f"- {file}\n"
-        
-        prompt += f"\nEXECUTION TIME: {execution_time}\n"
-        prompt += f"NUMBER OF ITERATIONS: {len(patches_applied)}\n"
-        
-        # Add patch summaries if available
-        if patches_applied:
-            prompt += f"\nPATCH SUMMARY:\n"
-            for i, patch in enumerate(patches_applied[:3], 1):
-                lines = patch.split('\n')
-                # Extract what was changed
-                files_in_patch = [line[6:] for line in lines if line.startswith('--- a/')]
-                if files_in_patch:
-                    prompt += f"Iteration {i}: Fixed {', '.join(files_in_patch)}\n"
-        
-        prompt += """
-Generate:
-1. A concise PR title (max 72 chars) that summarizes what was fixed
-2. A detailed PR description in markdown that includes:
-   - Summary of what was broken and what was fixed
-   - List of specific changes made
-   - Test results (before/after)
-   - Any relevant technical details
-   - Footer with automation credits
+The code changes (diff) were made to fix failing tests. Below you have:
+- A GIT DIFF of the changes.
+- A summary of the test failures and reasoning behind the fixes.
 
-Format your response as:
-TITLE: <title here>
-DESCRIPTION:
-<description here>
-"""
+FORMAT:
+Title: <one-line PR title summarizing the change>
+
+<Multiple lines of PR description in Markdown>
+
+GUIDELINES for the PR description:
+- Start with a brief sentence or two explaining the *problem* and the *solution* at a high level.
+- Then provide details: what was changed in the code and why those changes fix the issue.
+- Reference relevant functions/files (e.g., "Adjusted logic in `calculator.py` to handle negative inputs").
+- Mention the outcome (e.g., "Now all tests pass, including X and Y that previously failed.").
+- Use bullet points for multiple changes or steps, if it improves readability.
+- Use a professional, clear tone. (Imagine a developer writing the PR.)
+- Include sections: ## Summary, ## What was fixed, ## Changes made, ## Test results, ## Technical details (if relevant)
+
+Do NOT include raw diff or implementation details that are obvious from the code – focus on intent and impact.
+
+DIFF:
+```diff
+{final_diff[:3000]}{'...(truncated)' if len(final_diff) > 3000 else ''}
+```
+
+TEST & REASONING CONTEXT:
+
+Initially failing tests: {len(fixed_tests)} tests were failing:
+{self._format_failing_tests(fixed_tests)}
+
+Fix approach: {reasoning_summary or self._extract_fix_approach(patches_applied)}
+
+Result: All {len(fixed_tests)} tests now pass after these changes.
+
+Execution details:
+- Time taken: {execution_time}
+- Iterations needed: {len(patches_applied)}
+- Files modified: {', '.join(f'`{f}`' for f in changed_files)}
+
+Now generate the PR title and body."""
         
         try:
             response = self.llm.complete(
@@ -84,42 +91,54 @@ DESCRIPTION:
             else:
                 print(f"[dim]LLM response length: {len(response)} chars[/dim]")
             
-            # Parse response
+            # Parse response based on new format
             lines = response.split('\n') if response else []
             title = ""
             description_lines = []
-            in_description = False
             
-            for line in lines:
-                if line.startswith("TITLE:"):
-                    title = line[6:].strip()
-                elif line.strip() == "DESCRIPTION:":
-                    in_description = True
-                elif in_description:
-                    description_lines.append(line)
+            # Look for "Title: " prefix
+            for i, line in enumerate(lines):
+                if line.startswith("Title: "):
+                    title = line[7:].strip()
+                    # Everything after the title line (skipping blank line) is description
+                    if i + 2 < len(lines):
+                        description_lines = lines[i + 2:]
+                    break
+                elif i == 0 and not line.startswith("Title:") and len(line) <= 72:
+                    # If first line is short and no "Title:" prefix, assume it's the title
+                    title = line.strip()
+                    if len(lines) > 2:
+                        description_lines = lines[2:]
+                    break
             
             description = '\n'.join(description_lines).strip()
             
-            # If we couldn't parse title/description, use the full response
-            if not title and not description and response:
-                # Try to extract a title from the first line
-                first_line = response.split('\n')[0] if response else ""
-                if len(first_line) <= 72:
-                    title = first_line
-                    description = '\n'.join(response.split('\n')[1:]).strip()
-                else:
-                    title = f"fix: Fix {len(fixed_tests)} failing test(s)"
-                    description = response
+            # If we couldn't parse properly, try alternative parsing
+            if not title and response:
+                # Look for any line that looks like a title
+                for line in lines[:5]:  # Check first 5 lines
+                    if line and not line.startswith("#") and len(line) <= 72:
+                        title = line.strip()
+                        # Get rest as description
+                        idx = lines.index(line)
+                        if idx + 1 < len(lines):
+                            description = '\n'.join(lines[idx + 1:]).strip()
+                        break
             
-            # Ensure we have at least a basic title and description
+            # Final fallback
             if not title:
                 title = f"fix: Fix {len(fixed_tests)} failing test(s)"
             
-            if not description:
+            if not description and response:
+                description = response
+            elif not description:
                 description = "This PR fixes failing tests in the codebase."
             
+            # Clean up the title (remove quotes if present)
+            title = title.strip('"\'`')
+            
             # Add automation footer if not present
-            if "Nova CI-Rescue" not in description:
+            if "Nova CI-Rescue" not in description and "automatically generated" not in description:
                 description += "\n\n---\n*This PR was automatically generated by [Nova CI-Rescue](https://github.com/novasolve/ci-auto-rescue) 🤖*"
             
             return title, description
@@ -244,7 +263,86 @@ The following files were modified:
             )
             
             if result.returncode == 0 and result.stdout.strip() != "[]":
-                return True
+                                    return True
             return False
         except:
             return False
+    
+    def _get_combined_diff(self) -> str:
+        """Get the combined diff of all changes against the base branch."""
+        try:
+            # First try to get diff against main/master
+            for base in ["main", "master", "HEAD~"]:
+                result = subprocess.run(
+                    ["git", "diff", f"{base}...HEAD"],
+                    capture_output=True,
+                    text=True,
+                    cwd=self.repo_path
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return result.stdout
+            
+            # Fallback to diff of staged/unstaged changes
+            result = subprocess.run(
+                ["git", "diff", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=self.repo_path
+            )
+            return result.stdout or "No diff available"
+        except Exception as e:
+            print(f"Error getting diff: {e}")
+            return "Error retrieving diff"
+    
+    def _extract_reasoning_summary(self, reasoning_logs: List[Dict]) -> str:
+        """Extract key reasoning points from Nova's logs."""
+        if not reasoning_logs:
+            return ""
+        
+        summary_points = []
+        for log in reasoning_logs:
+            if log.get("event") == "planner_complete":
+                plan = log.get("data", {}).get("plan", {})
+                if plan.get("approach"):
+                    summary_points.append(f"Approach: {plan['approach']}")
+            elif log.get("event") == "critic_approved":
+                reason = log.get("data", {}).get("reason", "")
+                if reason:
+                    summary_points.append(f"Fix rationale: {reason}")
+        
+        return " ".join(summary_points[:3])  # Limit to avoid too much text
+    
+    def _format_failing_tests(self, tests: List[Dict]) -> str:
+        """Format failing tests for the prompt."""
+        if not tests:
+            return "No test details available"
+        
+        formatted = []
+        for test in tests[:10]:  # Limit to 10 for space
+            name = test.get('name', 'Unknown')
+            file = test.get('file', 'unknown')
+            error = test.get('short_traceback', test.get('error', 'No error details'))[:100]
+            formatted.append(f"- `{name}` in {file}: {error}")
+        
+        if len(tests) > 10:
+            formatted.append(f"- ... and {len(tests) - 10} more tests")
+        
+        return "\n".join(formatted)
+    
+    def _extract_fix_approach(self, patches: List[str]) -> str:
+        """Extract fix approach from patches if no reasoning logs available."""
+        if not patches:
+            return "Automated fixes applied to resolve test failures"
+        
+        # Try to summarize based on patch content
+        changes = []
+        for patch in patches[:2]:  # Look at first 2 patches
+            lines = patch.split('\n')
+            for line in lines:
+                if line.startswith('--- a/'):
+                    file = line[6:]
+                    changes.append(f"Modified {file}")
+        
+        if changes:
+            return "Changes made to: " + ", ".join(changes[:3])
+        return "Multiple fixes applied to resolve test failures"

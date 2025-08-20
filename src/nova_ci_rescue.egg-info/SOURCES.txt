@@ -24,6 +24,7 @@ src/nova/tools/fs.py
 src/nova/tools/git.py
 src/nova/tools/http.py
 src/nova/tools/patch_fixer.py
+src/nova/tools/pr_generator.py
 src/nova/tools/sandbox.py
 src/nova_ci_rescue.egg-info/PKG-INFO
 src/nova_ci_rescue.egg-info/SOURCES.txt

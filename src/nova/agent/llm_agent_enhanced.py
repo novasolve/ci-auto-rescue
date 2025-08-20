@@ -99,15 +99,16 @@ class EnhancedLLMAgent:
         try:
             # Use the unified LLM client
             system_prompt = (
-                "You are a coding assistant who fixes source code to make tests pass. "
-                "Generate the complete corrected file contents. "
-                "Follow the exact format requested in the prompt."
-            )
+                "You are a coding assistant who MUST fix ALL test failures in ONE complete solution. "
+                "Generate the COMPLETE corrected file contents that fix ALL {0} failing tests. "
+                "Partial solutions are FAILURES. Fix EVERYTHING in one go. "
+                "Follow the exact format requested."
+            ).format(len(failing_tests))
             
             response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
-                temperature=0.2,
+                temperature=1.0,  # GPT-5 requires temperature=1
                 max_tokens=8000  # Increased to prevent truncation
             )
             
@@ -306,24 +307,12 @@ class EnhancedLLMAgent:
                 "Consider: correctness, safety, side effects, and whether it addresses the test failures."
             )
             
-            user_prompt = f"""Review this patch that attempts to fix failing tests:
-
-PATCH:
-```diff
-{patch[:1500]}
-```
-
-FAILING TESTS IT SHOULD FIX:
-{json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:3]], indent=2)}
-
-Evaluate if this patch:
-1. Actually fixes the failing tests
-2. Doesn't introduce new bugs or break existing functionality
-3. Follows good coding practices
-4. Is minimal and focused on the problem
-
-Respond with JSON:
-{{"approved": true/false, "reason": "brief explanation"}}"""
+            # Use strict critic prompt that rejects partial solutions
+            user_prompt = build_strict_critic_prompt(
+                patch, 
+                failing_tests, 
+                len(self.state.failing_tests) if hasattr(self, 'state') else len(failing_tests)
+            )
             
             response = self.llm.complete(
                 system=system_prompt,

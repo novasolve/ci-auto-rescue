@@ -71,8 +71,8 @@ jobs:
           echo "Cloning Nova CI-Rescue repository..."
           git config --global url."https://${{ secrets.PAT }}@github.com/".insteadOf "https://github.com/"
 
-          # Clone Nova with proper error handling
-          if ! git clone --depth 1 https://github.com/novasolve/ci-auto-rescue.git ../nova-temp; then
+                    # Clone Nova with proper error handling
+          if ! git clone https://github.com/novasolve/ci-auto-rescue.git ../nova-temp; then
             echo "❌ Failed to clone Nova repository. Please check:"
             echo "   1. PAT has 'repo' scope permissions"
             echo "   2. Repository exists and is accessible"
@@ -80,8 +80,8 @@ jobs:
           fi
 
           cd ../nova-temp
-          # Use the specific working branch we've been developing on
-          git checkout feature/gpt5-pr-integration || git checkout development || echo "Using default branch"
+          # Use main branch which has all our latest fixes
+          git checkout main
 
           # Install Nova and dependencies
           echo "Installing Nova dependencies..."
@@ -91,6 +91,7 @@ jobs:
 
           # Run real Nova fix
           echo "Running Nova CI-Rescue..."
+          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
           PYTHONPATH=../nova-temp/src python -m nova.cli fix . --max-iters 3 --timeout 300
 
           # Check if Nova created a fix branch

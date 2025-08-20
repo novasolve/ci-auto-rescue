@@ -149,8 +149,9 @@ def fix(
         
         # Initialize settings and telemetry
         settings = NovaSettings()
-        telemetry = JSONLLogger(settings, enabled=True)
-        telemetry.start_run(repo_path)
+        telemetry = JSONLLogger(settings, enabled=settings.enable_telemetry)
+        if settings.enable_telemetry:
+            telemetry.start_run(repo_path)
         
         # Initialize agent state
         state = AgentState(

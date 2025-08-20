@@ -34,16 +34,22 @@ class PRGenerator:
         reasoning_summary = self._extract_reasoning_summary(reasoning_logs) if reasoning_logs else ""
         
         # Build the comprehensive prompt based on the user's template
-        prompt = f"""TASK: Write a concise pull request title and a detailed pull request description for the following code changes.
+        prompt = f"""TASK: Write a compelling pull request title and a detailed pull request description for the following code changes.
 
-The code changes (diff) were made to fix failing tests. Below you have:
+The code changes (diff) were made to automatically fix failing tests. Below you have:
 - A GIT DIFF of the changes.
 - A summary of the test failures and reasoning behind the fixes.
 
 FORMAT:
-Title: <one-line PR title summarizing the change>
+Title: <strong, action-oriented PR title that emphasizes the value/impact>
 
 <Multiple lines of PR description in Markdown>
+
+GUIDELINES for the PR title:
+- Use strong action verbs (e.g., "Restore", "Repair", "Fix critical", "Resolve")
+- Be specific about what was fixed (e.g., "Restore calculator operations and error handling")
+- Convey urgency/importance when appropriate
+- Avoid generic titles like "Fix failing tests"
 
 GUIDELINES for the PR description:
 - Start with a brief sentence or two explaining the *problem* and the *solution* at a high level.

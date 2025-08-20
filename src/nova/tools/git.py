@@ -56,7 +56,7 @@ class GitBranchManager:
         return success and not output
     
     def create_fix_branch(self) -> str:
-        """Create a new nova-fix/<timestamp> branch and switch to it."""
+        """Create a new nova-auto-fix/<timestamp> branch and switch to it."""
         # Store original HEAD and branch name
         self.original_head = self._get_current_head()
         if not self.original_head:
@@ -72,7 +72,7 @@ class GitBranchManager:
                 branches = output.strip().split('\n')
                 for branch in branches:
                     branch = branch.strip().lstrip('* ')
-                    if not branch.startswith('nova-fix/'):
+                    if not branch.startswith('nova-auto-fix/'):
                         self.original_branch = branch
                         break
             if self.original_branch == "HEAD":
@@ -87,7 +87,7 @@ class GitBranchManager:
         
         # Generate branch name with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.branch_name = f"nova-fix/{timestamp}"
+        self.branch_name = f"nova-auto-fix/{timestamp}"
         
         # Create and checkout new branch
         success, output = self._run_git_command("checkout", "-b", self.branch_name)
@@ -154,7 +154,7 @@ class GitBranchManager:
             
             # First, checkout the original branch (by name, not by commit hash)
             current_branch = self._get_current_branch()
-            if current_branch and current_branch.startswith("nova-fix/"):
+            if current_branch and current_branch.startswith("nova-auto-fix/"):
                 # We're on a nova-fix branch, need to switch back to original
                 if self.original_branch and self.original_branch != "HEAD":
                     # Checkout the original branch by name
@@ -203,7 +203,7 @@ def managed_fix_branch(repo_path: Path, verbose: bool = False):
     """
     Context manager for Git branch operations during nova fix.
     
-    Creates a nova-fix/<timestamp> branch on entry, and handles cleanup on exit.
+    Creates a nova-auto-fix/<timestamp> branch on entry, and handles cleanup on exit.
     On success, leaves the branch. On failure or interrupt, hard resets to original HEAD.
     """
     manager = GitBranchManager(repo_path, verbose)

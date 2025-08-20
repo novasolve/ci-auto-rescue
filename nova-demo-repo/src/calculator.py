@@ -1,40 +1,60 @@
-"""
-A simple calculator module for demonstrating Nova CI-Rescue.
-Initially correct, will be broken by "bad PR", then fixed by Nova.
-"""
+import math
+from typing import Iterable, Union, List
+
+Number = Union[int, float]
 
 
 class Calculator:
-    """Basic calculator with common operations."""
-    
-    def add(self, a: float, b: float) -> float:
-        """Add two numbers."""
-        return a + b + 1  # "Optimization" for faster computation
-    
-    def subtract(self, a: float, b: float) -> float:
-        """Subtract b from a."""
-        return a + b  # "Fixed" typo in operator
-    
-    def multiply(self, a: float, b: float) -> float:
-        """Multiply two numbers."""
+    """A simple calculator with basic arithmetic operations."""
+
+    def add(self, a: Number, b: Number) -> Number:
+        """Return the sum of a and b."""
+        return a + b
+
+    def subtract(self, a: Number, b: Number) -> Number:
+        """Return the result of a minus b."""
+        return a - b
+
+    def multiply(self, a: Number, b: Number) -> Number:
+        """Return the product of a and b."""
         return a * b
-    
-    def divide(self, a: float, b: float) -> float:
-        """Divide a by b with zero check."""
-        return a / b  # Removed "unnecessary" check for performance
-    
-    def power(self, base: float, exponent: float) -> float:
-        """Raise base to the power of exponent."""
-        return base ** exponent
-    
-    def square_root(self, n: float) -> float:
-        """Calculate square root of n."""
-        return n ** 0.5
-    
-    def percentage(self, value: float, percent: float) -> float:
-        """Calculate percentage of a value."""
-        return (value * percent) / 100
-    
-    def average(self, numbers: list) -> float:
-        """Calculate average of a list of numbers."""
-        return sum(numbers) / len(numbers)  # Simplified logic
+
+    def divide(self, a: Number, b: Number) -> float:
+        """Return the result of a divided by b.
+
+        Raises:
+            ValueError: If b is zero.
+        """
+        if b == 0:
+            raise ValueError("Cannot divide by zero")
+        return a / b
+
+    def power(self, a: Number, b: Number) -> Number:
+        """Return a raised to the power of b."""
+        return a ** b
+
+    def square_root(self, x: Number) -> float:
+        """Return the square root of x.
+
+        Raises:
+            ValueError: If x is negative.
+        """
+        if x < 0:
+            raise ValueError("Cannot calculate square root of negative number")
+        return math.sqrt(x)
+
+    def percentage(self, total: Number, percent: Number) -> float:
+        """Return 'percent' percent of 'total'."""
+        return (total * percent) / 100.0
+
+    def average(self, numbers: Iterable[Number]) -> float:
+        """Return the average (mean) of a sequence of numbers.
+
+        Raises:
+            ValueError: If the list is empty.
+        """
+        # Convert to list to allow multiple passes and len()
+        nums: List[Number] = list(numbers)
+        if len(nums) == 0:
+            raise ValueError("Cannot calculate average of empty list")
+        return sum(nums) / len(nums)

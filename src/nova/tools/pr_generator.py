@@ -88,8 +88,6 @@ Now generate the PR title and body."""
             # Debug: log the response
             if not response:
                 print("[yellow]Warning: Empty response from LLM[/yellow]")
-            else:
-                print(f"[dim]LLM response length: {len(response)} chars[/dim]")
             
             # Parse response based on new format
             lines = response.split('\n') if response else []

@@ -65,7 +65,7 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
     console.print("[bold]Statistics:[/bold]")
     console.print(f"  • Iterations completed: {state.current_iteration}/{state.max_iterations}")
     console.print(f"  • Patches applied: {len(state.patches_applied)}")
-    console.print(f"  • Initial failures: {len(state.failing_tests) if state.failing_tests else 0}")
+    console.print(f"  • Initial failures: {state.initial_failures}")
     console.print(f"  • Remaining failures: {state.total_failures}")
     
     if state.total_failures == 0:
@@ -520,7 +520,8 @@ def fix(
                     execution_time = f"{minutes}m {seconds}s"
                     
                     # Get fixed tests and changed files
-                    fixed_tests = state.failing_tests if state.failing_tests else []
+                    # Use initial_failing_tests for PR generation (what we originally fixed)
+                    fixed_tests = state.initial_failing_tests if state.initial_failing_tests else []
                     changed_files = []
                     
                     # Get list of changed files from git
@@ -574,6 +575,19 @@ def fix(
                     console.print(f"\n[bold]PR Title:[/bold] {title}")
                     console.print(f"\n[bold]PR Description:[/bold]")
                     console.print(description[:500] + "..." if len(description) > 500 else description)
+                    
+                    # Push the branch first
+                    console.print("\n[cyan]Pushing branch to remote...[/cyan]")
+                    push_result = subprocess.run(
+                        ["git", "push", "origin", branch_name],
+                        capture_output=True,
+                        text=True,
+                        cwd=repo_path
+                    )
+                    
+                    if push_result.returncode != 0:
+                        console.print(f"[yellow]Warning: Failed to push branch: {push_result.stderr}[/yellow]")
+                        console.print("[dim]Attempting to create PR anyway...[/dim]")
                     
                     # Create the PR
                     console.print("\n[cyan]Creating pull request...[/cyan]")

@@ -19,7 +19,9 @@ class AgentState:
     
     # Test failure information
     failing_tests: List[Dict[str, Any]] = field(default_factory=list)
+    initial_failing_tests: List[Dict[str, Any]] = field(default_factory=list)  # Store original failures for PR
     total_failures: int = 0
+    initial_failures: int = 0  # Store original count for PR
     
     # Planning information
     plan: Optional[Dict[str, Any]] = None
@@ -44,6 +46,11 @@ class AgentState:
             for test in tests
         ]
         self.total_failures = len(self.failing_tests)
+        
+        # Store initial failures if this is the first time
+        if not self.initial_failing_tests:
+            self.initial_failing_tests = self.failing_tests.copy()
+            self.initial_failures = self.total_failures
     
     def get_planner_context(self) -> Dict[str, Any]:
         """Get context for the planner prompt."""

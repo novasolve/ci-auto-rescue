@@ -8,6 +8,7 @@ import requests
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+import shutil
 from nova.agent.llm_client import LLMClient
 
 
@@ -192,10 +193,12 @@ The following files were modified:
             Tuple of (success, pr_url_or_error)
         """
         try:
-            # Get GitHub token from environment
-            token = os.environ.get('GITHUB_TOKEN')
+            # Get GitHub token from environment (fallback to GH_TOKEN)
+            token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
             if not token:
-                return False, "GITHUB_TOKEN environment variable not set"
+                return False, "GITHUB_TOKEN or GH_TOKEN environment variable not set"
+            # Normalize to GITHUB_TOKEN so any subprocess tools (gh) can also use it
+            os.environ['GITHUB_TOKEN'] = token
             
             # Get repository info
             repo_info = self._get_repository_info()
@@ -227,6 +230,36 @@ The following files were modified:
                 return True, pr_url
             else:
                 error_msg = response.json().get('message', response.text)
+                # Fallback: try GitHub CLI if available
+                gh_path = shutil.which("gh")
+                if gh_path:
+                    try:
+                        # Ensure remote branch exists (should already be pushed by caller)
+                        # Use gh CLI to create PR
+                        cmd = [
+                            gh_path, "pr", "create",
+                            "--title", title,
+                            "--body", description,
+                            "--base", base_branch,
+                            "--head", branch_name,
+                        ]
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            cwd=self.repo_path,
+                            env={**os.environ, "GITHUB_TOKEN": token}
+                        )
+                        if result.returncode == 0:
+                            # Try to extract PR URL from stdout
+                            stdout = (result.stdout or "").strip()
+                            url_line = next((l for l in stdout.splitlines() if l.startswith("https://github.com/")), "")
+                            return True, (url_line or stdout or "PR created")
+                        else:
+                            cli_err = (result.stderr or result.stdout or "").strip()
+                            return False, f"Failed to create PR: {error_msg}; gh fallback error: {cli_err}"
+                    except Exception as cli_e:
+                        return False, f"Failed to create PR: {error_msg}; gh fallback exception: {cli_e}"
                 return False, f"Failed to create PR: {error_msg}"
                 
         except Exception as e:

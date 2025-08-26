@@ -41,7 +41,7 @@ class EnhancedLLMAgent:
     def find_source_files_from_test(self, test_file_path: Path) -> Set[str]:
         """
         Extract imported modules from a test file and map them to source files.
-        Robust to package-style and relative imports.
+        Robust to package-style and relative imports (e.g., `from .calculator import X`).
         """
         source_files: Set[str] = set()
         stdlib_like = {
@@ -56,7 +56,6 @@ class EnhancedLLMAgent:
             return source_files
 
         def add_candidate(module_name: str) -> None:
-            """Translate a dotted module name into filesystem candidates."""
             if not module_name:
                 return
             parts = [p for p in module_name.split('.') if p]
@@ -65,13 +64,12 @@ class EnhancedLLMAgent:
             top = parts[0]
             if top in stdlib_like:
                 return
-            dotted_path = "/".join(parts)
+            dotted = "/".join(parts)
             candidates = [
-                self.repo_path / f"{dotted_path}.py",
-                self.repo_path / dotted_path / "__init__.py",
+                self.repo_path / f"{dotted}.py",
+                self.repo_path / dotted / "__init__.py",
             ]
             leaf = parts[-1]
-            # conservative fallback search limited to a handful of hits
             candidates.extend(list(self.repo_path.glob(f"**/{leaf}.py"))[:5])
             candidates.extend(list(self.repo_path.glob(f"**/{leaf}/__init__.py"))[:5])
             for pf in candidates:
@@ -88,8 +86,6 @@ class EnhancedLLMAgent:
                 for alias in node.names:
                     add_candidate(alias.name)
             elif isinstance(node, ast.ImportFrom):
-                # For relative imports we can still use the declared module
-                # (e.g., from .calculator import X -> module 'calculator')
                 add_candidate(node.module or "")
 
         return source_files

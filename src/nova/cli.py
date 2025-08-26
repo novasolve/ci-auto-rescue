@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+from nova.tools.datetime_utils import now_utc, delta_between, seconds_between
 from rich.console import Console
 from rich.table import Table
 
@@ -82,7 +83,7 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         if isinstance(state.start_time, float):
             elapsed = time.time() - state.start_time
         else:
-            elapsed = (datetime.now() - state.start_time).total_seconds()
+            elapsed = seconds_between(now_utc(), state.start_time)
         minutes, seconds = divmod(int(elapsed), 60)
         console.print(f"  • Time elapsed: {minutes}m {seconds}s")
     
@@ -216,7 +217,7 @@ def fix(
                 timeout_seconds=timeout,
                 whole_file_mode=whole_file,
             )
-            state.start_time = datetime.now()  # Track start time for PR generation
+            state.start_time = now_utc()  # Track start time for PR generation
             
             # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
             runner = TestRunner(repo_path, verbose=verbose)
@@ -634,7 +635,7 @@ def fix(
                         if isinstance(state.start_time, float):
                             elapsed_time = time.time() - state.start_time
                         else:
-                            elapsed_time = (datetime.now() - state.start_time).total_seconds()
+                            elapsed_time = seconds_between(now_utc(), state.start_time)
                     else:
                         elapsed_time = 0
                     minutes, seconds = divmod(int(elapsed_time), 60)

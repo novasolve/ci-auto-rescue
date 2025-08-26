@@ -123,9 +123,10 @@ class LLMClient:
             
             # Handle model-specific parameters
             if "gpt-5" in self.model.lower():
-                # GPT-5 enforces temperature=1 and uses max_completion_tokens; we override any provided temperature here.
+                # GPT-5 uses max_completion_tokens instead of max_tokens
                 kwargs["max_completion_tokens"] = max_tokens
-                kwargs["temperature"] = 1  # GPT-5 only supports default temperature
+                # Use provided temperature or default
+                kwargs["temperature"] = temperature
                 # Set reasoning effort to high for maximum reasoning quality
                 kwargs["reasoning_effort"] = "high"
             else:

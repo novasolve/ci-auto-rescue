@@ -79,7 +79,15 @@ Execution details:
 - Iterations needed: {len(patches_applied)}
 - Files modified: {', '.join(f'`{f}`' for f in changed_files)}
 
-Now generate the PR title and body."""
+Now generate the PR title and body.
+
+Additionally, emphasize these changes if present:
+- Added MIT LICENSE; updated pyproject to MIT
+- Simplified README with one-command quickstart
+- Enforced global timeout (5 minutes) and max iterations (5)
+- Per-repo run frequency cap (10 minutes between runs)
+- Per-test timeout (120s) and LLM call timeout warnings/daily usage thresholds
+"""
         
         try:
             # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.

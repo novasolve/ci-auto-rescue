@@ -124,7 +124,7 @@ def fix(
         resolve_path=True,
     ),
     max_iters: int = typer.Option(
-        6,
+        5,
         "--max-iters",
         "-i",
         help="Maximum number of fix iterations",
@@ -132,7 +132,7 @@ def fix(
         max=20,
     ),
     timeout: int = typer.Option(
-        1200,
+        300,
         "--timeout",
         "-t",
         help="Overall timeout in seconds",
@@ -187,6 +187,30 @@ def fix(
     
     try:
         with nova_lock(repo_path, wait=False):
+            # Enforce per-repo run frequency cap
+            try:
+                settings = get_settings()
+                nova_dir = Path(repo_path) / ".nova"
+                nova_dir.mkdir(exist_ok=True)
+                last_run_file = nova_dir / "last_run.txt"
+                import time as _time
+                now_ts = int(_time.time())
+                if last_run_file.exists():
+                    try:
+                        last_ts = int(last_run_file.read_text().strip() or "0")
+                        if now_ts - last_ts < settings.min_repo_run_interval_sec:
+                            remaining = settings.min_repo_run_interval_sec - (now_ts - last_ts)
+                            console.print(f"[yellow]⚠️ Run frequency cap: please wait {remaining}s before running Nova again on this repo.[/yellow]")
+                            raise typer.Exit(1)
+                    except Exception:
+                        pass
+                # Record start of run
+                try:
+                    last_run_file.write_text(str(now_ts))
+                except Exception:
+                    pass
+            except Exception:
+                pass
             # Check for clean working tree before starting
             if not git_manager._check_clean_working_tree():
                 console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")

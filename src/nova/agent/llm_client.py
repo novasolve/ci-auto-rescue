@@ -5,6 +5,8 @@ Unified LLM client for Nova CI-Rescue supporting OpenAI and Anthropic.
 import json
 from typing import Dict, List, Optional, Any
 from pathlib import Path
+from datetime import datetime, timezone
+import os
 
 try:
     from openai import OpenAI
@@ -18,6 +20,7 @@ except ImportError:
 
 from nova.config import get_settings
 from nova.tools.http import AllowedHTTPClient
+import time
 
 
 class LLMClient:
@@ -107,10 +110,58 @@ class LLMClient:
         print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
         print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
         
-        if self.provider == "openai":
-            return self._complete_openai(system, user, temperature, max_tokens)
-        elif self.provider == "anthropic":
-            return self._complete_anthropic(system, user, temperature, max_tokens)
+        # Daily usage tracking and alerts
+        self._increment_daily_usage()
+        start = time.time()
+        try:
+            if self.provider == "openai":
+                return self._complete_openai(system, user, temperature, max_tokens)
+            elif self.provider == "anthropic":
+                return self._complete_anthropic(system, user, temperature, max_tokens)
+            else:
+                raise ValueError(f"Unknown provider: {self.provider}")
+        finally:
+            elapsed = time.time() - start
+            if elapsed > self.settings.llm_call_timeout_sec:
+                print(f"[Nova Warn] LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
+
+    def _usage_path(self) -> Path:
+        root = Path(os.path.expanduser("~")) / ".nova"
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        return root / "usage.json"
+
+    def _increment_daily_usage(self) -> None:
+        try:
+            path = self._usage_path()
+            data: Dict[str, Any] = {}
+            if path.exists():
+                try:
+                    data = json.loads(path.read_text() or "{}")
+                except Exception:
+                    data = {}
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            counts = data.get(today, {"calls": 0})
+            counts["calls"] = int(counts.get("calls", 0)) + 1
+            data[today] = counts
+            try:
+                path.write_text(json.dumps(data))
+            except Exception:
+                pass
+            # Alerts
+            max_calls = int(getattr(self.settings, "max_daily_llm_calls", 0) or 0)
+            warn_pct = float(getattr(self.settings, "warn_daily_llm_calls_pct", 0.8) or 0.8)
+            if max_calls > 0:
+                warn_threshold = int(max_calls * warn_pct)
+                if counts["calls"] == warn_threshold:
+                    print(f"[Nova Warn] Daily LLM calls reached {counts['calls']}/{max_calls} ({int(warn_pct*100)}%).")
+                if counts["calls"] > max_calls:
+                    print(f"[Nova Warn] Daily LLM calls exceeded limit: {counts['calls']}/{max_calls}. Consider pausing or lowering usage.")
+        except Exception:
+            # Never block on usage tracking
+            pass
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
     

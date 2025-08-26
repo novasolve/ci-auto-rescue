@@ -78,6 +78,7 @@ class TestRunner:
                 capture_output=True,
                 text=True,
                 cwd=str(self.repo_path),
+                timeout=120,
             )
             
             # Parse the JSON report

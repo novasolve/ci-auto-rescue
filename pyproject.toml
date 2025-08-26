@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Nova CI‑Rescue: automated test fixing agent (MVP)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Proprietary"}
+license = {text = "MIT"}
 authors = [{ name = "NovaSolve", email = "dev@novasolve.ai" }]
 keywords = ["LLM", "LangGraph", "CI", "pytest", "agent", "automation"]
 classifiers = [
@@ -18,7 +18,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Intended Audience :: Developers",
-  "License :: Other/Proprietary License",
+  "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
   "langgraph>=0.2.0",

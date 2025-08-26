@@ -34,9 +34,13 @@ class NovaSettings(BaseModel):
 
     # Policy and runtime settings
     allowed_domains: List[str] = Field(default_factory=_default_allowed_domains)
-    max_iters: int = 6
-    run_timeout_sec: int = 1200
-    test_timeout_sec: int = 600
+    max_iters: int = 5
+    run_timeout_sec: int = 300
+    test_timeout_sec: int = 120
+    llm_call_timeout_sec: int = 60
+    min_repo_run_interval_sec: int = 600
+    max_daily_llm_calls: int = 200
+    warn_daily_llm_calls_pct: float = 0.8
     telemetry_dir: str = "telemetry"
     enable_telemetry: bool = True  # Enable telemetry by default to save patches
     # Keep default consistent with from_env fallback:
@@ -75,9 +79,13 @@ class NovaSettings(BaseModel):
             openswe_base_url=_get("OPENSWE_BASE_URL"),
             openswe_api_key=_get("OPENSWE_API_KEY"),
             allowed_domains=allowed,
-            max_iters=_get_int("NOVA_MAX_ITERS", 6),
-            run_timeout_sec=_get_int("NOVA_RUN_TIMEOUT_SEC", 1200),
-            test_timeout_sec=_get_int("NOVA_TEST_TIMEOUT_SEC", 600),
+            max_iters=_get_int("NOVA_MAX_ITERS", 5),
+            run_timeout_sec=_get_int("NOVA_RUN_TIMEOUT_SEC", 300),
+            test_timeout_sec=_get_int("NOVA_TEST_TIMEOUT_SEC", 120),
+            llm_call_timeout_sec=_get_int("NOVA_LLM_TIMEOUT_SEC", 60),
+            min_repo_run_interval_sec=_get_int("NOVA_MIN_REPO_RUN_INTERVAL_SEC", 600),
+            max_daily_llm_calls=_get_int("NOVA_MAX_DAILY_LLM_CALLS", 200),
+            warn_daily_llm_calls_pct=float(os.environ.get("NOVA_WARN_DAILY_LLM_CALLS_PCT", 0.8)),
             telemetry_dir=os.environ.get("NOVA_TELEMETRY_DIR", "telemetry"),
             enable_telemetry=os.environ.get("NOVA_ENABLE_TELEMETRY", "false").lower() == "true",
             default_llm_model=os.environ.get("NOVA_DEFAULT_LLM_MODEL", "gpt-5-chat-latest"),

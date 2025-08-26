@@ -30,8 +30,8 @@ class AgentState:
     
     # Execution state
     current_iteration: int = 0
-    max_iterations: int = 6
-    timeout_seconds: int = 1200
+    max_iterations: int = 5
+    timeout_seconds: int = 300
     start_time: datetime = field(default_factory=datetime.now)
     current_step: int = 0  # Track step number for commits
     whole_file_mode: bool = False  # Use whole file replacement instead of patches

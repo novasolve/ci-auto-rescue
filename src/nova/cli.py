@@ -370,7 +370,17 @@ def fix(
                 
                 # Use LLM to create plan (with critic feedback if available)
                 critic_feedback = getattr(state, 'critic_feedback', None) if iteration > 1 else None
-                plan = llm_agent.create_plan(state.failing_tests, iteration, critic_feedback)
+                try:
+                    plan = llm_agent.create_plan(state.failing_tests, iteration, critic_feedback)
+                except Exception as e:
+                    # If planner failed due to persistent empty LLM response or other errors, exit early
+                    console.print(f"[red]❌ Planner failed: {e}[/red]")
+                    state.final_status = "error"
+                    telemetry.log_event("planner_fatal", {
+                        "iteration": iteration,
+                        "error": str(e),
+                    })
+                    break
                 
                 # Store plan in state for reference
                 state.plan = plan

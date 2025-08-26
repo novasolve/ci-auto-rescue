@@ -10,6 +10,7 @@ from rich.console import Console
 
 from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
+from nova.agent.llm_interface import LLMNoResponseError
 
 console = Console()
 
@@ -121,6 +122,17 @@ class PlannerNode:
             
             return plan
             
+        except LLMNoResponseError as e:
+            # Fail-fast on persistent empty LLM response with clear logs/telemetry
+            logger.log_event("planner_no_response", {
+                "iteration": iteration,
+                "error": str(e),
+                "task": "planner",
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+            console.print(f"[red]❌ Planner aborted: {e}[/red]")
+            # Re-raise so CLI can set final status and exit
+            raise
         except Exception as e:
             # Log planner error
             logger.log_event("planner_error", {

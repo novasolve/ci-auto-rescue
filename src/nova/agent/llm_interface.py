@@ -14,6 +14,21 @@ from typing import Optional
 from nova.agent.llm_client import LLMClient
 
 
+class LLMNoResponseError(Exception):
+    def __init__(self, task_type: str, model: str, provider: str, attempts: int, last_error: Optional[Exception]):
+        self.task_type = task_type
+        self.model = model
+        self.provider = provider
+        self.attempts = attempts
+        self.last_error = last_error
+        message = (
+            f"LLM returned no response after {attempts} attempt(s) "
+            f"(task={task_type}, model={model}, provider={provider}). "
+            f"Last error: {last_error!r}"
+        )
+        super().__init__(message)
+
+
 class UnifiedLLMInterface:
     """Centralized interface for all LLM interactions in Nova."""
 
@@ -189,7 +204,14 @@ class UnifiedLLMInterface:
             print(f"[Nova Debug - {task_type.title()}] ERROR: No response after {retries} attempts")
             if last_error:
                 print(f"[Nova Debug - {task_type.title()}] Last error: {last_error}")
-        return None
+        # Fail-fast: raise a descriptive exception so callers can exit early with context
+        raise LLMNoResponseError(
+            task_type=task_type,
+            model=self._model(),
+            provider=self._provider(),
+            attempts=retries,
+            last_error=last_error,
+        )
 
     # -------------------------------------------------------------------------
     # Convenience wrappers

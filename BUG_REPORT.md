@@ -207,11 +207,11 @@ To solve the source file discovery issue, implement support for a `nova.yml` con
 version: 1
 paths:
   sources:
-    - src/          # Primary source directory
-    - lib/          # Alternative source directory
+    - src/ # Primary source directory
+    - lib/ # Alternative source directory
   tests:
-    - tests/        # Test directory
-    - test/         # Alternative test directory
+    - tests/ # Test directory
+    - test/ # Alternative test directory
   exclude:
     - node_modules/
     - .venv/
@@ -219,12 +219,14 @@ paths:
 ```
 
 **Implementation**:
+
 1. Check for `nova.yml` in project root before starting
 2. Use specified paths for source file discovery
 3. Fall back to current logic if no config file exists
 4. Would fix the "No source files identified" issue immediately
 
 **Benefits**:
+
 - Projects with non-standard structures can work with Nova
 - Faster file discovery (no need to search everywhere)
 - Better support for monorepos and complex projects

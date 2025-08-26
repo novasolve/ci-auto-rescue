@@ -1,4 +1,4 @@
-app = "ci-auto-rescue-github-app"
+app = "ci-auto-rescue"
 
 [build]
   dockerfile = "github-app/Dockerfile"

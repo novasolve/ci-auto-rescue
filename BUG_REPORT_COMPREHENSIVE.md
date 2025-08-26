@@ -105,7 +105,7 @@
 ### 11. **JSON Parsing Without Proper Error Handling**
 
 - **Issue**: Silent failures in JSON parsing with broad exception handling
-- **Files**: 
+- **Files**:
   - `src/nova/runner/test_runner.py:119`
   - `src/nova/cli.py:560`
 - **Impact**: Wrong configurations or missing results without user notification
@@ -141,7 +141,7 @@
   - `demo_file_io`: Deleted utility functions needed by other tests
   - `demo_oop`: Deleted entire Employee class causing import failures
 - **Impact**: Most dangerous issue - users trust false "success" messages
-- **Causes**: 
+- **Causes**:
   - Running only subset of tests
   - Stopping after initial tests pass without full verification
   - Related to subfolder discovery issue
@@ -190,7 +190,7 @@
 ### 21. **Encoding Issues**
 
 - **Issue**: Lossy text encoding handling with `errors='replace'`
-- **Files**: 
+- **Files**:
   - `src/nova/tools/sandbox.py:109-110`
   - `src/nova/tools/fs.py:185`
 - **Impact**: Could mask real content in non-UTF-8 scenarios
@@ -245,11 +245,11 @@ To solve the source file discovery issue, implement support for a `nova.yml` con
 version: 1
 paths:
   sources:
-    - src/          # Primary source directory
-    - lib/          # Alternative source directory
+    - src/ # Primary source directory
+    - lib/ # Alternative source directory
   tests:
-    - tests/        # Test directory
-    - test/         # Alternative test directory
+    - tests/ # Test directory
+    - test/ # Alternative test directory
   exclude:
     - node_modules/
     - .venv/
@@ -257,12 +257,14 @@ paths:
 ```
 
 **Implementation**:
+
 1. Check for `nova.yml` in project root before starting
 2. Use specified paths for source file discovery
 3. Fall back to current logic if no config file exists
 4. Would fix the "No source files identified" issue immediately
 
 **Benefits**:
+
 - Projects with non-standard structures can work with Nova
 - Faster file discovery (no need to search everywhere)
 - Better support for monorepos and complex projects

@@ -104,6 +104,10 @@ class ApplyPatchNode:
             # Track the applied patch in state
             state.patches_applied.append(patch_text)
             
+            # Increment modifications counter for loop prevention
+            if hasattr(state, 'increment_modifications'):
+                state.increment_modifications()
+            
             if self.verbose:
                 console.print(f"[green]✓ Applied and committed patch (step {step_number})[/green]")
                 if changed_files:

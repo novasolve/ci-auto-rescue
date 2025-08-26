@@ -34,11 +34,6 @@ class AgentState:
     start_time: datetime = field(default_factory=datetime.now)
     current_step: int = 0  # Track step number for commits
     
-    # Loop prevention
-    used_actions: set = field(default_factory=set)  # Track (tool_name, args, modification_count)
-    modifications_count: int = 0  # Increment when files are modified
-    file_cache: Dict[str, str] = field(default_factory=dict)  # Cache file contents
-    
     # Results
     patches_applied: List[str] = field(default_factory=list)
     test_results: List[Dict[str, Any]] = field(default_factory=list)
@@ -77,11 +72,6 @@ class AgentState:
         """Increment and return the step counter for patch commits."""
         self.current_step += 1
         return self.current_step
-    
-    def increment_modifications(self) -> None:
-        """Increment modifications counter when files are changed."""
-        self.modifications_count += 1
-        self.file_cache.clear()  # Clear cache on modifications
     
     def check_timeout(self) -> bool:
         """Check if we've exceeded the timeout."""

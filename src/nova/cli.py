@@ -299,7 +299,7 @@ def fix(
             telemetry.log_event("actor_start", {"iteration": iteration})
             
             # Generate patch with plan context and critic feedback if available
-            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan, critic_feedback=critic_feedback)
+            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan, critic_feedback=critic_feedback, state=state)
             
             if not patch_diff:
                 console.print("[red]❌ Could not generate a patch[/red]")

@@ -25,12 +25,24 @@ class EnhancedLLMAgent:
         self.settings = get_settings()
         self.llm = LLMClient()  # Use the unified LLM client
     
+    def _read_file_with_cache(self, file_path: Path, state=None) -> str:
+        """Read file with caching to prevent re-reading."""
+        if state and hasattr(state, 'file_cache'):
+            cache_key = f"{file_path}_{state.modifications_count}"
+            if cache_key in state.file_cache:
+                return state.file_cache[cache_key]
+        
+        content = file_path.read_text()
+        if state and hasattr(state, 'file_cache'):
+            state.file_cache[f"{file_path}_{state.modifications_count}"] = content
+        return content
+    
     def find_source_files_from_test(self, test_file_path: Path) -> Set[str]:
         """Extract imported modules from a test file to find source files."""
         source_files = set()
         
         try:
-            test_content = test_file_path.read_text()
+            test_content = self._read_file_with_cache(test_file_path)
             
             # Find import statements using regex
             import_pattern = r'^\s*(?:from|import)\s+([\w\.]+)'
@@ -56,7 +68,7 @@ class EnhancedLLMAgent:
         
         return source_files
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None, state=None) -> Optional[str]:
         """
         Generate a patch to fix failing tests (Actor node).
         
@@ -82,7 +94,7 @@ class EnhancedLLMAgent:
             if test_file and test_file not in test_contents:
                 test_path = self.repo_path / test_file
                 if test_path.exists():
-                    test_contents[test_file] = test_path.read_text()
+                    test_contents[test_file] = self._read_file_with_cache(test_path, state)
                     # Find source files imported by this test
                     source_files.update(self.find_source_files_from_test(test_path))
         
@@ -90,7 +102,7 @@ class EnhancedLLMAgent:
         for source_file in source_files:
             source_path = self.repo_path / source_file
             if source_path.exists():
-                source_contents[source_file] = source_path.read_text()
+                source_contents[source_file] = self._read_file_with_cache(source_path, state)
         
         # Use comprehensive prompt that demands complete fix
         from nova.agent.llm_client_fixed import convert_full_file_to_patch

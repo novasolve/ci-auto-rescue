@@ -54,7 +54,8 @@ class ActorNode:
             state.failing_tests, 
             iteration, 
             plan=state.plan, 
-            critic_feedback=critic_feedback
+            critic_feedback=critic_feedback,
+            state=state
         )
         
         if not patch_diff:

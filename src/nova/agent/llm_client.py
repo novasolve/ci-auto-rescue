@@ -22,6 +22,8 @@ from nova.tools.http import AllowedHTTPClient
 
 class LLMClient:
     """Unified LLM client that supports OpenAI and Anthropic models."""
+    # One-time temperature warning for GPT-5 models
+    _warned_fixed_temp: bool = False
     
     def __init__(self):
         self.settings = get_settings()
@@ -89,7 +91,7 @@ class LLMClient:
             return "claude-3-5-sonnet-20241022"
     
     def complete(self, system: str, user: str, temperature: float = 0.3, max_tokens: int = 2000,
-                 reasoning_effort: str = "high", verbosity: str = "medium") -> str:
+                 reasoning_effort: str = "high") -> str:
         """
         Get a completion from the LLM.
         
@@ -99,7 +101,6 @@ class LLMClient:
             temperature: Sampling temperature (0-1)
             max_tokens: Maximum tokens in response
             reasoning_effort: For GPT-5: "minimal", "low", "medium", "high" (default: "high")
-            verbosity: For GPT-5: "low", "medium", "high" (default: "medium")
             
         Returns:
             The LLM's response text
@@ -108,19 +109,19 @@ class LLMClient:
         print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
         print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
         if "gpt-5" in self.model.lower():
-            print(f"[Nova Debug - LLM] GPT-5 params: reasoning_effort={reasoning_effort}, verbosity={verbosity}")
+            print(f"[Nova Debug - LLM] GPT-5 params: reasoning_effort={reasoning_effort}")
         print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
         print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
         
         if self.provider == "openai":
-            return self._complete_openai(system, user, temperature, max_tokens, reasoning_effort, verbosity)
+            return self._complete_openai(system, user, temperature, max_tokens, reasoning_effort)
         elif self.provider == "anthropic":
             return self._complete_anthropic(system, user, temperature, max_tokens)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
     
     def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int, 
-                        reasoning_effort: str = "high", verbosity: str = "medium") -> str:
+                        reasoning_effort: str = "high") -> str:
         """Complete using OpenAI API."""
         try:
             # Build base kwargs for all models
@@ -135,24 +136,18 @@ class LLMClient:
             # Handle GPT-5 specific parameters
             if "gpt-5" in self.model.lower():
                 # GPT-5 currently uses Chat Completions API with special parameters
-                if temperature != 1.0:
-                    print(f"[Nova Debug - LLM] WARNING: GPT-5 only supports temperature=1.0, but got {temperature}")
-                
+                if temperature != 1.0 and not self.__class__._warned_fixed_temp:
+                    print(f"[Nova Debug - LLM] NOTE: {self.model} enforces temperature=1.0. Overriding requested {temperature}.")
+                    self.__class__._warned_fixed_temp = True
+
+                # Enforce temperature and use standard max_tokens field
                 kwargs["temperature"] = 1.0
-                kwargs["max_completion_tokens"] = max_tokens
-                
-                # Add reasoning parameters if supported
-                # Note: These may be in beta or not yet available
-                extra_params = {}
+                kwargs["max_tokens"] = max_tokens
+
+                # Send reasoning_effort only (no response_format.*)
                 if reasoning_effort:
-                    extra_params["reasoning_effort"] = reasoning_effort
-                if verbosity:
-                    extra_params["response_format"] = {"type": "text", "verbosity": verbosity}
-                
-                # Only add extra params if they exist
-                if extra_params:
-                    kwargs.update(extra_params)
-                    print(f"[Nova Debug - LLM] Using GPT-5 with extra params: {extra_params}")
+                    kwargs["reasoning_effort"] = reasoning_effort
+                    print(f"[Nova Debug - LLM] Using GPT-5 with extra params: {'{'}'reasoning_effort': '{reasoning_effort}'{'}'}")
                 else:
                     print(f"[Nova Debug - LLM] Using GPT-5 with standard Chat Completions API")
             else:

@@ -3,6 +3,7 @@ Test runner module for capturing pytest failures.
 """
 
 import json
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -63,7 +64,9 @@ class TestRunner:
                 f"--json-report-file={json_report_path}",
                 f"--junit-xml={junit_report_path}",
                 "--tb=short",
-                "-q",  # Quiet mode
+                # Forcefully disable failfast even if -x/maxfail is set in addopts/PYTEST_ADDOPTS
+                "--maxfail=0",
+                "-q",  # Quiet mode (does not affect JSON/JUnit reports)
                 "--no-header",
                 "--no-summary",
                 "-rN",  # Don't show any summary info
@@ -108,7 +111,7 @@ class TestRunner:
             Path(junit_report_path).unlink(missing_ok=True)
     
     def _parse_json_report(self, report_path: str) -> List[FailingTest]:
-        """Parse pytest JSON report to extract failing tests."""
+        """Parse pytest JSON report to extract failing tests (call/setup/teardown)."""
         try:
             with open(report_path, 'r') as f:
                 report = json.load(f)
@@ -120,10 +123,8 @@ class TestRunner:
         # Extract failing tests from the report
         for test in report.get('tests', []):
             if test.get('outcome') in ['failed', 'error']:
-                # Extract test details
+                # --- Node/test name parsing ---
                 nodeid = test.get('nodeid', '')
-                
-                # Parse file and line from nodeid (format: path/to/test.py::TestClass::test_method)
                 if '::' in nodeid:
                     file_part, test_part = nodeid.split('::', 1)
                     test_name = test_part.replace('::', '.')
@@ -131,47 +132,89 @@ class TestRunner:
                     file_part = nodeid
                     test_name = Path(nodeid).stem
                 
-                # Normalize the file path to be relative to repo root
-                # Remove repo directory prefix if it's included in the path
-                repo_name = self.repo_path.name
-                if file_part.startswith(f"{repo_name}/"):
-                    file_part = file_part[len(repo_name)+1:]
+                # Normalize file path to be relative to repo root when possible
+                try:
+                    p = Path(file_part)
+                    if p.is_absolute():
+                        file_part = str(p.relative_to(self.repo_path))
+                    else:
+                        repo_name = self.repo_path.name
+                        if file_part.startswith(f"{repo_name}/"):
+                            file_part = file_part[len(repo_name)+1:]
+                except Exception:
+                    # If not inside repo, keep as-is
+                    pass
                 
-                # Get the traceback
-                call_info = test.get('call', {})
-                longrepr = call_info.get('longrepr', '')
+                # --- Prefer the phase that actually failed (call/setup/teardown) ---
+                phase_info = None
+                for ph in ("call", "setup", "teardown"):
+                    info = test.get(ph)
+                    if isinstance(info, dict) and info.get('outcome') in ('failed', 'error'):
+                        phase_info = info
+                        break
+                if not phase_info:
+                    phase_info = test.get("call") or test.get("setup") or test.get("teardown") or {}
                 
-                # Extract short traceback - capture up to the assertion error line
-                traceback_lines = longrepr.split('\n') if longrepr else []
-                short_trace = []
+                longrepr_obj = phase_info.get('longrepr', '')
+                
+                # Convert longrepr to a string, whether it's already a string or a structured dict
+                def _longrepr_to_text(lr: Any) -> str:
+                    if isinstance(lr, str):
+                        return lr
+                    if isinstance(lr, dict):
+                        parts = []
+                        rc = lr.get('reprcrash') or {}
+                        path = rc.get('path')
+                        lineno = rc.get('lineno')
+                        message = rc.get('message')
+                        if path or lineno or message:
+                            parts.append(f"{path or ''}:{lineno or ''}: {message or ''}".strip())
+                        tb = lr.get('reprtraceback') or {}
+                        for entry in tb.get('reprentries', []):
+                            # entries may carry formatted lines under different keys
+                            data = entry.get('data') or {}
+                            lines = data.get('lines') or entry.get('lines') or []
+                            parts.extend(lines)
+                        return "\n".join([p for p in parts if p])
+                    return str(lr) if lr is not None else ""
+                
+                longrepr_text = _longrepr_to_text(longrepr_obj)
+                traceback_lines = longrepr_text.splitlines() if longrepr_text else []
+                
+                # Build a short traceback: try up to first AssertionError line; else last few lines
+                short_lines = []
+                saw_error = False
                 for line in traceback_lines:
-                    short_trace.append(line)
-                    if line.strip().startswith("E"):  # error/exception line
+                    short_lines.append(line)
+                    if line.strip().startswith("E"):
+                        saw_error = True
                         break
-                    if len(short_trace) >= 5:
+                    if len(short_lines) >= 10:
                         break
-                short_traceback = '\n'.join(short_trace) if short_trace else 'Test failed'
+                if not saw_error and traceback_lines:
+                    short_lines = traceback_lines[-6:]
+                short_traceback = "\n".join(short_lines) if short_lines else "Test failed"
                 
-                # Try to get line number from the traceback
+                # Extract line number: prefer structured reprcrash.lineno; else regex from text
                 line_no = 0
-                for line in traceback_lines:
-                    if file_part in line and ':' in line:
-                        try:
-                            # Extract line number from traceback line like "test.py:42"
-                            parts = line.split(':')
-                            for i, part in enumerate(parts):
-                                if file_part in part and i + 1 < len(parts):
-                                    line_no = int(parts[i + 1].split()[0])
-                                    break
-                        except (ValueError, IndexError):
-                            pass
+                try:
+                    if isinstance(longrepr_obj, dict):
+                        rc = longrepr_obj.get('reprcrash') or {}
+                        if isinstance(rc.get('lineno'), int):
+                            line_no = int(rc['lineno'])
+                    if not line_no and file_part and longrepr_text:
+                        m = re.search(rf"{re.escape(file_part)}:(\d+)", longrepr_text)
+                        if m:
+                            line_no = int(m.group(1))
+                except Exception:
+                    line_no = 0
                 
                 failing_tests.append(FailingTest(
                     name=test_name,
                     file=file_part,
                     line=line_no,
                     short_traceback=short_traceback,
-                    full_traceback=longrepr,
+                    full_traceback=longrepr_text,
                 ))
         
         return failing_tests

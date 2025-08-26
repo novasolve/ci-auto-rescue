@@ -76,16 +76,47 @@ for demo_dir in demo_*/; do
         fi
         
         if [[ "$DRY_RUN" == "true" ]]; then
-            echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose --whole-file"
+            echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose --whole-file $AUTO_PR"
             successful_demos+=("$demo_name (dry-run)")
         else
+            # Ensure we're on the original branch before each demo if merging
+            if [[ "$MERGE_FIXES" == "true" ]]; then
+                cd "$REPO_ROOT"
+                git checkout "$ORIGINAL_BRANCH" --quiet
+                cd "$DEMOS_DIR"
+            fi
+            
             # Log file to capture nova output for analysis
             LOG_FILE="/tmp/nova_fix_${demo_name}.log"
             # Run Nova CI-Rescue and capture output (force colors)
             # Use whole-file mode for more reliable fixes
-            if FORCE_COLOR=1 nova fix "$DEMOS_DIR/$demo_dir" --verbose --whole-file 2>&1 | tee "$LOG_FILE"; then
+            NOVA_CMD="nova fix \"$DEMOS_DIR/$demo_dir\" --verbose --whole-file $AUTO_PR"
+            if FORCE_COLOR=1 $NOVA_CMD 2>&1 | tee "$LOG_FILE"; then
                 echo -e "${GREEN}✅ Successfully fixed: $demo_name${NC}"
                 successful_demos+=("$demo_name")
+                
+                # Extract the branch name from the log if merging
+                if [[ "$MERGE_FIXES" == "true" ]]; then
+                    BRANCH_NAME=$(grep -oE "nova-auto-fix/[0-9_]+" "$LOG_FILE" | tail -1)
+                    if [[ -n "$BRANCH_NAME" ]]; then
+                        fix_branches+=("$BRANCH_NAME:$demo_name")
+                        
+                        # Merge the fix branch back to the original branch
+                        cd "$REPO_ROOT"
+                        echo -e "${BLUE}🔀 Merging $BRANCH_NAME back to $ORIGINAL_BRANCH...${NC}"
+                        if git merge "$BRANCH_NAME" --no-edit; then
+                            echo -e "${GREEN}✓ Merged successfully${NC}"
+                            # Delete the temporary branch after successful merge
+                            git branch -d "$BRANCH_NAME" --quiet
+                            echo -e "${BLUE}🗑️  Cleaned up temporary branch${NC}"
+                        else
+                            echo -e "${RED}❌ Failed to merge $BRANCH_NAME${NC}"
+                            echo "You may need to resolve conflicts manually"
+                        fi
+                        cd "$DEMOS_DIR"
+                    fi
+                fi
+                
                 # List saved patches if any exist
                 if [[ -d "$demo_dir/.nova" ]]; then
                     echo -e "${BLUE}📄 Saved patches:${NC}"
@@ -177,8 +208,24 @@ if [[ "$DRY_RUN" == "false" && ${#successful_demos[@]} -gt 0 ]]; then
     echo -e "${BLUE}🔍 To view a specific patch:${NC}"
     echo "   cat <patch_file>"
     echo ""
-    echo -e "${BLUE}🌿 To see git branches created (if any remain):${NC}"
-    echo "   git branch | grep nova-"
+    
+    if [[ "$MERGE_FIXES" == "true" ]]; then
+        # Show current status if merging
+        echo -e "${BLUE}📊 Current Git Status:${NC}"
+        cd "$REPO_ROOT"
+        git status --short
+        echo ""
+        echo -e "${BLUE}📋 Next steps:${NC}"
+        echo "   1. Review the changes: git diff"
+        echo "   2. Commit all fixes: git add -A && git commit -m \"Fix all demo tests\""
+        echo "   3. Push to remote: git push"
+    else
+        echo -e "${BLUE}🌿 To see git branches created:${NC}"
+        echo "   git branch | grep nova-"
+        echo ""
+        echo -e "${BLUE}💡 To merge all fixes to current branch:${NC}"
+        echo "   Run again with --merge flag: $0 --merge"
+    fi
 fi
 
 # Exit with error if any demo fixes failed

@@ -51,7 +51,7 @@ class RunTestsNode:
             console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
         
         # Run tests
-        new_failures, junit_xml = runner.run_tests(max_failures=5)
+        new_failures, junit_xml = runner.run_tests()
         
         # Save test report artifact
         if telemetry and junit_xml and step_number is not None:

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pathlib import Path
+import time
 
 
 @dataclass
@@ -33,6 +34,12 @@ class AgentState:
     timeout_seconds: int = 1200
     start_time: datetime = field(default_factory=datetime.now)
     current_step: int = 0  # Track step number for commits
+    whole_file_mode: bool = False  # Use whole file replacement instead of patches
+    
+    # Loop prevention
+    used_actions: set = field(default_factory=set)  # Track (tool_name, args, modification_count)
+    modifications_count: int = 0  # Increment when files are modified
+    file_cache: Dict[str, str] = field(default_factory=dict)  # Cache file contents
     
     # Results
     patches_applied: List[str] = field(default_factory=list)
@@ -73,9 +80,18 @@ class AgentState:
         self.current_step += 1
         return self.current_step
     
+    def increment_modifications(self) -> None:
+        """Increment modifications counter when files are changed."""
+        self.modifications_count += 1
+        self.file_cache.clear()  # Clear cache on modifications
+    
     def check_timeout(self) -> bool:
         """Check if we've exceeded the timeout."""
-        elapsed = (datetime.now() - self.start_time).total_seconds()
+        from nova.tools.datetime_utils import seconds_between, now_utc
+        if isinstance(self.start_time, float):
+            elapsed = time.time() - self.start_time
+        else:
+            elapsed = seconds_between(now_utc(), self.start_time)
         return elapsed >= self.timeout_seconds
     
     def to_dict(self) -> Dict[str, Any]:
@@ -89,7 +105,7 @@ class AgentState:
             "current_iteration": self.current_iteration,
             "max_iterations": self.max_iterations,
             "timeout_seconds": self.timeout_seconds,
-            "start_time": self.start_time.isoformat(),
+            "start_time": self.start_time if isinstance(self.start_time, float) else self.start_time.isoformat(),
             "patches_applied": self.patches_applied,
             "test_results": self.test_results,
             "final_status": self.final_status,

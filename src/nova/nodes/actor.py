@@ -54,7 +54,8 @@ class ActorNode:
             state.failing_tests, 
             iteration, 
             plan=state.plan, 
-            critic_feedback=critic_feedback
+            critic_feedback=critic_feedback,
+            state=state
         )
         
         if not patch_diff:
@@ -70,10 +71,11 @@ class ActorNode:
         patch_lines = patch_diff.split('\n')
         if self.verbose:
             console.print(f"[dim]Generated patch: {len(patch_lines)} lines[/dim]")
-            # Show first few lines of patch for debugging
-            for line in patch_lines[:10]:
+            console.print("[bold cyan]Full patch content:[/bold cyan]")
+            # Show the full patch content (no line limit in verbose mode)
+            for line in patch_lines:  
                 if line.startswith('+++') or line.startswith('---'):
-                    console.print(f"[dim]  {line}[/dim]")
+                    console.print(f"[bold]  {line}[/bold]")
                 elif line.startswith('+'):
                     console.print(f"[green]  {line}[/green]")
                 elif line.startswith('-'):
@@ -89,7 +91,7 @@ class ActorNode:
                 "patch_bytes": len(patch_diff)
             })
             # Save patch artifact (before apply, so we have it even if apply fails)
-            telemetry.save_patch(state.current_step + 1, patch_diff)
+            telemetry.save_patch(iteration, patch_diff)
         
         return patch_diff
 

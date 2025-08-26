@@ -101,6 +101,12 @@ class LLMClient:
         Returns:
             The LLM's response text
         """
+        # Log the request details
+        print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
+        print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
+        print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
+        print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
+        
         if self.provider == "openai":
             return self._complete_openai(system, user, temperature, max_tokens)
         elif self.provider == "anthropic":
@@ -123,9 +129,10 @@ class LLMClient:
             
             # Handle model-specific parameters
             if "gpt-5" in self.model.lower():
-                # GPT-5 only supports temperature=1 and uses max_completion_tokens
+                # GPT-5 uses max_completion_tokens instead of max_tokens
                 kwargs["max_completion_tokens"] = max_tokens
-                kwargs["temperature"] = 1  # GPT-5 only supports default temperature
+                # GPT-5 only supports temperature=1.0
+                kwargs["temperature"] = 1.0
                 # Set reasoning effort to high for maximum reasoning quality
                 kwargs["reasoning_effort"] = "high"
             else:
@@ -133,10 +140,18 @@ class LLMClient:
                 kwargs["temperature"] = temperature
             
             response = self.client.chat.completions.create(**kwargs)
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            if content:
+                content = content.strip()
+                print(f"[Nova Debug - LLM] OpenAI response length: {len(content)} chars")
+                print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+            else:
+                print(f"[Nova Debug - LLM] WARNING: OpenAI returned None/empty content!")
+                content = ""
+            return content
                 
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
             raise
     
     def _complete_anthropic(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
@@ -151,9 +166,21 @@ class LLMClient:
                 temperature=temperature,
                 max_tokens=max_tokens
             )
-            return response.content[0].text.strip()
+            if response.content and len(response.content) > 0:
+                content = response.content[0].text
+                if content:
+                    content = content.strip()
+                    print(f"[Nova Debug - LLM] Anthropic response length: {len(content)} chars")
+                    print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+                else:
+                    print(f"[Nova Debug - LLM] WARNING: Anthropic returned None/empty text!")
+                    content = ""
+            else:
+                print(f"[Nova Debug - LLM] WARNING: Anthropic returned empty content array!")
+                content = ""
+            return content
         except Exception as e:
-            print(f"Anthropic API error: {e}")
+            print(f"[Nova Debug - LLM] Anthropic API error: {type(e).__name__}: {e}")
             raise
 
 
@@ -174,7 +201,11 @@ def parse_plan(response: str) -> Dict[str, Any]:
             end = response.rfind("}") + 1
             plan_json = json.loads(response[start:end])
             return plan_json
-        except:
+        except json.JSONDecodeError as e:
+            # JSON parsing failed, fall back to bullet parsing
+            pass
+        except Exception as e:
+            # Other unexpected error, fall back to bullet parsing
             pass
     
     # Parse numbered list or bullets

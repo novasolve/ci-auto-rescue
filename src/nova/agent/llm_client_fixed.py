@@ -1,6 +1,6 @@
 """
 Fixed version of llm_client.py that generates complete file replacements instead of patches.
-This is a temporary fix for the v0.1.0-alpha demo.
+This is a temporary fix for earlier demos.
 """
 
 from typing import Dict, Any, List, Optional

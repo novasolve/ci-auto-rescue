@@ -6,9 +6,7 @@ import json
 import tempfile
 from file_io import (
     read_file, write_file, append_to_file, count_lines,
-    read_json, write_json, read_csv_to_dict, write_csv_from_dict,
-    copy_file, get_file_size, file_exists, create_directory,
-    list_files, delete_file
+    read_json, write_json, read_csv, write_csv
 )
 
 @pytest.fixture
@@ -67,8 +65,8 @@ def test_csv_operations(temp_dir):
         {"name": "Bob", "age": 25}
     ]
     
-    write_csv_from_dict(filename, data)
-    loaded = read_csv_to_dict(filename)
+    write_csv(filename, data)
+    loaded = read_csv(filename)
     
     # Should return list of dicts
     assert isinstance(loaded[0], dict)

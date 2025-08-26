@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="4" failures="0" skipped="0" tests="4" time="0.211" timestamp="2025-08-25T18:01:54.052155-07:00" hostname="MacBook-Pro.local"><testcase classname="" name="examples.demos.demo_file_io.test_file_io" time="0.000"><error message="collection failure">ImportError while importing test module '/Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_file_io/test_file_io.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Users/seb/.pyenv/versions/3.12.3/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+demo_file_io/test_file_io.py:7: in &lt;module&gt;
+    from file_io import (
+E   ImportError: cannot import name 'read_csv_to_dict' from 'file_io' (/Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_file_io/file_io.py)</error></testcase><testcase classname="" name="examples.demos.demo_nova_test.examples.demos.demo_nova_test.test_failures" time="0.000"><error message="collection failure">import file mismatch:
+imported module 'test_failures' has this __file__ attribute:
+  /Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_llm_repo/test_failures.py
+which is not the same as the test file we want to collect:
+  /Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_nova_test/examples/demos/demo_nova_test/test_failures.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules</error></testcase><testcase classname="" name="examples.demos.demo_nova_test.test_failures" time="0.000"><error message="collection failure">import file mismatch:
+imported module 'test_failures' has this __file__ attribute:
+  /Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_llm_repo/test_failures.py
+which is not the same as the test file we want to collect:
+  /Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_nova_test/test_failures.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules</error></testcase><testcase classname="" name="examples.demos.demo_test_repo.test_failures" time="0.000"><error message="collection failure">import file mismatch:
+imported module 'test_failures' has this __file__ attribute:
+  /Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_llm_repo/test_failures.py
+which is not the same as the test file we want to collect:
+  /Users/seb/GPT5/working/ci-auto-rescue/examples/demos/demo_test_repo/test_failures.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules</error></testcase></testsuite></testsuites>

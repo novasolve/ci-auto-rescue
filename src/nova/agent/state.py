@@ -34,6 +34,7 @@ class AgentState:
     timeout_seconds: int = 1200
     start_time: datetime = field(default_factory=datetime.now)
     current_step: int = 0  # Track step number for commits
+    whole_file_mode: bool = False  # Use whole file replacement instead of patches
     
     # Loop prevention
     used_actions: set = field(default_factory=set)  # Track (tool_name, args, modification_count)
@@ -86,10 +87,11 @@ class AgentState:
     
     def check_timeout(self) -> bool:
         """Check if we've exceeded the timeout."""
+        from nova.tools.datetime_utils import seconds_between, now_utc
         if isinstance(self.start_time, float):
             elapsed = time.time() - self.start_time
         else:
-            elapsed = (datetime.now() - self.start_time).total_seconds()
+            elapsed = seconds_between(now_utc(), self.start_time)
         return elapsed >= self.timeout_seconds
     
     def to_dict(self) -> Dict[str, Any]:

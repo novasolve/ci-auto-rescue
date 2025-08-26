@@ -38,8 +38,9 @@ class NovaSettings(BaseModel):
     run_timeout_sec: int = 1200
     test_timeout_sec: int = 600
     telemetry_dir: str = "telemetry"
-    enable_telemetry: bool = False  # Disable telemetry by default
-    default_llm_model: str = "gpt-5"  # Full GPT-5 model for complex reasoning
+    enable_telemetry: bool = True  # Enable telemetry by default to save patches
+    # Keep default consistent with from_env fallback:
+    default_llm_model: str = "gpt-5-chat-latest"
 
     @classmethod
     def from_env(cls) -> "NovaSettings":
@@ -56,10 +57,15 @@ class NovaSettings(BaseModel):
             except Exception:
                 return default
 
-        # Optional override for domain allow-list via NOVA_ALLOWED_DOMAINS
+        # Optional override for domain allow-list via NOVA_ALLOWED_DOMAINS.
+        # Accepts CSV ("a.com,b.com") or JSON-like with brackets.
         domains_env = os.environ.get("NOVA_ALLOWED_DOMAINS")
         if domains_env:
-            allowed = [d.strip() for d in domains_env.split(",") if d.strip()]
+            raw = domains_env.strip()
+            if raw.startswith("[") and raw.endswith("]"):
+                # tolerate simple JSON lists without importing json
+                raw = raw.strip("[]")
+            allowed = [d.strip().strip('"').strip("'") for d in raw.split(",") if d.strip()]
         else:
             allowed = _default_allowed_domains()
 
@@ -89,4 +95,20 @@ def get_settings() -> NovaSettings:
     return _CACHED_SETTINGS
 
 
-__all__ = ["NovaSettings", "get_settings"]
+# --- Back-compat alias -------------------------------------------------------
+# Some callers import a module variable named `settings`:
+#     from nova.config import settings
+# Provide that alias while still supporting the cached getter.
+# This is initialized at import time; if you need to re-read env in tests,
+# call `_reset_settings_cache()` and re-import or reassign.
+settings: NovaSettings = get_settings()
+
+
+def _reset_settings_cache() -> None:
+    """Test helper: clear cache and refresh module-level `settings`."""
+    global _CACHED_SETTINGS, settings
+    _CACHED_SETTINGS = None
+    settings = get_settings()
+
+
+__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache"]

@@ -11,41 +11,14 @@
 #        --dry-run: Show what would be done without actually running Nova
 
 set -e  # Exit on error
+set -o pipefail  # Ensure pipeline failures are caught
 
 # Parse arguments
 DRY_RUN=false
-DEBUG=false
-PYTHON_TRACEBACK=""
-
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --dry-run)
-            DRY_RUN=true
-            echo "🔍 DRY RUN MODE - No changes will be made"
-            shift
-            ;;
-        --debug)
-            DEBUG=true
-            PYTHON_TRACEBACK="PYTHONTRACEBACK=1"
-            echo "🐛 DEBUG MODE - Full tracebacks enabled"
-            shift
-            ;;
-        -h|--help)
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --dry-run    Show what would be done without actually running"
-            echo "  --debug      Enable debug mode with full Python tracebacks"
-            echo "  -h, --help   Show this help message"
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Use -h or --help for usage information"
-            exit 1
-            ;;
-    esac
-done
+if [[ "$1" == "--dry-run" ]]; then
+    DRY_RUN=true
+    echo "🔍 DRY RUN MODE - No changes will be made"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -94,8 +67,8 @@ for demo_dir in demo_*/; do
         echo -e "${BLUE}[$current_demo/$total_demos]${NC} Processing: ${YELLOW}$demo_name${NC}"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         
-        # Check if tests exist
-        if ! find "$demo_dir" -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+        # Check if tests exist in the demo directory
+        if ! find "$demo_dir" -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
             echo -e "${YELLOW}⚠️  No test files found in $demo_name, skipping...${NC}"
             skipped_demos+=("$demo_name")
             echo ""
@@ -103,46 +76,40 @@ for demo_dir in demo_*/; do
         fi
         
         if [[ "$DRY_RUN" == "true" ]]; then
-            echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose"
+            echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose --whole-file"
             successful_demos+=("$demo_name (dry-run)")
         else
-            # Create log directory for this demo
-            LOG_DIR="$DEMOS_DIR/.nova_logs/$demo_name"
-            mkdir -p "$LOG_DIR"
-            
-            # Run Nova CI-Rescue on the demo directory with full logging
-            LOG_FILE="$LOG_DIR/nova_run_$(date +%Y%m%d_%H%M%S).log"
-            echo -e "${BLUE}📝 Logging to: ${LOG_FILE#$REPO_ROOT/}${NC}"
-            
-            # Run with full error capture
-            if $PYTHON_TRACEBACK nova fix "$DEMOS_DIR/$demo_dir" --verbose 2>&1 | tee "$LOG_FILE"; then
+            # Log file to capture nova output for analysis
+            LOG_FILE="/tmp/nova_fix_${demo_name}.log"
+            # Run Nova CI-Rescue and capture output (force colors)
+            # Use whole-file mode for more reliable fixes
+            if FORCE_COLOR=1 nova fix "$DEMOS_DIR/$demo_dir" --verbose --whole-file 2>&1 | tee "$LOG_FILE"; then
                 echo -e "${GREEN}✅ Successfully fixed: $demo_name${NC}"
                 successful_demos+=("$demo_name")
-                
-                # Save patches and telemetry
+                # List saved patches if any exist
                 if [[ -d "$demo_dir/.nova" ]]; then
-                    echo -e "${BLUE}📄 Artifacts saved:${NC}"
-                    
-                    # Copy patches to log directory
+                    echo -e "${BLUE}📄 Saved patches:${NC}"
                     find "$demo_dir/.nova" -name "*.patch" -type f 2>/dev/null | while read -r patch; do
-                        cp "$patch" "$LOG_DIR/"
-                        echo "   - Patch: ${patch#$demo_dir/}"
-                    done
-                    
-                    # Copy telemetry logs
-                    find "$demo_dir/.nova" -name "*.jsonl" -type f 2>/dev/null | while read -r jsonl; do
-                        cp "$jsonl" "$LOG_DIR/"
-                        echo "   - Telemetry: ${jsonl#$demo_dir/}"
+                        echo "   - ${patch#$demo_dir/}"
                     done
                 fi
             else
-                EXIT_CODE=$?
-                echo -e "${RED}❌ Failed to fix: $demo_name (exit code: $EXIT_CODE)${NC}"
+                echo -e "${RED}❌ Failed to fix: $demo_name${NC}"
                 failed_demos+=("$demo_name")
-                
-                # Extract error details from log
-                echo -e "${RED}📋 Error details:${NC}"
-                grep -E "Error:|Exception:|Traceback|datetime.*float|unsupported operand" "$LOG_FILE" | tail -20
+                # List any patches that were generated before failure
+                if [[ -d "$demo_dir/.nova" ]]; then
+                    echo -e "${BLUE}📄 Saved patches (attempted fixes):${NC}"
+                    find "$demo_dir/.nova" -name "*.patch" -type f 2>/dev/null | while read -r patch; do
+                        echo "   - ${patch#$demo_dir/}"
+                    done
+                fi
+                # Highlight important issues from the Nova output log
+                if [[ -f "$LOG_FILE" ]]; then
+                    if grep -q -E "No progress|^Error:|Exit Reason:" "$LOG_FILE"; then
+                        echo -e "${YELLOW}⚠️  Issues encountered during fix of $demo_name:${NC}"
+                        grep -E "No progress|^Error:|Exit Reason:" "$LOG_FILE" | sed 's/^/   - /'
+                    fi
+                fi
             fi
         fi
         
@@ -164,7 +131,7 @@ echo -e "Failed: ${RED}${#failed_demos[@]}${NC}"
 echo -e "Skipped: ${YELLOW}${#skipped_demos[@]}${NC}"
 echo ""
 
-# List results
+# List results for each category
 if [[ ${#successful_demos[@]} -gt 0 ]]; then
     echo -e "${GREEN}✅ Successfully fixed:${NC}"
     for demo in "${successful_demos[@]}"; do
@@ -189,30 +156,19 @@ if [[ ${#skipped_demos[@]} -gt 0 ]]; then
     echo ""
 fi
 
-# Log information
-if [[ "$DRY_RUN" != "true" ]]; then
-    echo -e "${BLUE}📁 Logs saved to: $DEMOS_DIR/.nova_logs/${NC}"
-    echo -e "${DIM}   Each demo has its own subdirectory with:${NC}"
-    echo -e "${DIM}   - Full execution logs${NC}"
-    echo -e "${DIM}   - Applied patches${NC}"
-    echo -e "${DIM}   - Telemetry data${NC}"
-    echo ""
-fi
-
-# Verify all tests pass
+# Verify all tests pass if not a dry run and some fixes were applied
 if [[ "$DRY_RUN" == "false" && ${#successful_demos[@]} -gt 0 ]]; then
-    echo -e "${BLUE}🧪 Running final verification...${NC}"
+    echo -e "${BLUE}🧪 Running final verification on all demos...${NC}"
     cd "$DEMOS_DIR"
-    
     if pytest . -q --tb=no 2>&1 | grep -E "(FAILED|ERROR)" > /dev/null; then
-        echo -e "${RED}⚠️  WARNING: Some tests still failing after fixes!${NC}"
-        echo "Run 'pytest examples/demos -v' to see details"
+        echo -e "${RED}⚠️  WARNING: Some tests are still failing after fixes!${NC}"
+        echo "Run 'pytest examples/demos -v' to see details."
     else
-        echo -e "${GREEN}✅ All tests passing!${NC}"
+        echo -e "${GREEN}✅ All tests passing across demos!${NC}"
     fi
 fi
 
-# Show how to review patches
+# Instructions to review patches if needed
 if [[ "$DRY_RUN" == "false" && ${#successful_demos[@]} -gt 0 ]]; then
     echo ""
     echo -e "${BLUE}📋 To review patches:${NC}"
@@ -221,11 +177,11 @@ if [[ "$DRY_RUN" == "false" && ${#successful_demos[@]} -gt 0 ]]; then
     echo -e "${BLUE}🔍 To view a specific patch:${NC}"
     echo "   cat <patch_file>"
     echo ""
-    echo -e "${BLUE}🌿 To see git branches created:${NC}"
+    echo -e "${BLUE}🌿 To see git branches created (if any remain):${NC}"
     echo "   git branch | grep nova-"
 fi
 
-# Exit with error if any demos failed
+# Exit with error if any demo fixes failed
 if [[ ${#failed_demos[@]} -gt 0 ]]; then
     exit 1
 fi

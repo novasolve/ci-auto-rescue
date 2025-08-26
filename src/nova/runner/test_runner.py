@@ -81,7 +81,7 @@ class TestRunner:
             )
             
             # Parse the JSON report
-            failing_tests = self._parse_json_report(json_report_path, max_failures)
+            failing_tests = self._parse_json_report(json_report_path)
             
             # Read the JUnit XML report if it exists
             junit_path = Path(junit_report_path)
@@ -107,7 +107,7 @@ class TestRunner:
             Path(json_report_path).unlink(missing_ok=True)
             Path(junit_report_path).unlink(missing_ok=True)
     
-    def _parse_json_report(self, report_path: str, max_failures: int) -> List[FailingTest]:
+    def _parse_json_report(self, report_path: str) -> List[FailingTest]:
         """Parse pytest JSON report to extract failing tests."""
         try:
             with open(report_path, 'r') as f:
@@ -120,9 +120,6 @@ class TestRunner:
         # Extract failing tests from the report
         for test in report.get('tests', []):
             if test.get('outcome') in ['failed', 'error']:
-                if len(failing_tests) >= max_failures:
-                    break
-                
                 # Extract test details
                 nodeid = test.get('nodeid', '')
                 
@@ -144,9 +141,16 @@ class TestRunner:
                 call_info = test.get('call', {})
                 longrepr = call_info.get('longrepr', '')
                 
-                # Extract short traceback (first few lines)
+                # Extract short traceback - capture up to the assertion error line
                 traceback_lines = longrepr.split('\n') if longrepr else []
-                short_traceback = '\n'.join(traceback_lines[:3]) if traceback_lines else 'Test failed'
+                short_trace = []
+                for line in traceback_lines:
+                    short_trace.append(line)
+                    if line.strip().startswith("E"):  # error/exception line
+                        break
+                    if len(short_trace) >= 5:
+                        break
+                short_traceback = '\n'.join(short_trace) if short_trace else 'Test failed'
                 
                 # Try to get line number from the traceback
                 line_no = 0
@@ -182,8 +186,19 @@ class TestRunner:
         
         for test in failures:
             location = f"{test.file}:{test.line}" if test.line > 0 else test.file
-            # Truncate error message for table
-            error = test.short_traceback.split('\n')[0][:50] + "..."
+            # Extract the most relevant error line (assertion or exception)
+            error_lines = test.short_traceback.split('\n')
+            error = "Test failed"
+            for line in error_lines:
+                if line.strip().startswith("E"):
+                    error = line.strip()[2:].strip()  # Remove "E " prefix
+                    break
+                elif "AssertionError" in line or "assert" in line:
+                    error = line.strip()
+                    break
+            # Truncate if too long
+            if len(error) > 80:
+                error = error[:77] + "..."
             table += f"| {test.name} | {location} | {error} |\n"
         
         return table

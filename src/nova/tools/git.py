@@ -52,9 +52,11 @@ class GitBranchManager:
         return output if success else None
     
     def _check_clean_working_tree(self) -> bool:
-        """Check if the working tree is clean."""
-        success, output = self._run_git_command("status", "--porcelain")
-        return success and not output
+        """Check if the working tree is clean (ignoring submodules and untracked files)."""
+        success, output = self._run_git_command("status", "--porcelain", "--ignore-submodules=dirty", "--untracked-files=no")
+        if not success:
+            return False
+        return output.strip() == ""
     
     def get_default_branch(self) -> str:
         """Get the default branch name (main, master, etc.)."""

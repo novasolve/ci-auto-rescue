@@ -1,0 +1,10 @@
+# Limit Docker build context to only what the Probot app needs
+*
+!github-app/
+!github-app/**/*
+!fly.toml
+
+# Always ignore local creds and env
+.certs/
+.env
+

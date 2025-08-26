@@ -1,4 +1,5 @@
 app = "ci-auto-rescue"
+primary_region = "sjc"
 
 [build]
   dockerfile = "github-app/Dockerfile"
@@ -6,31 +7,11 @@ app = "ci-auto-rescue"
 [env]
   NODE_ENV = "production"
 
-[[services]]
+[http_service]
   internal_port = 8080
-  processes = ["app"]
-  protocol = "tcp"
+  force_https = true
   auto_start_machines = true
   auto_stop_machines = true
   min_machines_running = 0
-
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 50
-    soft_limit = 25
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-  [[services.tcp_checks]]
-    interval = "15s"
-    timeout = "2s"
-    grace_period = "30s"
-    restart_limit = 0
 
 

@@ -25,6 +25,7 @@ class GitBranchManager:
         self.original_branch: Optional[str] = None  # Store original branch name
         self.branch_name: Optional[str] = None
         self._original_sigint_handler = None
+        self._handling_interrupt = False
         
     def _run_git_command(self, *args) -> Tuple[bool, str]:
         """Run a git command and return success status and output."""
@@ -242,18 +243,30 @@ class GitBranchManager:
     
     def _signal_handler(self, signum, frame):
         """Handle interrupt signal (Ctrl+C)."""
+        # Prevent recursive signal handling
+        if self._handling_interrupt:
+            return
+        
+        self._handling_interrupt = True
         console.print("\n[yellow]Interrupted! Cleaning up...[/yellow]")
+        
+        # Restore original handler before cleanup to prevent recursion
+        self.restore_signal_handler()
+        
         self.cleanup(success=False)
         sys.exit(130)  # Standard exit code for SIGINT
     
     def setup_signal_handler(self):
         """Set up signal handler for graceful cleanup on interrupt."""
-        self._original_sigint_handler = signal.signal(signal.SIGINT, self._signal_handler)
+        # Only set up if we haven't already
+        if self._original_sigint_handler is None:
+            self._original_sigint_handler = signal.signal(signal.SIGINT, self._signal_handler)
     
     def restore_signal_handler(self):
         """Restore the original signal handler."""
         if self._original_sigint_handler:
             signal.signal(signal.SIGINT, self._original_sigint_handler)
+            self._original_sigint_handler = None
 
 
 @contextmanager

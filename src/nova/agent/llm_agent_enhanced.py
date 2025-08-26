@@ -323,7 +323,7 @@ class EnhancedLLMAgent:
             user_prompt = build_strict_critic_prompt(
                 patch, 
                 failing_tests, 
-                len(self.state.failing_tests) if hasattr(self, 'state') else len(failing_tests)
+                len(failing_tests)
             )
             
             response = self.llm.complete(

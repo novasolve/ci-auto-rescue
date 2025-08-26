@@ -69,6 +69,7 @@ class ApplyPatchNode:
         error_details = None
         if not success and self.verbose:
             # Try a git apply --check to get specific error
+            patch_file = None
             try:
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
                     f.write(patch_text)
@@ -83,18 +84,19 @@ class ApplyPatchNode:
                 
                 if result.returncode != 0:
                     error_details = result.stderr or result.stdout
-                    
-                # Clean up temp file
-                try:
-                    import os
-                    os.unlink(patch_file)
-                except OSError as e:
-                    if self.verbose:
-                        from rich.console import Console
-                        console = Console()
-                        console.print(f"[dim yellow]Warning: Failed to remove temp patch file: {e}[/dim yellow]")
             except Exception as e:
                 error_details = str(e)
+            finally:
+                # Clean up temp file
+                if patch_file:
+                    try:
+                        import os
+                        os.unlink(patch_file)
+                    except OSError as e:
+                        if self.verbose:
+                            from rich.console import Console
+                            console = Console()
+                            console.print(f"[dim yellow]Warning: Failed to remove temp patch file: {e}[/dim yellow]")
         
         result = {
             "success": success,

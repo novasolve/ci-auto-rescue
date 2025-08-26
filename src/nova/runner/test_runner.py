@@ -81,7 +81,7 @@ class TestRunner:
             )
             
             # Parse the JSON report
-            failing_tests = self._parse_json_report(json_report_path, max_failures)
+            failing_tests = self._parse_json_report(json_report_path)
             
             # Read the JUnit XML report if it exists
             junit_path = Path(junit_report_path)
@@ -107,7 +107,7 @@ class TestRunner:
             Path(json_report_path).unlink(missing_ok=True)
             Path(junit_report_path).unlink(missing_ok=True)
     
-    def _parse_json_report(self, report_path: str, max_failures: int) -> List[FailingTest]:
+    def _parse_json_report(self, report_path: str) -> List[FailingTest]:
         """Parse pytest JSON report to extract failing tests."""
         try:
             with open(report_path, 'r') as f:
@@ -120,9 +120,6 @@ class TestRunner:
         # Extract failing tests from the report
         for test in report.get('tests', []):
             if test.get('outcome') in ['failed', 'error']:
-                if len(failing_tests) >= max_failures:
-                    break
-                
                 # Extract test details
                 nodeid = test.get('nodeid', '')
                 

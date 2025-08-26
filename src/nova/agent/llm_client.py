@@ -140,9 +140,9 @@ class LLMClient:
                     print(f"[Nova Debug - LLM] NOTE: {self.model} enforces temperature=1.0. Overriding requested {temperature}.")
                     self.__class__._warned_fixed_temp = True
 
-                # Enforce temperature and use standard max_tokens field
+                # Enforce temperature and use model-appropriate token cap field
                 kwargs["temperature"] = 1.0
-                kwargs["max_tokens"] = max_tokens
+                kwargs["max_completion_tokens"] = max_tokens
 
                 # Send reasoning_effort only (no response_format.*)
                 if reasoning_effort:

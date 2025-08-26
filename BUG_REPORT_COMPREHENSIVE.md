@@ -52,7 +52,18 @@
   - `examples/sample_repos/nova_demo_workspace`
 - **Status**: Cleanup script created ✅
 
-### 6. **Datetime - Float Arithmetic Error (CRITICAL - STILL BROKEN)**
+### 6. **Import Error: 'settings' from nova.config**
+
+- **Issue**: ImportError: cannot import name 'settings' from 'nova.config'
+- **Root Cause**: `nova.config` exports `get_settings()` function, not `settings` variable
+- **Files Involved**:
+  - `src/nova/config.py` - Only exports `NovaSettings` class and `get_settings()` function
+  - `src/nova/cli.py:90` - ❌ Incorrectly tries `from nova.config import settings`
+  - `src/nova/cli.py:204` - Creates local `settings = NovaSettings()` instead of using `get_settings()`
+- **Other files correctly use**: `llm_agent_enhanced.py`, `llm_client.py`, `llm_agent.py`
+- **Status**: Fixed by using `get_settings()` consistently ✅
+
+### 7. **Datetime - Float Arithmetic Error (CRITICAL - STILL BROKEN)**
 
 - **Issue**: Despite multiple fix attempts, datetime arithmetic errors still occur
 - **Error**: `unsupported operand type(s) for -: 'datetime.datetime' and 'float'`
@@ -64,7 +75,7 @@
 - **Root Cause**: There's another location performing datetime arithmetic that we haven't found
 - **Next Steps**: Need full stack trace to identify exact location
 
-### 7. **JUnit Report Path Not Interpolated**
+### 8. **JUnit Report Path Not Interpolated**
 
 - **Issue**: Missing f-string prefix causes literal `{junit_report_path}` files
 - **File**: `src/nova/runner/test_runner.py:68`
@@ -74,7 +85,7 @@
 
 ## 🟡 High Priority Issues
 
-### 8. **Patch Truncation Handling**
+### 9. **Patch Truncation Handling**
 
 - **Issue**: Fragile mechanism for handling truncated patches from LLM
 - **File**: `src/nova/tools/patch_fixer.py`
@@ -82,7 +93,7 @@
 - **Risks**: Truncated patches could lead to syntax errors or logical errors
 - **Impact**: Undermines Nova's core function of applying fixes reliably
 
-### 9. **Resource Management**
+### 10. **Resource Management**
 
 - **Issue**: Temporary files and artifacts not consistently cleaned up
 - **Details**:
@@ -91,7 +102,7 @@
   - `src/nova/runner/test_runner.py:54` - Temporary JSON report files
 - **Impact**: File clutter and potential interference between runs
 
-### 10. **JSON Parsing Without Proper Error Handling**
+### 11. **JSON Parsing Without Proper Error Handling**
 
 - **Issue**: Silent failures in JSON parsing with broad exception handling
 - **Files**: 
@@ -99,20 +110,31 @@
   - `src/nova/cli.py:560`
 - **Impact**: Wrong configurations or missing results without user notification
 
-### 11. **Race Conditions in CI Environment**
+### 12. **Race Conditions in CI Environment**
 
 - **Issue**: No locking or coordination for concurrent runs
 - **Impact**: Parallel Nova processes can conflict and corrupt each other's work
 - **Example**: Two GitHub Actions running nova fix simultaneously
 
-### 12. **Nova Cannot Find Tests in Subfolders**
+### 13. **Nova Cannot Find Tests in Subfolders**
 
 - **Issue**: Test discovery doesn't search recursively in subdirectories
 - **Example**: Running `nova fix .` at project root misses tests in nested folders
 - **Impact**: Major usability issue for real projects with organized test structures
 - **Status**: Fixed by removing path restrictions in pytest invocation ✅
 
-### 13. **Nova Creates Incomplete/Broken Fixes**
+### 14. **Test Detection Limited by pytest.ini Configuration**
+
+- **Issue**: `pytest.ini` contains `--maxfail=1` which stops pytest after first failure
+- **Root Cause**: Line 9 in `pytest.ini`: `--maxfail=1`
+- **Impact**: Nova only detects 1 failing test even when there are many
+- **Example**: `demo_broken_project` has 13 tests with bugs but Nova only sees 1
+- **Files Involved**:
+  - `pytest.ini` - Contains the limiting configuration
+  - `src/nova/runner/test_runner.py` - Runs pytest with this config
+- **Status**: Fixed by adding `--maxfail=0` to override in test runner ✅
+
+### 15. **Nova Creates Incomplete/Broken Fixes**
 
 - **Issue**: Nova reports "All tests passing" while leaving code in broken state
 - **Examples**:
@@ -126,7 +148,7 @@
 
 ## 🟠 Medium Priority Issues
 
-### 14. **Hardcoded Limits**
+### 16. **Hardcoded Limits**
 
 - **Issue**: Magic numbers and limits hardcoded throughout
 - **Examples**:
@@ -136,21 +158,21 @@
 - **Impact**: Reduces effectiveness on larger projects
 - **Recommendation**: Expose via environment variables or config
 
-### 15. **Platform-Specific Code**
+### 17. **Platform-Specific Code**
 
 - **Issue**: Assumes POSIX environment in some parts
 - **File**: `src/nova/tools/sandbox.py` (lines 79, 89, 99)
 - **Risk**: May fail on Windows
 - **Examples**: os.fork(), signals, shell behaviors
 
-### 16. **GitHub Token Permissions**
+### 18. **GitHub Token Permissions**
 
 - **Issue**: PR creation fails without proper token permissions
 - **Context**: Requires `pull-requests: write` permission
 - **Impact**: Configuration/documentation issue
 - **Resolution**: Better error messages and documentation
 
-### 17. **Shell Injection Risk**
+### 19. **Shell Injection Risk**
 
 - **File**: `examples/demos/demo_full_llm.py:21`
 - **Issue**: `subprocess.run(..., shell=True)` with string concatenation
@@ -159,13 +181,13 @@
 
 ## 🟢 Minor Issues & TODOs
 
-### 18. **Unimplemented Features**
+### 20. **Unimplemented Features**
 
 - **Observation**: Placeholders like `nova eval` command
 - **Impact**: Confusing for users discovering non-functional commands
 - **Recommendation**: Remove from help text or implement
 
-### 19. **Encoding Issues**
+### 21. **Encoding Issues**
 
 - **Issue**: Lossy text encoding handling with `errors='replace'`
 - **Files**: 
@@ -173,13 +195,13 @@
   - `src/nova/tools/fs.py:185`
 - **Impact**: Could mask real content in non-UTF-8 scenarios
 
-### 20. **Test Coverage Gaps**
+### 22. **Test Coverage Gaps**
 
 - **Observation**: No skipped or xfailed tests
 - **Impact**: May indicate missing edge case coverage
 - **Recommendation**: Add tests for known limitations
 
-### 21. **Error Message Truncation**
+### 23. **Error Message Truncation**
 
 - **Issue**: Error messages truncated to 50-200 characters
 - **Impact**: Important debugging info may be lost

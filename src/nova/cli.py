@@ -15,7 +15,7 @@ from rich.table import Table
 from nova.runner import TestRunner
 from nova.agent import AgentState
 from nova.telemetry.logger import JSONLLogger
-from nova.config import NovaSettings
+from nova.config import get_settings
 from nova.tools.git import GitBranchManager
 
 app = typer.Typer(
@@ -87,7 +87,8 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         console.print(f"  • Time elapsed: {minutes}m {seconds}s")
     
     # List saved patches if telemetry is enabled
-    from nova.config import settings
+    from nova.config import get_settings
+    settings = get_settings()
     if settings.enable_telemetry and hasattr(state, 'telemetry') and state.telemetry:
         try:
             from pathlib import Path
@@ -201,7 +202,7 @@ def fix(
             git_manager.setup_signal_handler()
             
             # Initialize settings and telemetry
-            settings = NovaSettings()
+            settings = get_settings()
             # Override telemetry setting if --no-telemetry flag is used
             telemetry_enabled = settings.enable_telemetry and not no_telemetry
             telemetry = JSONLLogger(settings, enabled=telemetry_enabled)

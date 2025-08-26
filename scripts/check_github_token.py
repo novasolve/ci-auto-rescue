@@ -13,7 +13,10 @@ import os
 import sys
 import json
 import subprocess
+<<<<<<< HEAD
 import shutil
+=======
+>>>>>>> 9a8e6f8 (chore: add scripts/check_github_token.py to verify GitHub token validity and scopes\n\n- Checks GITHUB_TOKEN/GH_TOKEN via /user and rate_limit\n- Prints user, scopes, and repo permissions if resolvable\n- Non-zero exit on failure; helpful diagnostics)
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -54,6 +57,7 @@ def get_repo_from_env_or_git(cwd: Path) -> Optional[Tuple[str, str]]:
 
 
 def main() -> int:
+<<<<<<< HEAD
     cwd = Path.cwd()
 
     # Prefer GitHub CLI auth if available and configured
@@ -99,6 +103,8 @@ def main() -> int:
             print("gh CLI present but not authenticated (gh auth login)")
 
     # Fallback to token-based check
+=======
+>>>>>>> 9a8e6f8 (chore: add scripts/check_github_token.py to verify GitHub token validity and scopes\n\n- Checks GITHUB_TOKEN/GH_TOKEN via /user and rate_limit\n- Prints user, scopes, and repo permissions if resolvable\n- Non-zero exit on failure; helpful diagnostics)
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if not token:
         print("ERROR: No GITHUB_TOKEN or GH_TOKEN in environment.")
@@ -144,6 +150,10 @@ def main() -> int:
         pass
 
     # 3) Repository access (if resolvable)
+<<<<<<< HEAD
+=======
+    cwd = Path.cwd()
+>>>>>>> 9a8e6f8 (chore: add scripts/check_github_token.py to verify GitHub token validity and scopes\n\n- Checks GITHUB_TOKEN/GH_TOKEN via /user and rate_limit\n- Prints user, scopes, and repo permissions if resolvable\n- Non-zero exit on failure; helpful diagnostics)
     repo = get_repo_from_env_or_git(cwd)
     if repo:
         owner, name = repo

@@ -90,7 +90,7 @@ class ActorNode:
                 "patch_bytes": len(patch_diff)
             })
             # Save patch artifact (before apply, so we have it even if apply fails)
-            telemetry.save_patch(state.current_step + 1, patch_diff)
+            telemetry.save_patch(iteration, patch_diff)
         
         return patch_diff
 

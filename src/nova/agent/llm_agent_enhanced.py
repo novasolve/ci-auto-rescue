@@ -117,10 +117,10 @@ class EnhancedLLMAgent:
                 "Follow the exact format requested."
             ).format(len(failing_tests))
             
+            # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
             response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
-                temperature=1.0,  # GPT-5 requires temperature=1
                 max_tokens=8000  # Increased to prevent truncation
             )
             
@@ -340,13 +340,13 @@ class EnhancedLLMAgent:
                 review_json = json.loads(response[start:end])
                 return review_json.get('approved', False), review_json.get('reason', 'No reason provided')
             
-            # Fallback to simple approval if parsing fails
-            return True, "Patch review passed (parsing failed, auto-approved)"
+            # Fallback to rejection if parsing fails
+            return False, "Patch review indeterminate (parsing failed, auto-rejected)"
             
         except Exception as e:
             print(f"Error in patch review: {e}")
-            # Default to approving if review fails (with appropriate reason)
-            return True, "Review failed, auto-approving (LLM error)"
+            # Default to rejecting if review fails
+            return False, "Review failed due to error, patch not approved"
     
     def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int, critic_feedback: Optional[str] = None) -> Dict[str, Any]:
         """

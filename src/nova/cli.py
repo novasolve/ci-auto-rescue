@@ -122,6 +122,11 @@ def fix(
         "-v",
         help="Enable verbose output",
     ),
+    auto_pr: bool = typer.Option(
+        False,
+        "--auto-pr",
+        help="Automatically create PR without prompting",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -140,6 +145,14 @@ def fix(
     state = None
     
     try:
+        # Check for clean working tree before starting
+        if not git_manager._check_clean_working_tree():
+            console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
+            from rich.prompt import Confirm
+            if not Confirm.ask("Proceed and potentially lose these changes?"):
+                console.print("[dim]Aborting nova fix due to uncommitted changes.[/dim]")
+                raise typer.Exit(1)
+        
         # Create the nova-fix branch
         branch_name = git_manager.create_fix_branch()
         console.print(f"[dim]Working on branch: {branch_name}[/dim]")
@@ -163,7 +176,7 @@ def fix(
         
         # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
         runner = TestRunner(repo_path, verbose=verbose)
-        failing_tests, initial_junit_xml = runner.run_tests(max_failures=5)
+        failing_tests, initial_junit_xml = runner.run_tests()
         
         # Save initial test report
         if initial_junit_xml:
@@ -318,7 +331,7 @@ def fix(
                 "patch_size": len(patch_lines)
             })
             # Save patch artifact (before apply, so we have it even if apply fails)
-            telemetry.save_patch(state.current_step + 1, patch_diff)
+            telemetry.save_patch(iteration, patch_diff)
             
             # 3. CRITIC: Review and approve/reject the patch
             console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
@@ -368,13 +381,20 @@ def fix(
             result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
             
             if not result["success"]:
-                console.print(f"[red]❌ Failed to apply patch[/red]")
-                state.final_status = "patch_error"
+                console.print(f"[red]❌ Failed to apply patch: {result.get('error', 'unknown error')}[/red]")
+                # Provide feedback for next iteration
+                state.critic_feedback = "Patch failed to apply – likely incorrect context."
                 telemetry.log_event("patch_error", {
                     "iteration": iteration,
-                    "step": result.get("step_number", 0)
+                    "step": result.get("step_number", 0),
+                    "error": result.get('error', 'unknown')
                 })
-                break
+                if iteration < state.max_iterations:
+                    console.print(f"[yellow]↻ Retrying with a new patch in iteration {iteration+1}...[/yellow]")
+                    continue  # go to next iteration without breaking
+                else:
+                    state.final_status = "patch_error"
+                    break
             else:
                 # Log successful patch application (only if not already done by fallback)
                 console.print(f"[green]✓ Patch applied and committed (step {result['step_number']})[/green]")
@@ -390,7 +410,7 @@ def fix(
             
             # 5. RUN TESTS: Check if the patch fixed the failures
             console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
-            new_failures, junit_xml = runner.run_tests(max_failures=5)
+            new_failures, junit_xml = runner.run_tests()
             
             # Save test report artifact
             if junit_xml:
@@ -437,6 +457,8 @@ def fix(
                 console.print(f"[green]✓ Progress: Fixed {fixed_count} test(s), {state.total_failures} remaining[/green]")
             else:
                 console.print(f"[yellow]⚠ No progress: {state.total_failures} test(s) still failing[/yellow]")
+                # Let the planner/critic know that the last patch had no effect
+                state.critic_feedback = "No progress in reducing failures – try a different approach."
             
             # Check timeout
             if state.check_timeout():
@@ -516,7 +538,13 @@ def fix(
                     console.print("\n[cyan]🤖 Using GPT-5 to generate a pull request...[/cyan]")
                     
                     # Calculate execution time
-                    elapsed_time = (datetime.now() - state.start_time).total_seconds() if hasattr(state, 'start_time') else 0
+                    if hasattr(state, 'start_time'):
+                        if isinstance(state.start_time, float):
+                            elapsed_time = time.time() - state.start_time
+                        else:
+                            elapsed_time = (datetime.now() - state.start_time).total_seconds()
+                    else:
+                        elapsed_time = 0
                     minutes, seconds = divmod(int(elapsed_time), 60)
                     execution_time = f"{minutes}m {seconds}s"
                     
@@ -526,17 +554,21 @@ def fix(
                     changed_files = []
                     
                     # Get list of changed files from git
-                    try:
-                        result = subprocess.run(
-                            ["git", "diff", "--name-only", "HEAD~" + str(len(state.patches_applied))],
-                            capture_output=True,
-                            text=True,
-                            cwd=repo_path
-                        )
-                        if result.returncode == 0:
-                            changed_files = [f for f in result.stdout.strip().split('\n') if f]
-                    except:
-                        pass
+                    num_patches = len(state.patches_applied)
+                    if num_patches > 0:
+                        try:
+                            base_ref = f"HEAD~{num_patches}"
+                            result = subprocess.run(
+                                ["git", "diff", "--name-only", base_ref],
+                                capture_output=True,
+                                text=True,
+                                cwd=repo_path
+                            )
+                            if result.returncode == 0:
+                                changed_files = [f for f in result.stdout.strip().split('\n') if f]
+                        except Exception as e:
+                            if verbose:
+                                console.print(f"[yellow]Could not list changed files: {e}[/yellow]")
                     
                     # Gather reasoning logs from telemetry
                     reasoning_logs = []
@@ -558,7 +590,8 @@ def fix(
                                             for line in f:
                                                 try:
                                                     reasoning_logs.append(json.loads(line))
-                                                except:
+                                                except json.JSONDecodeError as e:
+                                                    # Skip malformed JSON lines
                                                     pass
                         except Exception as e:
                             print(f"[yellow]Could not read reasoning logs: {e}[/yellow]")
@@ -592,11 +625,13 @@ def fix(
                     
                     # Create the PR
                     console.print("\n[cyan]Creating pull request...[/cyan]")
+                    # Detect the default branch
+                    base_branch = git_manager.get_default_branch()
                     success_pr, pr_url_or_error = pr_gen.create_pr(
                         branch_name=branch_name,
                         title=title,
                         description=description,
-                        base_branch="main",  # Could make this configurable
+                        base_branch=base_branch,
                         draft=False
                     )
                     
@@ -616,7 +651,7 @@ def fix(
         if git_manager and branch_name:
             if pr_created:
                 # Don't delete the branch if we created a PR
-                git_manager.cleanup(success=False)  # This will keep the branch
+                git_manager.cleanup(success=True)  # Preserve branch if PR was created
                 console.print(f"\n[dim]Branch '{branch_name}' preserved for PR[/dim]")
             else:
                 git_manager.cleanup(success=success)

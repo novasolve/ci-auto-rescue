@@ -30,9 +30,27 @@
   - `examples/demos/demo_test_repo`
   - `examples/sample_repos/nova_demo_workspace`
 
+### 4. **Datetime - Float Arithmetic Error (PERSISTENT)**
+
+- **Issue**: Despite attempted fixes, datetime arithmetic errors still occur
+- **Error**: `unsupported operand type(s) for -: 'datetime.datetime' and 'float'`
+- **Status**: Partially fixed - still occurring in production runs
+- **Files**:
+  - `src/nova/cli.py:519` - Fixed but issue persists
+  - `src/nova/nodes/reflect.py:52` - Fixed but needs testing
+  - Potentially other locations not yet identified
+- **Root Cause**: Inconsistent handling of `start_time` which can be either float or datetime
+
+### 5. **JUnit Report Path Not Interpolated**
+
+- **Issue**: Missing f-string prefix causes literal `{junit_report_path}` files
+- **File**: `src/nova/runner/test_runner.py:68`
+- **Impact**: Creates files named `{junit_report_path}` in demo directories
+- **Fix**: Change `"--junit-xml={junit_report_path}"` to `f"--junit-xml={junit_report_path}"`
+
 ## 🟡 High Priority Issues
 
-### 4. **Patch Truncation Handling**
+### 6. **Patch Truncation Handling**
 
 - **Issue**: Patches can be truncated but detection is fragile
 - **Files**: `src/nova/tools/patch_fixer.py`
@@ -41,7 +59,7 @@
   - Attempts to reconstruct truncated patches
   - May fail silently on corrupted patches
 
-### 5. **Resource Management**
+### 7. **Resource Management**
 
 - **Issue**: Temporary files not always cleaned up properly
 - **Files**:
@@ -49,14 +67,14 @@
   - `src/nova/tools/fs.py:414` - temp patch files in .nova directory
   - `src/nova/runner/test_runner.py:54` - temp JSON report files
 
-### 6. **JSON Parsing Without Proper Error Handling**
+### 8. **JSON Parsing Without Proper Error Handling**
 
 - **Issue**: JSON parsing that could fail on malformed data
 - **Files**:
   - `src/nova/runner/test_runner.py:119` - FileNotFoundError/JSONDecodeError
   - `src/nova/cli.py:560` - bare except on JSON parsing
 
-### 7. **Race Conditions in CI Environment**
+### 9. **Race Conditions in CI Environment**
 
 - **Issue**: No locking mechanism for parallel runs
 - **Impact**: Multiple Nova instances could conflict
@@ -64,7 +82,7 @@
 
 ## 🟠 Medium Priority Issues
 
-### 8. **Hardcoded Limits**
+### 10. **Hardcoded Limits**
 
 - **Issue**: Various hardcoded limits that should be configurable
 - **Examples**:
@@ -72,19 +90,19 @@
   - Max tokens hardcoded to 8000 in `llm_agent_enhanced.py`
   - Test failure limit of 5 in various places
 
-### 9. **Platform-Specific Code**
+### 11. **Platform-Specific Code**
 
 - **Issue**: OS-specific code without full testing
 - **Files**: `src/nova/tools/sandbox.py:79, 89, 99`
 - **Risk**: May fail on non-POSIX systems
 
-### 10. **GitHub Token Permissions**
+### 12. **GitHub Token Permissions**
 
 - **Issue**: PR creation can fail without proper permissions
 - **Documented in**: `docs/07-risks-and-guardrails.md:51`
 - **Required**: `pull-requests: write` permission
 
-### 11. **Shell Injection Risk**
+### 13. **Shell Injection Risk**
 
 - **File**: `demo_full_llm.py:21`
 - **Issue**: `subprocess.run` with `shell=True`
@@ -92,14 +110,14 @@
 
 ## 🟡 High Priority Issues (continued)
 
-### 16. **Nova Cannot Find Tests in Subfolders**
+### 18. **Nova Cannot Find Tests in Subfolders**
 
 - **Issue**: When running `nova fix .` in a parent directory, Nova reports "No failing tests found" even when subdirectories contain failing tests
 - **Impact**: Users must manually navigate to each subdirectory to fix tests
 - **Example**: Running `nova fix .` in `examples/demos/` doesn't find failing tests in `demo_file_io/`, `demo_oop/`, etc.
 - **Root Cause**: Test discovery logic may not be recursively searching subdirectories properly
 
-### 17. **Nova Creates Incomplete/Broken Fixes**
+### 19. **Nova Creates Incomplete/Broken Fixes**
 
 - **Issue**: Nova reports "All tests passing" but actually leaves the codebase in a broken state
 - **Examples Observed**:
@@ -110,24 +128,24 @@
 
 ## 🟢 Minor Issues & TODOs
 
-### 12. **Unimplemented Features**
+### 14. **Unimplemented Features**
 
 - **Eval command**: `src/nova/cli.py:661` - "Eval command not yet implemented"
 - **TODO comments**: Various TODO/FIXME markers throughout codebase
 
-### 13. **Encoding Issues**
+### 15. **Encoding Issues**
 
 - **Issue**: UTF-8 decode with 'replace' errors could hide data corruption
 - **Files**:
   - `src/nova/tools/sandbox.py:109-110`
   - `src/nova/tools/fs.py:185`
 
-### 14. **Test Coverage Gaps**
+### 16. **Test Coverage Gaps**
 
 - **Issue**: No skipped or xfailed tests found (too good to be true?)
 - **Risk**: May be missing edge case tests
 
-### 15. **Error Message Truncation**
+### 17. **Error Message Truncation**
 
 - **Issue**: Error messages truncated to 50-200 chars in various places
 - **Impact**: May lose critical debugging information

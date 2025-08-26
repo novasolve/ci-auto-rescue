@@ -3,6 +3,8 @@ Reflect node for Nova CI-Rescue agent workflow.
 """
 
 from typing import Dict, Any, Optional
+import time
+from datetime import datetime
 from rich.console import Console
 
 from nova.agent.state import AgentState
@@ -49,7 +51,11 @@ class ReflectNode:
                 "iteration": iteration,
                 "failures_before": failures_before,
                 "failures_after": failures_after,
-                "timeout_remaining": state.timeout_seconds - (state.start_time.timestamp() if state.start_time else 0)
+                "timeout_remaining": state.timeout_seconds - (
+                    (time.time() - state.start_time) if isinstance(state.start_time, float) 
+                    else (datetime.now() - state.start_time).total_seconds() if state.start_time 
+                    else 0
+                )
             })
         
         if self.verbose:

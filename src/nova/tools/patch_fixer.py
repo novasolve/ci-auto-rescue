@@ -34,10 +34,19 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
     i = 0
     
     # Check if patch appears truncated
-    if verbose and lines:
+    patch_appears_truncated = False
+    if lines:
         last_line = lines[-1].strip()
-        if last_line and not last_line.startswith(('\\', ' ', '+', '-')):
-            print(f"Warning: Patch may be truncated. Last line: '{last_line}'")
+        # Common signs of truncation
+        if (last_line and 
+            not last_line.startswith(('\\', ' ', '+', '-', '@@')) and
+            not last_line == '' and
+            '...' in last_line or 
+            'truncated' in last_line.lower() or
+            last_line.endswith(('...', '…'))):
+            patch_appears_truncated = True
+            if verbose:
+                print(f"Warning: Patch appears truncated. Last line: '{last_line}'")
     
     while i < len(lines):
         line = lines[i]
@@ -234,6 +243,14 @@ def validate_patch(patch_text: str) -> Tuple[bool, str]:
         return False, "Empty patch"
     
     lines = patch_text.split('\n')
+    
+    # Check for obvious truncation
+    if lines:
+        last_line = lines[-1].strip()
+        if (last_line and 
+            ('...' in last_line or 'truncated' in last_line.lower() or
+             last_line.endswith(('...', '…')))):
+            return False, "Patch appears to be truncated"
     
     # Check for file headers
     has_old_file = any(line.startswith('---') for line in lines)

@@ -127,6 +127,11 @@ def fix(
         "--auto-pr",
         help="Automatically create PR without prompting",
     ),
+    no_telemetry: bool = typer.Option(
+        False,
+        "--no-telemetry",
+        help="Disable telemetry collection for this run",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -144,8 +149,12 @@ def fix(
     telemetry = None
     state = None
     
+    # Check for concurrent runs
+    from nova.tools.lock import nova_lock
+    
     try:
-        # Check for clean working tree before starting
+        with nova_lock(repo_path, wait=False):
+            # Check for clean working tree before starting
         if not git_manager._check_clean_working_tree():
             console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
             from rich.prompt import Confirm
@@ -162,8 +171,10 @@ def fix(
         
         # Initialize settings and telemetry
         settings = NovaSettings()
-        telemetry = JSONLLogger(settings, enabled=settings.enable_telemetry)
-        if settings.enable_telemetry:
+        # Override telemetry setting if --no-telemetry flag is used
+        telemetry_enabled = settings.enable_telemetry and not no_telemetry
+        telemetry = JSONLLogger(settings, enabled=telemetry_enabled)
+        if telemetry_enabled:
             telemetry.start_run(repo_path)
         
         # Initialize agent state
@@ -694,8 +705,10 @@ def eval(
     console.print(f"Output directory: {output_dir}")
     
     # TODO: Implement the actual eval logic
-    console.print("[yellow]Eval command not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    console.print("[yellow]⚠️  The 'eval' command is not yet implemented.[/yellow]")
+    console.print("[dim]This command will evaluate Nova on multiple repositories to measure performance.[/dim]")
+    console.print("[dim]For now, please use 'nova fix' on individual repositories.[/dim]")
+    raise typer.Exit(0)
 
 
 @app.command()
@@ -703,7 +716,8 @@ def version():
     """
     Show Nova CI-Rescue version.
     """
-    console.print("[green]Nova CI-Rescue[/green] v0.1.0")
+    from nova import __version__
+    console.print(f"[green]Nova CI-Rescue[/green] v{__version__}")
 
 
 if __name__ == "__main__":

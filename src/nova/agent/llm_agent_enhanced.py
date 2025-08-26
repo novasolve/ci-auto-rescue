@@ -164,11 +164,14 @@ class EnhancedLLMAgent:
             response = ""
             for attempt in range(max(1, retries)):
                 try:
-                    print(f"[Nova Debug - Actor] Attempt {attempt + 1}/{retries}, max_tokens={base_tokens}")
-                    # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
+                    # Use temperature=1.0 for GPT-5 (actor needs to be creative)
+                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
+                    temp = 1.0  # Actor always uses 1.0 for creativity
+                    print(f"[Nova Debug - Actor] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens}")
                     response = self.llm.complete(
                         system=system_prompt,
                         user=prompt,
+                        temperature=temp,
                         max_tokens=base_tokens  # Increased to prevent truncation
                     )
                     if response and response.strip():
@@ -438,11 +441,14 @@ class EnhancedLLMAgent:
             last_err: Optional[Exception] = None
             for attempt in range(max(1, retries)):
                 try:
-                    print(f"[Nova Debug - Critic] Attempt {attempt + 1}/{retries}, temperature={0.1 if attempt == 0 else 0.2}, max_tokens={base_tokens + (attempt * 200)}")
+                    # Use temperature=1.0 for GPT-5
+                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
+                    temp = 1.0 if is_gpt5 else (0.1 if attempt == 0 else 0.2)
+                    print(f"[Nova Debug - Critic] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
                     response = self.llm.complete(
                         system=system_prompt,
                         user=user_prompt,
-                        temperature=0.1 if attempt == 0 else 0.2,
+                        temperature=temp,
                         max_tokens=base_tokens + (attempt * 200)
                     )
                     # Log response details
@@ -555,11 +561,14 @@ class EnhancedLLMAgent:
             response = ""
             for attempt in range(max(1, retries)):
                 try:
-                    print(f"[Nova Debug - Planner] Attempt {attempt + 1}/{retries}, temperature={0.3 if attempt == 0 else 0.4}, max_tokens={base_tokens + (attempt * 200)}")
+                    # Use temperature=1.0 for GPT-5
+                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
+                    temp = 1.0 if is_gpt5 else (0.3 if attempt == 0 else 0.4)
+                    print(f"[Nova Debug - Planner] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
                     response = self.llm.complete(
                         system=system_prompt,
                         user=prompt,
-                        temperature=0.3 if attempt == 0 else 0.4,
+                        temperature=temp,
                         max_tokens=base_tokens + (attempt * 200)
                     )
                     if response and response.strip():

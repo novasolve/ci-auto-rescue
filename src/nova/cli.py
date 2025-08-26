@@ -155,27 +155,27 @@ def fix(
     try:
         with nova_lock(repo_path, wait=False):
             # Check for clean working tree before starting
-        if not git_manager._check_clean_working_tree():
-            console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
-            from rich.prompt import Confirm
-            if not Confirm.ask("Proceed and potentially lose these changes?"):
-                console.print("[dim]Aborting nova fix due to uncommitted changes.[/dim]")
-                raise typer.Exit(1)
-        
-        # Create the nova-fix branch
-        branch_name = git_manager.create_fix_branch()
-        console.print(f"[dim]Working on branch: {branch_name}[/dim]")
-        
-        # Set up signal handler for Ctrl+C
-        git_manager.setup_signal_handler()
-        
-        # Initialize settings and telemetry
-        settings = NovaSettings()
-        # Override telemetry setting if --no-telemetry flag is used
-        telemetry_enabled = settings.enable_telemetry and not no_telemetry
-        telemetry = JSONLLogger(settings, enabled=telemetry_enabled)
-        if telemetry_enabled:
-            telemetry.start_run(repo_path)
+            if not git_manager._check_clean_working_tree():
+                console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
+                from rich.prompt import Confirm
+                if not Confirm.ask("Proceed and potentially lose these changes?"):
+                    console.print("[dim]Aborting nova fix due to uncommitted changes.[/dim]")
+                    raise typer.Exit(1)
+            
+            # Create the nova-fix branch
+            branch_name = git_manager.create_fix_branch()
+            console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+            
+            # Set up signal handler for Ctrl+C
+            git_manager.setup_signal_handler()
+            
+            # Initialize settings and telemetry
+            settings = NovaSettings()
+            # Override telemetry setting if --no-telemetry flag is used
+            telemetry_enabled = settings.enable_telemetry and not no_telemetry
+            telemetry = JSONLLogger(settings, enabled=telemetry_enabled)
+            if telemetry_enabled:
+                telemetry.start_run(repo_path)
         
         # Initialize agent state
         state = AgentState(

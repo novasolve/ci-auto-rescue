@@ -184,3 +184,14 @@ regression_tests/venvs/
 
 # Private keys
 .certs/
+.env
+venv/
+.nova/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+coverage.xml
+htmlcov/

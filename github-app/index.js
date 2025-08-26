@@ -10,30 +10,73 @@ export default (app) => {
       context.payload.check_suite?.head_sha;
     if (!headSha) return;
 
+    let checkSummary = 'Nova CI-Rescue is installed. Waiting for CI results...';
+    let checkConclusion = 'neutral';
+
+    // If a workflow run just finished and failed on a PR, try to trigger Nova workflow
+    if (context.name === 'workflow_run' && context.payload.action === 'completed') {
+      const workflowRun = context.payload.workflow_run;
+      const failed = workflowRun?.conclusion === 'failure';
+      const pr = workflowRun?.pull_requests?.[0];
+      const headBranch = workflowRun?.head_branch || pr?.head?.ref;
+
+      if (failed && pr) {
+        try {
+          // Find the Nova workflow in the repository by name or file path
+          const { data } = await context.octokit.actions.listRepoWorkflows({ owner, repo });
+          const novaWf = data.workflows.find(
+            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' || (wf?.path || '').endsWith('/nova-ci-rescue.yml')
+          );
+
+          if (novaWf) {
+            await context.octokit.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: novaWf.id,
+              ref: headBranch || 'main',
+              inputs: { pr_number: String(pr.number) },
+            });
+
+            const actionsLink = `https://github.com/${owner}/${repo}/actions/workflows/${encodeURIComponent(
+              novaWf.path.split('/').pop() || 'nova-ci-rescue.yml'
+            )}`;
+
+            checkSummary = `CI failed on PR #${pr.number}. Triggered 'Nova CI-Rescue Auto-Fix' for branch \`${headBranch}\`. View progress in Actions: ${actionsLink}`;
+          } else {
+            checkSummary =
+              "CI failed on this PR, but the 'Nova CI-Rescue Auto-Fix' workflow was not found. Add .github/workflows/nova-ci-rescue.yml to enable auto-fix.";
+          }
+        } catch (err) {
+          const message = err && err.message ? err.message : 'unknown error';
+          checkSummary = `Attempted to trigger Nova CI-Rescue but encountered an error: ${message}`;
+        }
+
+        // Leave a lightweight comment on the PR for visibility
+        try {
+          await context.octokit.issues.createComment({
+            owner,
+            repo,
+            issue_number: pr.number,
+            body: checkSummary,
+          });
+        } catch (_) {
+          // Best-effort: do not fail the handler if commenting fails
+        }
+      }
+    }
+
     await context.octokit.checks.create({
       owner,
       repo,
       name: 'Nova CI-Rescue',
       head_sha: headSha,
       status: 'completed',
-      conclusion: 'neutral',
+      conclusion: checkConclusion,
       output: {
-        title: 'CI-Rescue ran',
-        summary:
-          'This is a placeholder check. Hook your logic here (e.g., detect failures, propose fixes, open PRs).',
+        title: 'CI-Rescue',
+        summary: checkSummary,
       },
     });
-
-    const failed = context.payload.workflow_run?.conclusion === 'failure';
-    const prNumber = context.payload.pull_request?.number || context.payload.workflow_run?.pull_requests?.[0]?.number;
-    if (failed && prNumber) {
-      await context.octokit.issues.createComment({
-        owner,
-        repo,
-        issue_number: prNumber,
-        body: '⚠️ CI failed. Nova can open a fix branch or suggest remediation steps.',
-      });
-    }
   });
 };
 

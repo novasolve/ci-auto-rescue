@@ -122,6 +122,11 @@ def fix(
         "-v",
         help="Enable verbose output",
     ),
+    auto_pr: bool = typer.Option(
+        False,
+        "--auto-pr",
+        help="Automatically create PR without prompting",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -620,11 +625,13 @@ def fix(
                     
                     # Create the PR
                     console.print("\n[cyan]Creating pull request...[/cyan]")
+                    # Detect the default branch
+                    base_branch = git_manager.get_default_branch()
                     success_pr, pr_url_or_error = pr_gen.create_pr(
                         branch_name=branch_name,
                         title=title,
                         description=description,
-                        base_branch="main",  # Could make this configurable
+                        base_branch=base_branch,
                         draft=False
                     )
                     

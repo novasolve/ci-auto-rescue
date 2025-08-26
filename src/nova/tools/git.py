@@ -55,6 +55,25 @@ class GitBranchManager:
         success, output = self._run_git_command("status", "--porcelain")
         return success and not output
     
+    def get_default_branch(self) -> str:
+        """Get the default branch name (main, master, etc.)."""
+        # Try to get the default branch from origin
+        success, output = self._run_git_command("symbolic-ref", "refs/remotes/origin/HEAD")
+        if success and output:
+            # Extract branch name from refs/remotes/origin/main format
+            branch = output.replace("refs/remotes/origin/", "").strip()
+            if branch:
+                return branch
+        
+        # Fallback: check if main or master exists
+        for branch in ["main", "master"]:
+            success, _ = self._run_git_command("rev-parse", "--verify", branch)
+            if success:
+                return branch
+        
+        # Last resort: use main
+        return "main"
+    
     def create_fix_branch(self) -> str:
         """Create a new nova-auto-fix/<timestamp> branch and switch to it."""
         # Store original HEAD and branch name

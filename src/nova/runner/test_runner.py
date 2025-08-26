@@ -38,12 +38,9 @@ class TestRunner:
         self.repo_path = repo_path
         self.verbose = verbose
         
-    def run_tests(self, max_failures: int = 5) -> Tuple[List[FailingTest], Optional[str]]:
+    def run_tests(self) -> Tuple[List[FailingTest], Optional[str]]:
         """
-        Run pytest and capture failing tests.
-        
-        Args:
-            max_failures: Maximum number of failures to capture (default: 5)
+        Run pytest and capture all failing tests.
             
         Returns:
             Tuple of (List of FailingTest objects, JUnit XML report content)
@@ -62,12 +59,10 @@ class TestRunner:
             # Run pytest with JSON and JUnit reports
             cmd = [
                 "python", "-m", "pytest",
-                str(self.repo_path),
                 "--json-report",
                 f"--json-report-file={json_report_path}",
-                "--junit-xml={junit_report_path}",
+                f"--junit-xml={junit_report_path}",
                 "--tb=short",
-                f"--maxfail={max_failures}",
                 "-q",  # Quiet mode
                 "--no-header",
                 "--no-summary",

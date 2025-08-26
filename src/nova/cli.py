@@ -163,7 +163,7 @@ def fix(
         
         # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
         runner = TestRunner(repo_path, verbose=verbose)
-        failing_tests, initial_junit_xml = runner.run_tests(max_failures=5)
+        failing_tests, initial_junit_xml = runner.run_tests()
         
         # Save initial test report
         if initial_junit_xml:
@@ -318,7 +318,7 @@ def fix(
                 "patch_size": len(patch_lines)
             })
             # Save patch artifact (before apply, so we have it even if apply fails)
-            telemetry.save_patch(state.current_step + 1, patch_diff)
+            telemetry.save_patch(iteration, patch_diff)
             
             # 3. CRITIC: Review and approve/reject the patch
             console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
@@ -390,7 +390,7 @@ def fix(
             
             # 5. RUN TESTS: Check if the patch fixed the failures
             console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
-            new_failures, junit_xml = runner.run_tests(max_failures=5)
+            new_failures, junit_xml = runner.run_tests()
             
             # Save test report artifact
             if junit_xml:
@@ -516,7 +516,13 @@ def fix(
                     console.print("\n[cyan]🤖 Using GPT-5 to generate a pull request...[/cyan]")
                     
                     # Calculate execution time
-                    elapsed_time = (datetime.now() - state.start_time).total_seconds() if hasattr(state, 'start_time') else 0
+                    if hasattr(state, 'start_time'):
+                        if isinstance(state.start_time, float):
+                            elapsed_time = time.time() - state.start_time
+                        else:
+                            elapsed_time = (datetime.now() - state.start_time).total_seconds()
+                    else:
+                        elapsed_time = 0
                     minutes, seconds = divmod(int(elapsed_time), 60)
                     execution_time = f"{minutes}m {seconds}s"
                     
@@ -526,18 +532,21 @@ def fix(
                     changed_files = []
                     
                     # Get list of changed files from git
-                    try:
-                        result = subprocess.run(
-                            ["git", "diff", "--name-only", "HEAD~" + str(len(state.patches_applied))],
-                            capture_output=True,
-                            text=True,
-                            cwd=repo_path
-                        )
-                        if result.returncode == 0:
-                            changed_files = [f for f in result.stdout.strip().split('\n') if f]
-                    except Exception as e:
-                        if verbose:
-                            console.print(f"[yellow]Could not list changed files: {e}[/yellow]")
+                    num_patches = len(state.patches_applied)
+                    if num_patches > 0:
+                        try:
+                            base_ref = f"HEAD~{num_patches}"
+                            result = subprocess.run(
+                                ["git", "diff", "--name-only", base_ref],
+                                capture_output=True,
+                                text=True,
+                                cwd=repo_path
+                            )
+                            if result.returncode == 0:
+                                changed_files = [f for f in result.stdout.strip().split('\n') if f]
+                        except Exception as e:
+                            if verbose:
+                                console.print(f"[yellow]Could not list changed files: {e}[/yellow]")
                     
                     # Gather reasoning logs from telemetry
                     reasoning_logs = []
@@ -618,7 +627,7 @@ def fix(
         if git_manager and branch_name:
             if pr_created:
                 # Don't delete the branch if we created a PR
-                git_manager.cleanup(success=False)  # This will keep the branch
+                git_manager.cleanup(success=True)  # Preserve branch if PR was created
                 console.print(f"\n[dim]Branch '{branch_name}' preserved for PR[/dim]")
             else:
                 git_manager.cleanup(success=success)

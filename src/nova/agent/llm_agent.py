@@ -168,8 +168,8 @@ Respond with JSON:
             
         except Exception as e:
             print(f"Error in patch review: {e}")
-            # Default to approving if review fails
-            return True, "Review failed, auto-approving"
+            # Default to rejecting if review fails
+            return False, "Review failed due to error, patch not approved"
     
     def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int, critic_feedback: Optional[str] = None) -> Dict[str, Any]:
         """

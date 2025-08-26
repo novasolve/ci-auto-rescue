@@ -7,7 +7,7 @@ class Stack:
     
     def push(self, item):
         """Push item to stack - adds to beginning instead of end."""
-        self.items.insert(0, item)  # BUG: Should append to end
+        self.items.append(item)  # BUG: Should append to end
     
     def pop(self):
         """Pop item from stack - no empty check."""
@@ -15,11 +15,11 @@ class Stack:
     
     def peek(self):
         """Peek at top item - wrong index."""
-        return self.items[0]  # BUG: Should be [-1]
+        return self.items[-1]  # BUG: Should be [-1]
     
     def is_empty(self):
         """Check if stack is empty - inverted logic."""
-        return len(self.items) > 0  # BUG: Should be == 0
+        return len(self.items) == 0  # BUG: Should be == 0
 
 class Queue:
     """Queue implementation with bugs."""
@@ -32,11 +32,11 @@ class Queue:
     
     def dequeue(self):
         """Remove item from queue - wrong end."""
-        return self.items.pop()  # BUG: Should pop(0)
+        return self.items.pop(0)  # BUG: Should pop(0)
     
     def size(self):
         """Get queue size - off by one."""
-        return len(self.items) + 1  # BUG: Should not add 1
+        return len(self.items)  # BUG: Should not add 1
 
 class LinkedListNode:
     """Node for linked list."""
@@ -52,6 +52,9 @@ class LinkedList:
     def append(self, data):
         """Append to list - doesn't handle empty list."""
         new_node = LinkedListNode(data)
+        if self.head is None:
+            self.head = new_node
+            return
         current = self.head
         while current.next:  # BUG: Fails if head is None
             current = current.next
@@ -61,28 +64,29 @@ class LinkedList:
         """Prepend to list - doesn't update head."""
         new_node = LinkedListNode(data)
         new_node.next = self.head  # BUG: Doesn't set self.head = new_node
+        self.head = new_node
     
     def find(self, data):
         """Find data in list - wrong comparison."""
         current = self.head
         while current:
-            if current == data:  # BUG: Should be current.data == data
+            if current.data == data:  # BUG: Should be current.data == data
                 return True
             current = current.next
         return False
 
 def binary_search(arr, target):
     """Binary search with bugs."""
-    left, right = 0, len(arr)  # BUG: Should be len(arr) - 1
+    left, right = 0, len(arr) - 1  # BUG: Should be len(arr) - 1
     
     while left <= right:
         mid = (left + right) // 2
         if arr[mid] == target:
             return mid
         elif arr[mid] < target:
-            left = mid  # BUG: Should be mid + 1
+            left = mid + 1  # BUG: Should be mid + 1
         else:
-            right = mid  # BUG: Should be mid - 1
+            right = mid - 1  # BUG: Should be mid - 1
     
     return -1
 
@@ -105,7 +109,7 @@ def merge_sort(arr):
             i += 1
         else:
             result.append(right[j])
-            # BUG: Forgot to increment j
+            j += 1  # BUG: Forgot to increment j
     
     result.extend(left[i:])
     result.extend(right[j:])
@@ -118,7 +122,7 @@ def find_duplicates(arr):
     
     for item in arr:
         if item in seen:
-            seen.add(item)  # BUG: Should add to duplicates
+            duplicates.append(item)  # BUG: Should add to duplicates
         else:
             seen.add(item)
     

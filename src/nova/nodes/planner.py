@@ -74,6 +74,15 @@ class PlannerNode:
             )
             
             # Ensure plan has required structure
+            if plan is None:
+                console.print(f"[red]Planner returned None (empty LLM response).[/red]")
+                logger.log_event("planner_empty_response", {
+                    "iteration": iteration,
+                    "task": "planner",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "failing_tests_count": len(state.failing_tests),
+                })
+                plan = {}
             if not isinstance(plan, dict):
                 plan = {
                     "approach": "Fix failing tests",

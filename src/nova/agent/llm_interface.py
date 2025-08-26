@@ -158,8 +158,14 @@ class UnifiedLLMInterface:
                         print(f"[Nova Debug - {task_type.title()}] Received {len(str(response))} chars")
                     return response
 
-                if self.verbose:
-                    print(f"[Nova Debug - {task_type.title()}] WARNING: Empty response on attempt {attempt+1}")
+                # Empty response case — log deeper debug info
+                resp_type = type(response).__name__
+                resp_preview = str(response)[:200] if response else "None"
+                print(
+                    f"[Nova Debug - {task_type.title()}] WARNING: Empty response on attempt {attempt+1} "
+                    f"(model={self._model()}, provider={self._provider()}, "
+                    f"tokens={current_tokens}, temp={temperature}, type={resp_type}, preview={resp_preview!r})"
+                )
 
             except Exception as e:
                 last_error = e

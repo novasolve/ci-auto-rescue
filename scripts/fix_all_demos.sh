@@ -7,18 +7,34 @@
 # 
 # Patches are saved in each demo's .nova directory for review.
 #
-# Usage: ./scripts/fix_all_demos.sh [--dry-run]
+# Usage: ./scripts/fix_all_demos.sh [--dry-run] [--no-auto-pr] [--merge]
 #        --dry-run: Show what would be done without actually running Nova
+#        --no-auto-pr: Disable automatic PR creation (enabled by default)
+#        --merge: Merge fix branches back to current branch
 
 set -e  # Exit on error
 set -o pipefail  # Ensure pipeline failures are caught
 
 # Parse arguments
 DRY_RUN=false
-if [[ "$1" == "--dry-run" ]]; then
-    DRY_RUN=true
-    echo "🔍 DRY RUN MODE - No changes will be made"
-fi
+AUTO_PR="--auto-pr"  # Default to auto PR creation
+MERGE_FIXES=false
+for arg in "$@"; do
+    case $arg in
+        --dry-run)
+            DRY_RUN=true
+            echo "🔍 DRY RUN MODE - No changes will be made"
+            ;;
+        --no-auto-pr)
+            AUTO_PR=""
+            echo "📌 AUTO PR DISABLED - Will not create PRs"
+            ;;
+        --merge)
+            MERGE_FIXES=true
+            echo "🔀 MERGE MODE - Will merge fixes back to current branch"
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,10 +47,19 @@ NC='\033[0m' # No Color
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEMOS_DIR="$REPO_ROOT/examples/demos"
 
+# Store the original branch if merging
+ORIGINAL_BRANCH=""
+if [[ "$MERGE_FIXES" == "true" ]]; then
+    ORIGINAL_BRANCH=$(cd "$REPO_ROOT" && git rev-parse --abbrev-ref HEAD)
+fi
+
 echo -e "${BLUE}Nova CI-Rescue Automated Demo Fixer${NC}"
 echo "====================================="
 echo "Repository: $REPO_ROOT"
 echo "Demos directory: $DEMOS_DIR"
+if [[ -n "$ORIGINAL_BRANCH" ]]; then
+    echo "Current branch: $ORIGINAL_BRANCH"
+fi
 echo ""
 
 # Check if nova is available
@@ -43,10 +68,34 @@ if ! command -v nova &> /dev/null; then
     exit 1
 fi
 
+# Check GitHub auth if --auto-pr is set
+if [[ -n "$AUTO_PR" ]]; then
+    echo -e "${BLUE}🔐 Checking GitHub authentication...${NC}"
+    if command -v gh &> /dev/null && gh auth status --hostname github.com &>/dev/null; then
+        echo -e "${GREEN}✓ GitHub CLI authenticated${NC}"
+    elif [[ -n "$GITHUB_TOKEN" ]] || [[ -n "$GH_TOKEN" ]]; then
+        echo -e "${GREEN}✓ GitHub token available${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Warning: No GitHub authentication found${NC}"
+        echo -e "${YELLOW}   PR creation may fail. To fix this:${NC}"
+        echo -e "${YELLOW}   Option 1: Run 'gh auth login'${NC}"
+        echo -e "${YELLOW}   Option 2: Set GITHUB_TOKEN environment variable${NC}"
+        echo ""
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Aborted."
+            exit 1
+        fi
+    fi
+    echo ""
+fi
+
 # Track results
 declare -a successful_demos=()
 declare -a failed_demos=()
 declare -a skipped_demos=()
+declare -a fix_branches=()
 
 # Change to demos directory
 cd "$DEMOS_DIR"
@@ -76,7 +125,7 @@ for demo_dir in demo_*/; do
         fi
         
         if [[ "$DRY_RUN" == "true" ]]; then
-            echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose --whole-file $AUTO_PR"
+            echo "Would run: nova fix $DEMOS_DIR/$demo_dir --verbose --whole-file $AUTO_PR"
             successful_demos+=("$demo_name (dry-run)")
         else
             # Ensure we're on the original branch before each demo if merging
@@ -90,8 +139,7 @@ for demo_dir in demo_*/; do
             LOG_FILE="/tmp/nova_fix_${demo_name}.log"
             # Run Nova CI-Rescue and capture output (force colors)
             # Use whole-file mode for more reliable fixes
-            NOVA_CMD="nova fix \"$DEMOS_DIR/$demo_dir\" --verbose --whole-file $AUTO_PR"
-            if FORCE_COLOR=1 $NOVA_CMD 2>&1 | tee "$LOG_FILE"; then
+            if FORCE_COLOR=1 nova fix "$DEMOS_DIR/$demo_dir" --verbose --whole-file $AUTO_PR 2>&1 | tee "$LOG_FILE"; then
                 echo -e "${GREEN}✅ Successfully fixed: $demo_name${NC}"
                 successful_demos+=("$demo_name")
                 

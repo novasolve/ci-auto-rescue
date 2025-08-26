@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import subprocess
+import shutil
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -53,6 +54,51 @@ def get_repo_from_env_or_git(cwd: Path) -> Optional[Tuple[str, str]]:
 
 
 def main() -> int:
+    cwd = Path.cwd()
+
+    # Prefer GitHub CLI auth if available and configured
+    gh = shutil.which("gh")
+    if gh:
+        st = subprocess.run([gh, "auth", "status"], capture_output=True, text=True)
+        if st.returncode == 0:
+            print("gh CLI: authenticated")
+            # Get user via gh api
+            who = subprocess.run([gh, "api", "user"], capture_output=True, text=True)
+            if who.returncode == 0 and who.stdout.strip():
+                try:
+                    u = json.loads(who.stdout)
+                    print(f"User: {u.get('login', '<unknown>')}")
+                except Exception:
+                    print("User: <unknown>")
+            # Rate limit via gh api
+            rl = subprocess.run([gh, "api", "rate_limit"], capture_output=True, text=True)
+            if rl.returncode == 0 and rl.stdout.strip():
+                try:
+                    core = json.loads(rl.stdout).get("resources", {}).get("core", {})
+                    print(f"Rate limit: {core.get('remaining', '?')}/{core.get('limit', '?')} remaining, resets at {core.get('reset', '?')}")
+                except Exception:
+                    pass
+            # Repo permissions if resolvable
+            repo = get_repo_from_env_or_git(cwd)
+            if repo:
+                owner, name = repo
+                rp = subprocess.run([gh, "api", f"repos/{owner}/{name}"], capture_output=True, text=True)
+                if rp.returncode == 0 and rp.stdout.strip():
+                    try:
+                        data = json.loads(rp.stdout)
+                        perms = data.get("permissions", {})
+                        print(f"Repo: {owner}/{name}")
+                        if perms:
+                            print(f"Permissions: {json.dumps(perms)}")
+                            print(f"PR creation likely requires: push=true -> {perms.get('push', False)}")
+                    except Exception:
+                        pass
+            print("OK: gh CLI authentication valid.")
+            return 0
+        else:
+            print("gh CLI present but not authenticated (gh auth login)")
+
+    # Fallback to token-based check
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if not token:
         print("ERROR: No GITHUB_TOKEN or GH_TOKEN in environment.")
@@ -98,7 +144,6 @@ def main() -> int:
         pass
 
     # 3) Repository access (if resolvable)
-    cwd = Path.cwd()
     repo = get_repo_from_env_or_git(cwd)
     if repo:
         owner, name = repo

@@ -53,10 +53,14 @@ class EnhancedLLMAgent:
                     
                     # Skip standard library and test frameworks
                     if module not in ['pytest', 'unittest', 'sys', 'os', 'json', 're']:
-                        # Look for corresponding source file
+                        # Look for corresponding source file in common locations
                         possible_files = [
                             self.repo_path / f"{module}.py",
                             self.repo_path / module / "__init__.py",
+                            self.repo_path / "src" / f"{module}.py",  # Common src/ directory
+                            self.repo_path / "src" / module / "__init__.py",
+                            self.repo_path / "lib" / f"{module}.py",  # Common lib/ directory
+                            self.repo_path / "lib" / module / "__init__.py",
                         ]
                         
                         for pf in possible_files:
@@ -89,14 +93,19 @@ class EnhancedLLMAgent:
         source_contents = {}
         source_files = set()
         
+        print(f"\n[Nova Debug] Looking for source files from {len(failing_tests)} failing test(s)...")
+        
         for test in failing_tests[:5]:  # Limit to first 5 tests for context
             test_file = test.get("file", "")
             if test_file and test_file not in test_contents:
                 test_path = self.repo_path / test_file
+                print(f"[Nova Debug] Checking test file: {test_path}")
                 if test_path.exists():
                     test_contents[test_file] = self._read_file_with_cache(test_path, state)
                     # Find source files imported by this test
-                    source_files.update(self.find_source_files_from_test(test_path))
+                    found_files = self.find_source_files_from_test(test_path)
+                    print(f"[Nova Debug] Found source files: {found_files}")
+                    source_files.update(found_files)
         
         # Read source files
         for source_file in source_files:
@@ -408,6 +417,8 @@ class EnhancedLLMAgent:
                 max_tokens=500
             )
             
+            print(f"[Nova Debug] Plan response from LLM: {response[:200]}...")
+            
             # Parse the comprehensive plan
             plan = parse_comprehensive_plan(response)
             
@@ -423,6 +434,9 @@ class EnhancedLLMAgent:
             
             plan['source_files'] = list(source_files)
             plan['target_tests'] = failing_tests[:3] if len(failing_tests) > 3 else failing_tests
+            
+            print(f"[Nova Debug] Plan created with source files: {plan.get('source_files', [])}")
+            print(f"[Nova Debug] Plan approach: {plan.get('approach', 'NO APPROACH')}")
             
             return plan
             

@@ -178,3 +178,6 @@ demo-repo/
 
 # Regression test virtual environments
 regression_tests/venvs/
+
+# Local environment
+.env

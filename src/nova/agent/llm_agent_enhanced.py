@@ -4,6 +4,8 @@ This is the production agent for Nova CI-Rescue that uses GPT-4/5 or Claude.
 """
 
 import json
+import os
+import time
 import re
 import ast
 from pathlib import Path
@@ -21,10 +23,11 @@ from nova.agent.llm_client_complete_fix import (
 class EnhancedLLMAgent:
     """Enhanced LLM agent that implements Planner, Actor, and Critic for test fixing."""
     
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, verbose: bool = False):
         self.repo_path = repo_path
         self.settings = get_settings()
         self.llm = LLMClient()  # Use the unified LLM client
+        self.verbose = verbose
     
     def _read_file_with_cache(self, file_path: Path, state=None) -> str:
         """Read file with caching to prevent re-reading."""
@@ -154,12 +157,38 @@ class EnhancedLLMAgent:
                 "Follow the exact format requested."
             ).format(len(failing_tests))
             
-            # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
-            response = self.llm.complete(
-                system=system_prompt,
-                user=prompt,
-                max_tokens=8000  # Increased to prevent truncation
-            )
+            # Add retries for actor too
+            retries = int(getattr(self.settings, "actor_retries", int(os.getenv("NOVA_ACTOR_RETRIES", "3"))))
+            base_tokens = 8000  # Keep high for actor since it generates full file contents
+            
+            response = ""
+            for attempt in range(max(1, retries)):
+                try:
+                    # Use temperature=1.0 for GPT-5 (actor needs to be creative)
+                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
+                    temp = 1.0  # Actor always uses 1.0 for creativity
+                    print(f"[Nova Debug - Actor] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens}")
+                    response = self.llm.complete(
+                        system=system_prompt,
+                        user=prompt,
+                        temperature=temp,
+                        max_tokens=base_tokens  # Increased to prevent truncation
+                    )
+                    if response and response.strip():
+                        print(f"[Nova Debug - Actor] Got response of {len(response)} chars")
+                        break
+                    else:
+                        print(f"[Nova Debug - Actor] WARNING: Empty response from LLM on attempt {attempt + 1}")
+                except Exception as e:
+                    print(f"[Nova Debug - Actor] LLM error on attempt {attempt + 1}: {type(e).__name__}: {e}")
+                    response = ""
+                # brief backoff
+                if attempt < retries - 1:
+                    time.sleep(0.3 * (attempt + 1))
+            
+            if not response:
+                print(f"[Nova Debug - Actor] ERROR: No response from LLM after {retries} attempts")
+                return None
             
             # Parse the response to extract file contents
             files_to_fix = {}
@@ -391,51 +420,114 @@ class EnhancedLLMAgent:
                 len(failing_tests)
             )
             
-            response = self.llm.complete(
-                system=system_prompt,
-                user=user_prompt,
-                temperature=0.1,
-                max_tokens=200
+            # Force JSON-only output and give clear schema + more room to answer
+            user_prompt += (
+                "\n\nRespond with JSON ONLY (single line, minified). "
+                'Required keys: {"approved": bool, "reason": string, "fixes_all_tests": bool, "estimated_tests_fixed": number}.'
             )
             
+            # Log critic prompt for debugging
+            print(f"[Nova Debug - Critic] Prompt length: {len(user_prompt)} chars")
+            print(f"[Nova Debug - Critic] Failing tests to review: {len(failing_tests)}")
+            if self.verbose:
+                print(f"[Nova Debug - Critic] Full prompt preview (first 500 chars):\n{user_prompt[:500]}...")
+            
+            # Tunables (settings or env with sensible defaults)
+            retries = int(getattr(self.settings, "critic_retries", int(os.getenv("NOVA_CRITIC_RETRIES", "3"))))
+            base_tokens = int(getattr(self.settings, "critic_max_tokens", int(os.getenv("NOVA_CRITIC_MAX_TOKENS", "800"))))
+            
+            # Retry logic for better reliability
+            response = ""
+            last_err: Optional[Exception] = None
+            for attempt in range(max(1, retries)):
+                try:
+                    # Use temperature=1.0 for GPT-5
+                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
+                    temp = 1.0 if is_gpt5 else (0.1 if attempt == 0 else 0.2)
+                    print(f"[Nova Debug - Critic] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
+                    response = self.llm.complete(
+                        system=system_prompt,
+                        user=user_prompt,
+                        temperature=temp,
+                        max_tokens=base_tokens + (attempt * 200)
+                    )
+                    # Log response details
+                    print(f"[Nova Debug - Critic] LLM response length: {len(response) if response else 0} chars")
+                    if response and response.strip():
+                        print(f"[Nova Debug - Critic] Response preview (first 200 chars): {response[:200]}...")
+                        break
+                    else:
+                        print(f"[Nova Debug - Critic] WARNING: Empty response from LLM on attempt {attempt + 1}")
+                except Exception as e:
+                    last_err = e
+                    print(f"[Nova Debug - Critic] LLM error on attempt {attempt + 1}: {type(e).__name__}: {e}")
+                    response = ""
+                # brief backoff
+                if attempt < retries - 1:
+                    time.sleep(0.2 * (attempt + 1))
+            
             # Parse JSON response
-            if '{' in response and '}' in response:
+            if response and '{' in response and '}' in response:
                 start = response.find('{')
                 end = response.rfind('}') + 1
                 try:
-                    review_json = json.loads(response[start:end])
-                    return review_json.get('approved', False), review_json.get('reason', 'No reason provided')
-                except json.JSONDecodeError:
-                    # JSON parsing failed, use raw response as feedback
-                    pass
+                    json_str = response[start:end]
+                    review_json = json.loads(json_str)
+                    approved = review_json.get('approved', False)
+                    reason = review_json.get('reason', 'No reason provided')
+                    print(f"[Nova Debug - Critic] JSON parsed successfully: approved={approved}")
+                    return approved, reason
+                except json.JSONDecodeError as e:
+                    print(f"[Nova Debug - Critic] JSON parsing failed: {e}")
+                    print(f"[Nova Debug - Critic] Attempted to parse: {json_str[:100]}...")
             
             # Parsing failed – use raw response as feedback
             critic_feedback = (response or "").strip()
             if not critic_feedback:
-                # Fallback: approve small/safe patches when critic is silent
+                print(f"[Nova Debug - Critic] Empty critic response after {retries} attempts")
+                # Fail CLOSED by default if the critic is silent.
+                # Allow opt-in auto-approval via settings or env var.
+                auto_approve = bool(getattr(self.settings, "critic_auto_approve_small_safe", False))
+                if not hasattr(self.settings, "critic_auto_approve_small_safe"):
+                    auto_approve = (os.getenv("NOVA_CRITIC_AUTO_APPROVE_SMALL_SAFE", "0") == "1")
+                
+                if auto_approve:
+                    print(f"[Nova Debug - Critic] Auto-approval is enabled, checking criteria...")
+                    patch_lines = patch.split('\n')
+                    files_touched = sum(1 for l in patch_lines if l.startswith('+++ b/'))
+                    if files_touched == 0:
+                        files_touched = sum(1 for l in patch_lines if l.startswith('FILE_REPLACE:'))
+                    protected = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
+                    safe = not any(p in l for l in patch_lines for p in protected)
+                    
+                    print(f"[Nova Debug - Critic] Auto-approval check: patch_lines={len(patch_lines)}, files_touched={files_touched}, safe={safe}")
+                    
+                    if safe and len(patch_lines) < 1000 and files_touched <= 3:
+                        return True, "Auto-approved: critic returned empty response; patch deemed small & safe (opt-in)."
+                # default: do NOT auto-approve on silence
+                return False, "Critic returned an empty LLM response; not auto-approving. Increase critic_max_tokens / check LLM."
+            # Decide to reject but show feedback (truncate if very long)
+            print(f"[Nova Debug - Critic] Using raw response as feedback")
+            return False, critic_feedback[:500]
+            
+        except Exception as e:
+            print(f"[Nova Debug - Critic] ERROR in patch review: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Default: fail CLOSED on critic errors unless opt-in auto-approve is set
+            auto_approve = bool(getattr(self.settings, "critic_auto_approve_small_safe", False))
+            if not hasattr(self.settings, "critic_auto_approve_small_safe"):
+                auto_approve = (os.getenv("NOVA_CRITIC_AUTO_APPROVE_SMALL_SAFE", "0") == "1")
+            
+            if auto_approve:
+                print(f"[Nova Debug - Critic] Auto-approval is enabled for errors, checking criteria...")
                 patch_lines = patch.split('\n')
                 files_touched = sum(1 for l in patch_lines if l.startswith('+++ b/'))
                 if files_touched == 0:
                     files_touched = sum(1 for l in patch_lines if l.startswith('FILE_REPLACE:'))
-                protected = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
-                safe = not any(p in l for l in patch_lines for p in protected)
-                if safe and len(patch_lines) < 1000 and files_touched <= 3:
-                    return True, "Auto-approved: empty critic feedback and patch is small & safe"
-                # otherwise still reject, but explain why
-                return False, "No feedback provided"
-            # Decide to reject but show feedback (truncate if very long)
-            return False, critic_feedback[:500]
-            
-        except Exception as e:
-            print(f"Error in patch review: {e}")
-            # Fallback: approve small/safe patches if critic errors out
-            patch_lines = patch.split('\n')
-            files_touched = sum(1 for l in patch_lines if l.startswith('+++ b/'))
-            if files_touched == 0:
-                files_touched = sum(1 for l in patch_lines if l.startswith('FILE_REPLACE:'))
-            if len(patch_lines) < 1000 and files_touched <= 3:
-                return True, "Auto-approved: critic errored but patch is small & safe"
-            return False, "Review failed due to error, patch not approved"
+                if len(patch_lines) < 1000 and files_touched <= 3:
+                    return True, "Auto-approved: critic errored but patch is small & safe (opt-in)."
+            return False, "Review failed due to critic error; not auto-approving."
     
     def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int, critic_feedback: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -462,12 +554,38 @@ class EnhancedLLMAgent:
                 "Your plan must address EVERY SINGLE failing test in one go."
             )
             
-            response = self.llm.complete(
-                system=system_prompt,
-                user=prompt,
-                temperature=0.3,
-                max_tokens=500
-            )
+            # Add retries for planner too
+            retries = int(getattr(self.settings, "planner_retries", int(os.getenv("NOVA_PLANNER_RETRIES", "3"))))
+            base_tokens = int(getattr(self.settings, "planner_max_tokens", int(os.getenv("NOVA_PLANNER_MAX_TOKENS", "800"))))
+            
+            response = ""
+            for attempt in range(max(1, retries)):
+                try:
+                    # Use temperature=1.0 for GPT-5
+                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
+                    temp = 1.0 if is_gpt5 else (0.3 if attempt == 0 else 0.4)
+                    print(f"[Nova Debug - Planner] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
+                    response = self.llm.complete(
+                        system=system_prompt,
+                        user=prompt,
+                        temperature=temp,
+                        max_tokens=base_tokens + (attempt * 200)
+                    )
+                    if response and response.strip():
+                        print(f"[Nova Debug - Planner] Got response of {len(response)} chars")
+                        break
+                    else:
+                        print(f"[Nova Debug - Planner] WARNING: Empty response from LLM on attempt {attempt + 1}")
+                except Exception as e:
+                    print(f"[Nova Debug - Planner] LLM error on attempt {attempt + 1}: {type(e).__name__}: {e}")
+                    response = ""
+                # brief backoff
+                if attempt < retries - 1:
+                    time.sleep(0.2 * (attempt + 1))
+            
+            if not response:
+                print(f"[Nova Debug - Planner] ERROR: No response from LLM after {retries} attempts")
+                return {"approach": "Failed to get plan from LLM", "target_tests": failing_tests, "steps": ["Fix failing tests"]}
             
             print(f"[Nova Debug] Plan response from LLM: {response[:200]}...")
             

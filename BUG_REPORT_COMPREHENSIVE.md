@@ -12,7 +12,7 @@
 - **Root Cause**: Nova only looks in project root, not in subdirectories like `src/`
 - **Impact**: Nova generates random code without seeing actual bugs
 - **Example**: In `demo_broken_project`, the actual file is at `src/calculator.py` but Nova looks for `calculator.py` in root
-- **Status**: Fixed with AST-based source file discovery ✅
+- **Status**: Fixed with AST-based source file discovery ✅ (Applied from fix pack A)
 
 ### 2. **Path Doubling Bug**
 
@@ -31,6 +31,7 @@
   - `src/nova/agent/llm_agent_enhanced.py:123`
   - `src/nova/tools/pr_generator.py:87`
   - `src/nova/agent/llm_client.py:128`
+- **Status**: Fixed - temperature is now configurable ✅ (Applied from fix pack B)
 
 ### 4. **Bare Exception Handlers**
 
@@ -72,8 +73,13 @@
   - `src/nova/cli.py:82-85, 542-545` - Added isinstance checks ✅
   - `src/nova/nodes/reflect.py:55-57` - Added isinstance checks ✅
 - **Error Still Occurs**: After "⚠ No progress: 5 test(s) still failing"
-- **Root Cause**: There's another location performing datetime arithmetic that we haven't found
-- **Next Steps**: Need full stack trace to identify exact location
+- **Root Cause**: Mixed datetime-float arithmetic in multiple locations
+- **Status**: Fixed with datetime_utils.py and safe datetime handling ✅ (Applied from fix pack D)
+- **Fixed Files**:
+  - `src/nova/cli.py` - Uses now_utc() and seconds_between()
+  - `src/nova/agent/state.py` - Uses seconds_between()
+  - `src/nova/nodes/reflect.py` - Uses seconds_between()
+  - `src/nova/tools/lock.py` - Uses to_datetime() and seconds_between()
 
 ### 8. **JUnit Report Path Not Interpolated**
 

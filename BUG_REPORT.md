@@ -2,7 +2,25 @@
 
 ## 🔴 Critical Issues
 
-### 1. **GPT-5 Temperature Hardcoding**
+### 1. **No Source Files Identified (MOST CRITICAL)**
+
+- **Issue**: Nova cannot find source files to fix, resulting in blind patch generation
+- **Symptoms**:
+  - `[Nova Debug] Plan created with source files: []`
+  - `⚠ No source files identified`
+  - Empty plan generation with no approach or steps
+- **Root Cause**: Nova only looks in project root, not in subdirectories like `src/`
+- **Impact**: Nova generates random code without seeing actual bugs
+- **Example**: In `demo_broken_project`, the actual file is at `src/calculator.py` but Nova looks for `calculator.py` in root
+
+### 2. **Path Doubling Bug**
+
+- **Issue**: Test file paths are incorrectly constructed with duplicated segments
+- **Example**: `/Users/.../demo_broken_project/examples/demos/demo_broken_project/tests/test_calculator.py`
+- **Impact**: Files cannot be found due to malformed paths
+- **Location**: Path construction in `llm_agent_enhanced.py`
+
+### 3. **GPT-5 Temperature Hardcoding**
 
 - **Location**: Multiple files (`llm_agent_enhanced.py`, `pr_generator.py`, `llm_client.py`)
 - **Issue**: Temperature is hardcoded to 1.0 for GPT-5, but comment says "GPT-5 requires temperature=1"
@@ -12,7 +30,7 @@
   - `src/nova/tools/pr_generator.py:87`
   - `src/nova/agent/llm_client.py:128`
 
-### 2. **Bare Exception Handlers**
+### 4. **Bare Exception Handlers**
 
 - **Issue**: Multiple places use bare `except:` which can hide critical errors
 - **Files**:
@@ -21,7 +39,7 @@
   - `src/nova/tools/pr_generator.py:264, 300`
   - `src/nova/agent/llm_client.py:177`
 
-### 3. **Submodule Git Repository Warnings**
+### 5. **Submodule Git Repository Warnings**
 
 - **Issue**: Embedded git repositories causing warnings during commits
 - **Paths**:
@@ -30,7 +48,7 @@
   - `examples/demos/demo_test_repo`
   - `examples/sample_repos/nova_demo_workspace`
 
-### 4. **Datetime - Float Arithmetic Error (CRITICAL - STILL BROKEN)**
+### 6. **Datetime - Float Arithmetic Error (CRITICAL - STILL BROKEN)**
 
 - **Issue**: Despite multiple fix attempts, datetime arithmetic errors still occur
 - **Error**: `unsupported operand type(s) for -: 'datetime.datetime' and 'float'`
@@ -42,7 +60,7 @@
 - **Root Cause**: There's another location performing datetime arithmetic that we haven't found
 - **Next Steps**: Need full stack trace to identify exact location
 
-### 5. **JUnit Report Path Not Interpolated**
+### 7. **JUnit Report Path Not Interpolated**
 
 - **Issue**: Missing f-string prefix causes literal `{junit_report_path}` files
 - **File**: `src/nova/runner/test_runner.py:68`
@@ -178,15 +196,51 @@
 
 - **Datetime Error** - Applied fixes but error persists in unknown location 🔴
 
+## 🔧 Proposed Solution: Nova Configuration File
+
+### Add `nova.yml` Configuration Support
+
+To solve the source file discovery issue, implement support for a `nova.yml` configuration file that projects can use to specify their structure:
+
+```yaml
+# nova.yml - Project structure hints for Nova CI-Rescue
+version: 1
+paths:
+  sources:
+    - src/          # Primary source directory
+    - lib/          # Alternative source directory
+  tests:
+    - tests/        # Test directory
+    - test/         # Alternative test directory
+  exclude:
+    - node_modules/
+    - .venv/
+    - build/
+```
+
+**Implementation**:
+1. Check for `nova.yml` in project root before starting
+2. Use specified paths for source file discovery
+3. Fall back to current logic if no config file exists
+4. Would fix the "No source files identified" issue immediately
+
+**Benefits**:
+- Projects with non-standard structures can work with Nova
+- Faster file discovery (no need to search everywhere)
+- Better support for monorepos and complex projects
+- Explicit is better than implicit
+
 ## 📋 Recommendations
 
 ### Immediate Actions (Before Launch)
 
-1. **Fix bare exception handlers** - Add specific exception types
-2. **Add file locking** for CI environments to prevent race conditions
-3. **Clean up embedded git repositories** or convert to proper submodules
-4. **Add proper JSON error handling** with fallbacks
-5. **Ensure temp file cleanup** in all error paths
+1. **Fix source file discovery** - Implement nova.yml support or fix path logic
+2. **Fix path doubling bug** - Correct the file path construction
+3. **Fix bare exception handlers** - Add specific exception types
+4. **Add file locking** for CI environments to prevent race conditions
+5. **Clean up embedded git repositories** or convert to proper submodules
+6. **Add proper JSON error handling** with fallbacks
+7. **Ensure temp file cleanup** in all error paths
 
 ### Short-term Improvements
 

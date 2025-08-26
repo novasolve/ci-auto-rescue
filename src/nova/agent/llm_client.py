@@ -103,7 +103,11 @@ class LLMClient:
         """
         # Log the request details
         print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
-        print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
+        # Handle GPT-5 temperature override for accurate logging
+        actual_temperature = temperature
+        if self.provider == "openai" and "gpt-5" in self.model.lower():
+            actual_temperature = 1.0  # GPT-5 only supports temperature=1.0
+        print(f"[Nova Debug - LLM] Request params: temperature={actual_temperature}, max_tokens={max_tokens}")
         print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
         print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
         
@@ -135,6 +139,8 @@ class LLMClient:
                 kwargs["temperature"] = 1.0
                 # Set reasoning effort to high for maximum reasoning quality
                 kwargs["reasoning_effort"] = "high"
+                if temperature != 1.0:
+                    print(f"[Nova Debug - LLM] Note: Temperature override for GPT-5: {temperature} -> 1.0")
             else:
                 kwargs["max_tokens"] = max_tokens
                 kwargs["temperature"] = temperature

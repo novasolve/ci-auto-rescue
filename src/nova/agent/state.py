@@ -87,10 +87,11 @@ class AgentState:
     
     def check_timeout(self) -> bool:
         """Check if we've exceeded the timeout."""
+        from nova.tools.datetime_utils import seconds_between, now_utc
         if isinstance(self.start_time, float):
             elapsed = time.time() - self.start_time
         else:
-            elapsed = (datetime.now() - self.start_time).total_seconds()
+            elapsed = seconds_between(now_utc(), self.start_time)
         return elapsed >= self.timeout_seconds
     
     def to_dict(self) -> Dict[str, Any]:

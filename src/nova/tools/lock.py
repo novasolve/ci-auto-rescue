@@ -52,9 +52,10 @@ class NovaLock:
     
     def _is_lock_stale(self, lock_info: dict) -> bool:
         """Check if a lock is stale based on timeout."""
+        from nova.tools.datetime_utils import seconds_between, now_utc, to_datetime
         try:
-            lock_time = datetime.fromisoformat(lock_info['timestamp'])
-            elapsed = (datetime.now() - lock_time).total_seconds()
+            lock_time = to_datetime(lock_info['timestamp'])
+            elapsed = seconds_between(now_utc(), lock_time)
             return elapsed > self.timeout
         except (KeyError, ValueError):
             # Invalid lock info, consider it stale

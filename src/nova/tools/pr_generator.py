@@ -81,10 +81,10 @@ Execution details:
 Now generate the PR title and body."""
         
         try:
+            # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
             response = self.llm.complete(
                 system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
                 user=prompt,
-                temperature=1.0,  # GPT-5 only supports temperature=1
                 max_tokens=2000  # Will be handled by LLMClient with reasoning_effort=high
             )
             
@@ -261,7 +261,7 @@ The following files were modified:
                 prs = response.json()
                 return len(prs) > 0
             return False
-        except:
+        except requests.RequestException as e:
             return False
     
     def _get_repository_info(self) -> Optional[Tuple[str, str]]:
@@ -297,7 +297,8 @@ The following files were modified:
                     
                     if len(parts) >= 2:
                         return parts[0], parts[1]
-        except:
+        except Exception as e:
+            # Failed to get repository info from git remote
             pass
         
         return None

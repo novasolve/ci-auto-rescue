@@ -123,7 +123,7 @@ class LLMClient:
             
             # Handle model-specific parameters
             if "gpt-5" in self.model.lower():
-                # GPT-5 only supports temperature=1 and uses max_completion_tokens
+                # GPT-5 enforces temperature=1 and uses max_completion_tokens; we override any provided temperature here.
                 kwargs["max_completion_tokens"] = max_tokens
                 kwargs["temperature"] = 1  # GPT-5 only supports default temperature
                 # Set reasoning effort to high for maximum reasoning quality
@@ -174,7 +174,11 @@ def parse_plan(response: str) -> Dict[str, Any]:
             end = response.rfind("}") + 1
             plan_json = json.loads(response[start:end])
             return plan_json
-        except:
+        except json.JSONDecodeError as e:
+            # JSON parsing failed, fall back to bullet parsing
+            pass
+        except Exception as e:
+            # Other unexpected error, fall back to bullet parsing
             pass
     
     # Parse numbered list or bullets

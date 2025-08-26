@@ -88,8 +88,11 @@ class ApplyPatchNode:
                 try:
                     import os
                     os.unlink(patch_file)
-                except:
-                    pass
+                except OSError as e:
+                    if self.verbose:
+                        from rich.console import Console
+                        console = Console()
+                        console.print(f"[dim yellow]Warning: Failed to remove temp patch file: {e}[/dim yellow]")
             except Exception as e:
                 error_details = str(e)
         

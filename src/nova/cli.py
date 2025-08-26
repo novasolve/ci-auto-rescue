@@ -535,8 +535,9 @@ def fix(
                         )
                         if result.returncode == 0:
                             changed_files = [f for f in result.stdout.strip().split('\n') if f]
-                    except:
-                        pass
+                    except Exception as e:
+                        if verbose:
+                            console.print(f"[yellow]Could not list changed files: {e}[/yellow]")
                     
                     # Gather reasoning logs from telemetry
                     reasoning_logs = []
@@ -558,7 +559,8 @@ def fix(
                                             for line in f:
                                                 try:
                                                     reasoning_logs.append(json.loads(line))
-                                                except:
+                                                except json.JSONDecodeError as e:
+                                                    # Skip malformed JSON lines
                                                     pass
                         except Exception as e:
                             print(f"[yellow]Could not read reasoning logs: {e}[/yellow]")

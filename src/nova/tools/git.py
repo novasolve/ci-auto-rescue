@@ -8,7 +8,7 @@ import signal
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from contextlib import contextmanager
 from rich.console import Console
 
@@ -97,13 +97,22 @@ class GitBranchManager:
         if self.verbose:
             console.print(f"[dim]Created branch: {self.branch_name}[/dim]")
         
+        # Check for nested git repositories
+        nested_repos = self._detect_nested_git_repos()
+        if nested_repos:
+            console.print("[yellow]⚠️  Warning: Detected nested git repositories:[/yellow]")
+            for repo_path in nested_repos:
+                console.print(f"[yellow]   - {repo_path}[/yellow]")
+            console.print("[yellow]These will be ignored as only specific changed files will be staged.[/yellow]")
+        
         return self.branch_name
     
-    def commit_patch(self, step_number: int, message: Optional[str] = None) -> bool:
+    def commit_patch(self, step_number: int, changed_files: Optional[List[Path]] = None, message: Optional[str] = None) -> bool:
         """Commit current changes with a step message.
         
         Args:
             step_number: The step number for the commit message
+            changed_files: Optional list of specific files to stage (if None, stages all changes)
             message: Optional custom message (defaults to 'nova: step <n>')
             
         Returns:
@@ -113,12 +122,25 @@ class GitBranchManager:
         if message is None:
             message = f"nova: step {step_number}"
         
-        # Stage all changes
-        success, output = self._run_git_command("add", "-A")
-        if not success:
-            if self.verbose:
-                console.print(f"[red]Failed to stage changes: {output}[/red]")
-            return False
+        # Stage changes
+        if changed_files is not None:
+            # Stage only the specific changed files in batches
+            BATCH_SIZE = 100
+            for i in range(0, len(changed_files), BATCH_SIZE):
+                batch = changed_files[i:i + BATCH_SIZE]
+                file_args = ["add", "--"] + [str(f) for f in batch]
+                success, output = self._run_git_command(*file_args)
+                if not success:
+                    if self.verbose:
+                        console.print(f"[red]Failed to stage changes: {output}[/red]")
+                    return False
+        else:
+            # Fall back to staging all changes
+            success, output = self._run_git_command("add", "-A")
+            if not success:
+                if self.verbose:
+                    console.print(f"[red]Failed to stage changes: {output}[/red]")
+                return False
         
         # Check if there are changes to commit
         success, output = self._run_git_command("diff", "--cached", "--quiet")
@@ -139,6 +161,23 @@ class GitBranchManager:
             console.print(f"[green]✓ Committed: {message}[/green]")
         
         return True
+    
+    def _detect_nested_git_repos(self) -> List[Path]:
+        """Detect nested .git directories (excluding the top-level repository).
+        
+        Returns:
+            List of paths to nested .git directories
+        """
+        nested_repos = []
+        
+        # Use pathlib's glob to find all .git directories
+        for git_dir in self.repo_path.glob("**/.git"):
+            # Skip the top-level .git directory
+            if git_dir.parent == self.repo_path:
+                continue
+            nested_repos.append(git_dir.parent)
+        
+        return nested_repos
     
     def cleanup(self, success: bool = False):
         """Clean up the repository state."""

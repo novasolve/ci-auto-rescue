@@ -358,7 +358,7 @@ def apply_and_commit_patch(
             # Import here to avoid circular dependency
             from nova.tools.git import GitBranchManager
             if isinstance(git_manager, GitBranchManager):
-                commit_success = git_manager.commit_patch(step_number)
+                commit_success = git_manager.commit_patch(step_number, changed_files)
                 if not commit_success and verbose:
                     print(f"Warning: Failed to commit step {step_number}")
         

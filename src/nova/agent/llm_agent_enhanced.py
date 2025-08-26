@@ -117,10 +117,10 @@ class EnhancedLLMAgent:
                 "Follow the exact format requested."
             ).format(len(failing_tests))
             
+            # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
             response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
-                temperature=1.0,  # GPT-5 requires temperature=1
                 max_tokens=8000  # Increased to prevent truncation
             )
             

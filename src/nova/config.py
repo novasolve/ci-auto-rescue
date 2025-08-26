@@ -38,7 +38,7 @@ class NovaSettings(BaseModel):
     run_timeout_sec: int = 1200
     test_timeout_sec: int = 600
     telemetry_dir: str = "telemetry"
-    enable_telemetry: bool = False  # Disable telemetry by default
+    enable_telemetry: bool = True  # Enable telemetry by default to save patches
     default_llm_model: str = "gpt-5"  # Full GPT-5 model for complex reasoning
 
     @classmethod

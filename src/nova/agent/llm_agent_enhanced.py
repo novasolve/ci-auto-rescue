@@ -378,11 +378,19 @@ class EnhancedLLMAgent:
             if '{' in response and '}' in response:
                 start = response.find('{')
                 end = response.rfind('}') + 1
-                review_json = json.loads(response[start:end])
-                return review_json.get('approved', False), review_json.get('reason', 'No reason provided')
+                try:
+                    review_json = json.loads(response[start:end])
+                    return review_json.get('approved', False), review_json.get('reason', 'No reason provided')
+                except json.JSONDecodeError:
+                    # JSON parsing failed, use raw response as feedback
+                    pass
             
-            # Fallback to rejection if parsing fails
-            return False, "Patch review indeterminate (parsing failed, auto-rejected)"
+            # Parsing failed – use raw response as feedback
+            critic_feedback = response.strip()
+            if not critic_feedback:
+                critic_feedback = "No feedback provided"
+            # Decide to reject but show feedback (truncate if very long)
+            return False, critic_feedback[:500]
             
         except Exception as e:
             print(f"Error in patch review: {e}")

@@ -141,9 +141,16 @@ class TestRunner:
                 call_info = test.get('call', {})
                 longrepr = call_info.get('longrepr', '')
                 
-                # Extract short traceback (first few lines)
+                # Extract short traceback - capture up to the assertion error line
                 traceback_lines = longrepr.split('\n') if longrepr else []
-                short_traceback = '\n'.join(traceback_lines[:3]) if traceback_lines else 'Test failed'
+                short_trace = []
+                for line in traceback_lines:
+                    short_trace.append(line)
+                    if line.strip().startswith("E"):  # error/exception line
+                        break
+                    if len(short_trace) >= 5:
+                        break
+                short_traceback = '\n'.join(short_trace) if short_trace else 'Test failed'
                 
                 # Try to get line number from the traceback
                 line_no = 0
@@ -179,8 +186,19 @@ class TestRunner:
         
         for test in failures:
             location = f"{test.file}:{test.line}" if test.line > 0 else test.file
-            # Truncate error message for table
-            error = test.short_traceback.split('\n')[0][:50] + "..."
+            # Extract the most relevant error line (assertion or exception)
+            error_lines = test.short_traceback.split('\n')
+            error = "Test failed"
+            for line in error_lines:
+                if line.strip().startswith("E"):
+                    error = line.strip()[2:].strip()  # Remove "E " prefix
+                    break
+                elif "AssertionError" in line or "assert" in line:
+                    error = line.strip()
+                    break
+            # Truncate if too long
+            if len(error) > 80:
+                error = error[:77] + "..."
             table += f"| {test.name} | {location} | {error} |\n"
         
         return table

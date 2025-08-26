@@ -86,6 +86,27 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         minutes, seconds = divmod(int(elapsed), 60)
         console.print(f"  • Time elapsed: {minutes}m {seconds}s")
     
+    # List saved patches if telemetry is enabled
+    from nova.config import settings
+    if settings.enable_telemetry and hasattr(state, 'telemetry') and state.telemetry:
+        try:
+            from pathlib import Path
+            run_dir = state.telemetry.run_dir
+            if run_dir and Path(run_dir).exists():
+                patch_dir = Path(run_dir) / "patches"
+                if patch_dir.exists():
+                    console.print("\n[bold]📄 Saved patches:[/bold]")
+                    patches = sorted(patch_dir.glob("*.patch"))
+                    if patches:
+                        for patch_file in patches:
+                            console.print(f"  • {patch_file.name}")
+                        console.print(f"  [dim](Saved in: {patch_dir})[/dim]")
+                    else:
+                        console.print("  [dim](No patches saved)[/dim]")
+        except Exception as e:
+            if state.verbose:
+                console.print(f"[dim]Could not list patches: {e}[/dim]")
+    
     console.print("=" * 60)
     console.print()
 
@@ -233,9 +254,22 @@ def fix(
             
             for test in failing_tests:
                 location = f"{test.file}:{test.line}" if test.line > 0 else test.file
-                error_preview = test.short_traceback.split('\n')[0][:60]
-                if len(test.short_traceback.split('\n')[0]) > 60:
-                    error_preview += "..."
+                
+                # Extract the most relevant error line (same logic as test runner)
+                error_lines = test.short_traceback.split('\n')
+                error_preview = "Test failed"
+                for line in error_lines:
+                    if line.strip().startswith("E"):
+                        error_preview = line.strip()[2:].strip()  # Remove "E " prefix
+                        break
+                    elif "AssertionError" in line or "assert" in line:
+                        error_preview = line.strip()
+                        break
+                
+                # Truncate if too long for table display
+                if len(error_preview) > 80:
+                    error_preview = error_preview[:77] + "..."
+                
                 table.add_row(test.name, location, error_preview)
             
             console.print(table)
@@ -314,11 +348,20 @@ def fix(
                 # Display plan summary
                 if verbose:
                     console.print("[dim]Plan created:[/dim]")
-                    console.print(f"  Approach: {plan.get('approach', 'Unknown')}")
-                    if plan.get('steps'):
+                    if plan.get("approach"):
+                        console.print(f"  Approach: {plan['approach']}")
+                    if plan.get("steps"):
                         console.print("  Steps:")
-                        for i, step in enumerate(plan['steps'][:3], 1):
+                        for i, step in enumerate(plan['steps'], 1):  # Show all steps
                             console.print(f"    {i}. {step}")
+                    elif plan.get("strategy"):
+                        console.print(f"  Strategy: {plan['strategy']}")
+                    
+                    # Show which source files will be modified
+                    if plan.get("source_files"):
+                        console.print(f"  Target files: {', '.join(plan['source_files'])}")
+                    else:
+                        console.print("  [yellow]⚠ No source files identified[/yellow]")
                 
                 # Log planner completion
                 telemetry.log_event("planner_complete", {

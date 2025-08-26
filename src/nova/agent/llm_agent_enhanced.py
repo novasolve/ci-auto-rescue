@@ -50,6 +50,7 @@ class EnhancedLLMAgent:
                 match = re.match(import_pattern, line)
                 if match:
                     module = match.group(1).split('.')[0]
+                    print(f"[Nova Debug] Found import: {module}")
                     
                     # Skip standard library and test frameworks
                     if module not in ['pytest', 'unittest', 'sys', 'os', 'json', 're']:
@@ -65,8 +66,11 @@ class EnhancedLLMAgent:
                         
                         for pf in possible_files:
                             if pf.exists():
+                                print(f"[Nova Debug] Found source file: {pf}")
                                 source_files.add(str(pf.relative_to(self.repo_path)))
                                 break
+                        else:
+                            print(f"[Nova Debug] Could not find source file for module: {module}")
         except Exception as e:
             print(f"Error parsing test file {test_file_path}: {e}")
         

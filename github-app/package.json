@@ -1,0 +1,15 @@
+{
+  "name": "nova-ci-rescue-app",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "description": "Nova CI-Rescue GitHub App (Probot) for Fly.io",
+  "scripts": {
+    "start": "probot run ./index.js"
+  },
+  "dependencies": {
+    "probot": "^13.3.7"
+  }
+}
+
+

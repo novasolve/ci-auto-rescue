@@ -1,0 +1,5 @@
+demo_llm_repo/
+demo_nova_test/
+demo_test_repo/
+src/nova/**/__pycache__/
+*.pyc

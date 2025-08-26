@@ -1,14 +1,13 @@
-[build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nova-ci-rescue"
 version = "0.1.0"
-description = "Nova CI‑Rescue: automated test fixing agent (MVP)"
+description = "Nova CI-Rescue: automated test fixing agent (MVP)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Proprietary"}
+license = { text = "MIT" }
 authors = [{ name = "NovaSolve", email = "dev@novasolve.ai" }]
 keywords = ["LLM", "LangGraph", "CI", "pytest", "agent", "automation"]
 classifiers = [
@@ -18,8 +17,9 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Intended Audience :: Developers",
-  "License :: Other/Proprietary License",
+  "License :: OSI Approved :: MIT License",
 ]
+
 dependencies = [
   "langgraph>=0.2.0",
   "langchain>=0.2.0",
@@ -36,12 +36,26 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/novasolve/ci-auto-rescue"
+Repository = "https://github.com/novasolve/ci-auto-rescue"
+Issues = "https://github.com/novasolve/ci-auto-rescue/issues"
 
 [project.scripts]
+# Ensure you have: src/nova/cli.py with a Typer app named `app`
 nova = "nova.cli:app"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+# If you ship non-Python files referenced at runtime (e.g., templates),
+# set this true and/or use MANIFEST.in if needed.
+include-package-data = true
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+# If you want to exclude tests from the wheel:
+# exclude = ["tests*", "test*"]
+
+# Optional: pytest config lives here so `pytest` works consistently.
+# Delete if you keep a separate pytest.ini/pyproject section elsewhere.
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

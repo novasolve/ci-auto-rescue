@@ -5,6 +5,7 @@ Unified LLM client for Nova CI-Rescue supporting OpenAI and Anthropic.
 import json
 from typing import Dict, List, Optional, Any
 from pathlib import Path
+import os
 
 try:
     from openai import OpenAI
@@ -124,37 +125,77 @@ class LLMClient:
                         reasoning_effort: str = "high") -> str:
         """Complete using OpenAI API."""
         try:
-            # Build base kwargs for all models
-            kwargs = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user}
-                ]
-            }
-            
-            # Handle GPT-5 specific parameters
-            if "gpt-5" in self.model.lower():
-                # GPT-5 currently uses Chat Completions API with special parameters
+            # Build chat-style content once
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
+
+            # Decide API surface for GPT-5: Responses by default, Chat when forced
+            is_gpt5 = "gpt-5" in self.model.lower()
+            use_responses = is_gpt5 and (
+                os.getenv("NOVA_FORCE_OPENAI_CHAT") != "1" or os.getenv("NOVA_FORCE_OPENAI_RESPONSES") == "1"
+            )
+
+            if use_responses:
+                # Responses API path (recommended for GPT-5)
                 if temperature != 1.0 and not self.__class__._warned_fixed_temp:
                     print(f"[Nova Debug - LLM] NOTE: {self.model} enforces temperature=1.0. Overriding requested {temperature}.")
                     self.__class__._warned_fixed_temp = True
 
-                # Enforce temperature and use model-appropriate token cap field
+                print("[Nova Debug - LLM] Using Responses API (input=messages, max_output_tokens, reasoning.effort).")
+                resp = self.client.responses.create(
+                    model=self.model,
+                    input=messages,
+                    temperature=1.0,
+                    max_output_tokens=max_tokens,
+                    reasoning={"effort": reasoning_effort} if reasoning_effort else None,
+                )
+
+                # Prefer convenience field when available; otherwise, collect text parts.
+                content = getattr(resp, "output_text", None)
+                if not content:
+                    try:
+                        parts: List[str] = []
+                        for item in getattr(resp, "output", []) or []:
+                            for c in getattr(item, "content", []) or []:
+                                text_part = getattr(c, "text", None)
+                                if text_part:
+                                    parts.append(text_part)
+                        content = "".join(parts)
+                    except Exception:
+                        content = ""
+
+                if content:
+                    content = content.strip()
+                    print(f"[Nova Debug - LLM] Responses output length: {len(content)} chars")
+                    print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+                else:
+                    print("[Nova Debug - LLM] WARNING: Responses API returned empty content!")
+                    content = ""
+                return content
+
+            # Chat Completions path
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+            }
+
+            if is_gpt5:
+                # GPT-5 via Chat Completions requires 1.0 temp and max_completion_tokens
+                if temperature != 1.0 and not self.__class__._warned_fixed_temp:
+                    print(f"[Nova Debug - LLM] NOTE: {self.model} enforces temperature=1.0. Overriding requested {temperature}.")
+                    self.__class__._warned_fixed_temp = True
                 kwargs["temperature"] = 1.0
                 kwargs["max_completion_tokens"] = max_tokens
-
-                # Send reasoning_effort only (no response_format.*)
                 if reasoning_effort:
                     kwargs["reasoning_effort"] = reasoning_effort
-                    print(f"[Nova Debug - LLM] Using GPT-5 with extra params: {'{'}'reasoning_effort': '{reasoning_effort}'{'}'}")
-                else:
-                    print(f"[Nova Debug - LLM] Using GPT-5 with standard Chat Completions API")
+                print("[Nova Debug - LLM] Using Chat Completions (max_completion_tokens, reasoning_effort).")
             else:
                 # Standard parameters for non-GPT-5 models
                 kwargs["temperature"] = temperature
                 kwargs["max_tokens"] = max_tokens
-            
+
             # Make the API call
             response = self.client.chat.completions.create(**kwargs)
             content = response.choices[0].message.content

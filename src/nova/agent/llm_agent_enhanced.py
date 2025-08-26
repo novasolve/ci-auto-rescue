@@ -168,11 +168,14 @@ class EnhancedLLMAgent:
                     is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
                     temp = 1.0  # Actor always uses 1.0 for creativity
                     print(f"[Nova Debug - Actor] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens}")
+                    # Actor uses high reasoning for best code generation
                     response = self.llm.complete(
                         system=system_prompt,
                         user=prompt,
                         temperature=temp,
-                        max_tokens=base_tokens  # Increased to prevent truncation
+                        max_tokens=base_tokens,  # Increased to prevent truncation
+                        reasoning_effort="high",  # High for best code generation
+                        verbosity="high" if is_gpt5 else "medium"  # Comprehensive code with comments
                     )
                     if response and response.strip():
                         print(f"[Nova Debug - Actor] Got response of {len(response)} chars")
@@ -445,11 +448,14 @@ class EnhancedLLMAgent:
                     is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
                     temp = 1.0 if is_gpt5 else (0.1 if attempt == 0 else 0.2)
                     print(f"[Nova Debug - Critic] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
+                    # Critic uses minimal reasoning for fast responses
                     response = self.llm.complete(
                         system=system_prompt,
                         user=user_prompt,
                         temperature=temp,
-                        max_tokens=base_tokens + (attempt * 200)
+                        max_tokens=base_tokens + (attempt * 200),
+                        reasoning_effort="minimal" if is_gpt5 else "high",  # Minimal for GPT-5 critic
+                        verbosity="low" if is_gpt5 else "medium"  # Concise feedback
                     )
                     # Log response details
                     print(f"[Nova Debug - Critic] LLM response length: {len(response) if response else 0} chars")
@@ -565,11 +571,14 @@ class EnhancedLLMAgent:
                     is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
                     temp = 1.0 if is_gpt5 else (0.3 if attempt == 0 else 0.4)
                     print(f"[Nova Debug - Planner] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
+                    # Planner uses medium reasoning for balanced planning
                     response = self.llm.complete(
                         system=system_prompt,
                         user=prompt,
                         temperature=temp,
-                        max_tokens=base_tokens + (attempt * 200)
+                        max_tokens=base_tokens + (attempt * 200),
+                        reasoning_effort="medium" if is_gpt5 else "high",  # Medium for GPT-5 planner
+                        verbosity="medium"  # Detailed plans
                     )
                     if response and response.strip():
                         print(f"[Nova Debug - Planner] Got response of {len(response)} chars")

@@ -88,7 +88,8 @@ class LLMClient:
             # Default to Claude 3.5 Sonnet
             return "claude-3-5-sonnet-20241022"
     
-    def complete(self, system: str, user: str, temperature: float = 0.3, max_tokens: int = 2000) -> str:
+    def complete(self, system: str, user: str, temperature: float = 0.3, max_tokens: int = 2000,
+                 reasoning_effort: str = "high", verbosity: str = "medium") -> str:
         """
         Get a completion from the LLM.
         
@@ -97,6 +98,8 @@ class LLMClient:
             user: User prompt
             temperature: Sampling temperature (0-1)
             max_tokens: Maximum tokens in response
+            reasoning_effort: For GPT-5: "minimal", "low", "medium", "high" (default: "high")
+            verbosity: For GPT-5: "low", "medium", "high" (default: "medium")
             
         Returns:
             The LLM's response text
@@ -104,45 +107,58 @@ class LLMClient:
         # Log the request details
         print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
         print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
+        if "gpt-5" in self.model.lower():
+            print(f"[Nova Debug - LLM] GPT-5 params: reasoning_effort={reasoning_effort}, verbosity={verbosity}")
         print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
         print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
         
         if self.provider == "openai":
-            return self._complete_openai(system, user, temperature, max_tokens)
+            return self._complete_openai(system, user, temperature, max_tokens, reasoning_effort, verbosity)
         elif self.provider == "anthropic":
             return self._complete_anthropic(system, user, temperature, max_tokens)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
     
-    def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
+    def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int, 
+                        reasoning_effort: str = "high", verbosity: str = "medium") -> str:
         """Complete using OpenAI API."""
         try:
-            # Use Chat Completions API for all models
-            # Build kwargs
-            kwargs = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user}
-                ]
-            }
-            
-            # Handle model-specific parameters
+            # Handle GPT-5 models using Responses API
             if "gpt-5" in self.model.lower():
-                # GPT-5 uses max_completion_tokens instead of max_tokens
-                kwargs["max_completion_tokens"] = max_tokens
-                # GPT-5 only supports temperature=1.0
+                # GPT-5 uses the Responses API with different parameters
                 if temperature != 1.0:
                     print(f"[Nova Debug - LLM] WARNING: GPT-5 only supports temperature=1.0, but got {temperature}")
-                kwargs["temperature"] = 1.0
-                # Set reasoning effort to high for maximum reasoning quality
-                kwargs["reasoning_effort"] = "high"
+                
+                # Combine system and user prompts for GPT-5 input
+                combined_input = f"{system}\n\n{user}" if system else user
+                
+                print(f"[Nova Debug - LLM] Using GPT-5 Responses API with reasoning_effort={reasoning_effort}, verbosity={verbosity}")
+                
+                # Use the Responses API for GPT-5
+                response = self.client.responses.create(
+                    model=self.model,
+                    input=combined_input,
+                    reasoning={"effort": reasoning_effort},
+                    text={"verbosity": verbosity},
+                    max_completion_tokens=max_tokens
+                )
+                
+                # Extract content from Responses API response
+                content = response.output_text
             else:
-                kwargs["max_tokens"] = max_tokens
-                kwargs["temperature"] = temperature
-            
-            response = self.client.chat.completions.create(**kwargs)
-            content = response.choices[0].message.content
+                # Use Chat Completions API for non-GPT-5 models
+                kwargs = {
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user}
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature
+                }
+                
+                response = self.client.chat.completions.create(**kwargs)
+                content = response.choices[0].message.content
             if content:
                 content = content.strip()
                 print(f"[Nova Debug - LLM] OpenAI response length: {len(content)} chars")

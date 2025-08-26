@@ -21,10 +21,11 @@ from nova.agent.llm_client_complete_fix import (
 class EnhancedLLMAgent:
     """Enhanced LLM agent that implements Planner, Actor, and Critic for test fixing."""
     
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, verbose: bool = False):
         self.repo_path = repo_path
         self.settings = get_settings()
         self.llm = LLMClient()  # Use the unified LLM client
+        self.verbose = verbose
     
     def _read_file_with_cache(self, file_path: Path, state=None) -> str:
         """Read file with caching to prevent re-reading."""
@@ -391,27 +392,47 @@ class EnhancedLLMAgent:
                 len(failing_tests)
             )
             
+            # Log critic prompt for debugging
+            print(f"[Nova Debug - Critic] Prompt length: {len(user_prompt)} chars")
+            print(f"[Nova Debug - Critic] Failing tests to review: {len(failing_tests)}")
+            if self.verbose:
+                print(f"[Nova Debug - Critic] Full prompt preview (first 500 chars):\n{user_prompt[:500]}...")
+            
+            # Increased max_tokens for better responses
+            print(f"[Nova Debug - Critic] Calling LLM with temperature=0.1, max_tokens=500")
             response = self.llm.complete(
                 system=system_prompt,
                 user=user_prompt,
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=500  # Increased from 200 to allow fuller responses
             )
             
+            # Log response details
+            print(f"[Nova Debug - Critic] LLM response length: {len(response) if response else 0} chars")
+            if response:
+                print(f"[Nova Debug - Critic] Response preview (first 200 chars): {response[:200]}...")
+            else:
+                print(f"[Nova Debug - Critic] WARNING: Empty response from LLM!")
+            
             # Parse JSON response
-            if '{' in response and '}' in response:
+            if response and '{' in response and '}' in response:
                 start = response.find('{')
                 end = response.rfind('}') + 1
                 try:
-                    review_json = json.loads(response[start:end])
-                    return review_json.get('approved', False), review_json.get('reason', 'No reason provided')
-                except json.JSONDecodeError:
-                    # JSON parsing failed, use raw response as feedback
-                    pass
+                    json_str = response[start:end]
+                    review_json = json.loads(json_str)
+                    approved = review_json.get('approved', False)
+                    reason = review_json.get('reason', 'No reason provided')
+                    print(f"[Nova Debug - Critic] JSON parsed successfully: approved={approved}")
+                    return approved, reason
+                except json.JSONDecodeError as e:
+                    print(f"[Nova Debug - Critic] JSON parsing failed: {e}")
+                    print(f"[Nova Debug - Critic] Attempted to parse: {json_str[:100]}...")
             
             # Parsing failed – use raw response as feedback
             critic_feedback = (response or "").strip()
             if not critic_feedback:
+                print(f"[Nova Debug - Critic] Empty critic response, checking auto-approval criteria...")
                 # Fallback: approve small/safe patches when critic is silent
                 patch_lines = patch.split('\n')
                 files_touched = sum(1 for l in patch_lines if l.startswith('+++ b/'))
@@ -419,15 +440,21 @@ class EnhancedLLMAgent:
                     files_touched = sum(1 for l in patch_lines if l.startswith('FILE_REPLACE:'))
                 protected = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
                 safe = not any(p in l for l in patch_lines for p in protected)
+                
+                print(f"[Nova Debug - Critic] Auto-approval check: patch_lines={len(patch_lines)}, files_touched={files_touched}, safe={safe}")
+                
                 if safe and len(patch_lines) < 1000 and files_touched <= 3:
                     return True, "Auto-approved: empty critic feedback and patch is small & safe"
                 # otherwise still reject, but explain why
-                return False, "No feedback provided"
+                return False, "No feedback provided (patch too large or touches protected files)"
             # Decide to reject but show feedback (truncate if very long)
+            print(f"[Nova Debug - Critic] Using raw response as feedback")
             return False, critic_feedback[:500]
             
         except Exception as e:
-            print(f"Error in patch review: {e}")
+            print(f"[Nova Debug - Critic] ERROR in patch review: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             # Fallback: approve small/safe patches if critic errors out
             patch_lines = patch.split('\n')
             files_touched = sum(1 for l in patch_lines if l.startswith('+++ b/'))

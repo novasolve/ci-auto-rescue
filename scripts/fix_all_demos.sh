@@ -81,8 +81,8 @@ for demo_dir in demo_*/; do
         else
             # Log file to capture nova output for analysis
             LOG_FILE="/tmp/nova_fix_${demo_name}.log"
-            # Run Nova CI-Rescue and capture output
-            if nova fix "$DEMOS_DIR/$demo_dir" --verbose | tee "$LOG_FILE"; then
+            # Run Nova CI-Rescue and capture output (force colors)
+            if FORCE_COLOR=1 nova fix "$DEMOS_DIR/$demo_dir" --verbose 2>&1 | tee "$LOG_FILE"; then
                 echo -e "${GREEN}✅ Successfully fixed: $demo_name${NC}"
                 successful_demos+=("$demo_name")
                 # List saved patches if any exist

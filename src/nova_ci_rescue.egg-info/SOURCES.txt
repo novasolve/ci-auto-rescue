@@ -2,11 +2,13 @@ README.md
 pyproject.toml
 src/nova/__init__.py
 src/nova/cli.py
+src/nova/cli_fixed.py
 src/nova/config.py
 src/nova/agent/__init__.py
 src/nova/agent/llm_agent.py
 src/nova/agent/llm_agent_enhanced.py
 src/nova/agent/llm_client.py
+src/nova/agent/llm_client_complete_fix.py
 src/nova/agent/llm_client_fixed.py
 src/nova/agent/mock_llm.py
 src/nova/agent/state.py
@@ -19,10 +21,13 @@ src/nova/nodes/reflect.py
 src/nova/nodes/run_tests.py
 src/nova/runner/__init__.py
 src/nova/runner/test_runner.py
+src/nova/telemetry/__init__.py
 src/nova/telemetry/logger.py
+src/nova/telemetry/viewer.py
 src/nova/tools/fs.py
 src/nova/tools/git.py
 src/nova/tools/http.py
+src/nova/tools/lock.py
 src/nova/tools/patch_fixer.py
 src/nova/tools/pr_generator.py
 src/nova/tools/sandbox.py

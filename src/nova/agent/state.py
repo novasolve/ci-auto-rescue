@@ -34,6 +34,7 @@ class AgentState:
     timeout_seconds: int = 1200
     start_time: datetime = field(default_factory=datetime.now)
     current_step: int = 0  # Track step number for commits
+    whole_file_mode: bool = False  # Use whole file replacement instead of patches
     
     # Loop prevention
     used_actions: set = field(default_factory=set)  # Track (tool_name, args, modification_count)

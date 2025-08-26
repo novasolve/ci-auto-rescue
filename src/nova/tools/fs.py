@@ -309,6 +309,48 @@ def apply_and_commit_patch(
                 print("Error: Empty patch provided")
             return False, []
         
+        # Check if this is a whole file replacement format
+        if "FILE_REPLACE:" in diff_text:
+            # Handle whole file replacements
+            changed_files = []
+            lines = diff_text.split('\n')
+            i = 0
+            while i < len(lines):
+                if lines[i].startswith("FILE_REPLACE:"):
+                    file_path = lines[i][13:].strip()  # Remove "FILE_REPLACE:" prefix
+                    content_lines = []
+                    i += 1
+                    # Collect content until END_FILE_REPLACE
+                    while i < len(lines) and lines[i] != "END_FILE_REPLACE":
+                        content_lines.append(lines[i])
+                        i += 1
+                    
+                    # Write the file
+                    full_path = repo_root / file_path
+                    try:
+                        # Ensure parent directory exists
+                        full_path.parent.mkdir(parents=True, exist_ok=True)
+                        # Write the new content
+                        full_path.write_text('\n'.join(content_lines))
+                        changed_files.append(Path(file_path))
+                        if verbose:
+                            print(f"Replaced file: {file_path}")
+                    except Exception as e:
+                        if verbose:
+                            print(f"Error writing file {file_path}: {e}")
+                        return False, []
+                i += 1
+            
+            # Commit if we have a git manager
+            if git_manager and changed_files:
+                from nova.tools.git import GitBranchManager
+                if isinstance(git_manager, GitBranchManager):
+                    commit_success = git_manager.commit_patch(step_number, changed_files)
+                    if not commit_success and verbose:
+                        print(f"Warning: Failed to commit step {step_number}")
+            
+            return True, changed_files
+        
         # Fix patch format issues (trailing artifacts, hunk count mismatches) before applying
         try:
             from nova.tools.patch_fixer import fix_patch_format, validate_patch, attempt_patch_reconstruction

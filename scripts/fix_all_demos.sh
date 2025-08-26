@@ -76,13 +76,14 @@ for demo_dir in demo_*/; do
         fi
         
         if [[ "$DRY_RUN" == "true" ]]; then
-            echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose"
+            echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose --whole-file"
             successful_demos+=("$demo_name (dry-run)")
         else
             # Log file to capture nova output for analysis
             LOG_FILE="/tmp/nova_fix_${demo_name}.log"
             # Run Nova CI-Rescue and capture output (force colors)
-            if FORCE_COLOR=1 nova fix "$DEMOS_DIR/$demo_dir" --verbose 2>&1 | tee "$LOG_FILE"; then
+            # Use whole-file mode for more reliable fixes
+            if FORCE_COLOR=1 nova fix "$DEMOS_DIR/$demo_dir" --verbose --whole-file 2>&1 | tee "$LOG_FILE"; then
                 echo -e "${GREEN}✅ Successfully fixed: $demo_name${NC}"
                 successful_demos+=("$demo_name")
                 # List saved patches if any exist

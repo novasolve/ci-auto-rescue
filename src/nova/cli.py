@@ -132,6 +132,12 @@ def fix(
         "--no-telemetry",
         help="Disable telemetry collection for this run",
     ),
+    whole_file: bool = typer.Option(
+        False,
+        "--whole-file",
+        "-w",
+        help="Replace entire files instead of using patches (simpler, more reliable)",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -140,6 +146,10 @@ def fix(
     console.print(f"Repository: {repo_path}")
     console.print(f"Max iterations: {max_iters}")
     console.print(f"Timeout: {timeout}s")
+    if whole_file:
+        console.print(f"Mode: [yellow]Whole file replacement[/yellow]")
+    else:
+        console.print(f"Mode: [cyan]Patch-based fixes[/cyan]")
     console.print()
     
     # Initialize branch manager for nova-fix branch
@@ -182,6 +192,7 @@ def fix(
                 repo_path=repo_path,
                 max_iterations=max_iters,
                 timeout_seconds=timeout,
+                whole_file_mode=whole_file,
             )
             state.start_time = datetime.now()  # Track start time for PR generation
             
@@ -335,6 +346,32 @@ def fix(
                 patch_lines = patch_diff.split('\n')
                 if verbose:
                     console.print(f"[dim]Generated patch: {len(patch_lines)} lines[/dim]")
+                    
+                    # Show the actual patch content in verbose mode
+                    if whole_file:
+                        console.print("\n[bold cyan]File replacements:[/bold cyan]")
+                        for line in patch_lines[:50]:  # Show first 50 lines
+                            if line.startswith('FILE_REPLACE:'):
+                                console.print(f"[bold yellow]{line}[/bold yellow]")
+                            elif line == 'END_FILE_REPLACE':
+                                console.print(f"[bold yellow]{line}[/bold yellow]\n")
+                            else:
+                                console.print(f"[dim]{line}[/dim]")
+                        if len(patch_lines) > 50:
+                            console.print(f"[dim]... ({len(patch_lines) - 50} more lines)[/dim]")
+                    else:
+                        console.print("\n[bold cyan]Patch preview:[/bold cyan]")
+                        for line in patch_lines[:30]:  # Show first 30 lines
+                            if line.startswith('+++') or line.startswith('---'):
+                                console.print(f"[bold]{line}[/bold]")
+                            elif line.startswith('+'):
+                                console.print(f"[green]{line}[/green]")
+                            elif line.startswith('-'):
+                                console.print(f"[red]{line}[/red]")
+                            else:
+                                console.print(f"[dim]{line}[/dim]")
+                        if len(patch_lines) > 30:
+                            console.print(f"[dim]... ({len(patch_lines) - 30} more lines)[/dim]")
                 
                 # Log actor completion
                 telemetry.log_event("actor_complete", {
@@ -354,7 +391,7 @@ def fix(
                 patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
                 
                 if verbose:
-                    console.print(f"[dim]Review result: {review_reason}[/dim]")
+                    console.print(f"[dim]Critic review: {review_reason}[/dim]")
                 
                 if not patch_approved:
                     console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")

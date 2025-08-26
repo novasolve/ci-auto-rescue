@@ -156,13 +156,24 @@ class EnhancedLLMAgent:
                 print("Warning: No files found in LLM response")
                 return None
             
-            # Generate unified diff for each file
-            combined_diff = ""
-            for file_path, new_content in files_to_fix.items():
-                file_diff = convert_full_file_to_patch(file_path, new_content, self.repo_path)
-                combined_diff += file_diff + "\n"
-            
-            return combined_diff.strip()
+            # Check if we're in whole file mode
+            if state and hasattr(state, 'whole_file_mode') and state.whole_file_mode:
+                # In whole file mode, return a special format that indicates files to replace
+                # Format: FILE_REPLACE:<path>\n<content>\nEND_FILE_REPLACE
+                combined_output = ""
+                for file_path, new_content in files_to_fix.items():
+                    combined_output += f"FILE_REPLACE:{file_path}\n"
+                    combined_output += new_content
+                    combined_output += "\nEND_FILE_REPLACE\n"
+                return combined_output.strip()
+            else:
+                # Generate unified diff for each file (normal patch mode)
+                combined_diff = ""
+                for file_path, new_content in files_to_fix.items():
+                    file_diff = convert_full_file_to_patch(file_path, new_content, self.repo_path)
+                    combined_diff += file_diff + "\n"
+                
+                return combined_diff.strip()
             
         except Exception as e:
             print(f"Error generating patch: {e}")
@@ -296,21 +307,38 @@ class EnhancedLLMAgent:
         if not patch:
             return False, "Empty patch"
         
-        # Safety checks first
-        patch_lines = patch.split('\n')
-        files_touched = sum(1 for line in patch_lines if line.startswith('+++ b/'))
-        
-        if len(patch_lines) >= 1000:
-            return False, f"Patch too large ({len(patch_lines)} lines)"
-        
-        if files_touched > 10:
-            return False, f"Too many files modified ({files_touched})"
-        
-        # Check for dangerous patterns
-        dangerous_patterns = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
-        for line in patch_lines:
-            if any(pattern in line for pattern in dangerous_patterns):
-                return False, "Patch modifies protected/configuration files"
+        # Check if this is whole file replacement format
+        if "FILE_REPLACE:" in patch:
+            # For whole file replacements, apply different validation
+            patch_lines = patch.split('\n')
+            files_touched = sum(1 for line in patch_lines if line.startswith('FILE_REPLACE:'))
+            
+            if files_touched > 10:
+                return False, f"Too many files modified ({files_touched})"
+            
+            # Check for dangerous patterns in file paths
+            dangerous_patterns = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
+            for line in patch_lines:
+                if line.startswith('FILE_REPLACE:'):
+                    file_path = line[13:].strip()
+                    if any(pattern in file_path for pattern in dangerous_patterns):
+                        return False, "Patch modifies protected/configuration files"
+        else:
+            # Normal patch safety checks
+            patch_lines = patch.split('\n')
+            files_touched = sum(1 for line in patch_lines if line.startswith('+++ b/'))
+            
+            if len(patch_lines) >= 1000:
+                return False, f"Patch too large ({len(patch_lines)} lines)"
+            
+            if files_touched > 10:
+                return False, f"Too many files modified ({files_touched})"
+            
+            # Check for dangerous patterns
+            dangerous_patterns = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
+            for line in patch_lines:
+                if any(pattern in line for pattern in dangerous_patterns):
+                    return False, "Patch modifies protected/configuration files"
         
         # Use LLM for semantic review
         try:

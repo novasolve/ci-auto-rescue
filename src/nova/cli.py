@@ -161,6 +161,26 @@ def fix(
         "-w",
         help="Replace entire files instead of using patches (simpler, more reliable)",
     ),
+    # Critic tuning options
+    critic_max_tokens: int = typer.Option(
+        800,
+        "--critic-max-tokens",
+        help="Max tokens for critic LLM responses (env: NOVA_CRITIC_MAX_TOKENS)",
+        min=128,
+        max=8192,
+    ),
+    critic_retries: int = typer.Option(
+        3,
+        "--critic-retries",
+        help="Number of retry attempts on empty/failed critic responses (env: NOVA_CRITIC_RETRIES)",
+        min=1,
+        max=10,
+    ),
+    critic_auto_approve_small_safe: bool = typer.Option(
+        False,
+        "--critic-auto-approve-small-safe/--no-critic-auto-approve-small-safe",
+        help="Allow auto-approval when critic is silent and patch is small & safe (env: NOVA_CRITIC_AUTO_APPROVE_SMALL_SAFE). Default OFF (fail-closed).",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -173,6 +193,7 @@ def fix(
         console.print(f"Mode: [yellow]Whole file replacement[/yellow]")
     else:
         console.print(f"Mode: [cyan]Patch-based fixes[/cyan]")
+    console.print(f"[dim]Critic config → max_tokens={critic_max_tokens}, retries={critic_retries}, auto_approve_small_safe={critic_auto_approve_small_safe}[/dim]")
     console.print()
     
     # Initialize branch manager for nova-fix branch
@@ -204,6 +225,13 @@ def fix(
             
             # Initialize settings and telemetry
             settings = get_settings()
+            
+            # Apply critic flags to environment BEFORE agent initialization (agent reads settings/env)
+            import os
+            os.environ["NOVA_CRITIC_MAX_TOKENS"] = str(critic_max_tokens)
+            os.environ["NOVA_CRITIC_RETRIES"] = str(critic_retries)
+            os.environ["NOVA_CRITIC_AUTO_APPROVE_SMALL_SAFE"] = "1" if critic_auto_approve_small_safe else "0"
+            
             # Override telemetry setting if --no-telemetry flag is used
             telemetry_enabled = settings.enable_telemetry and not no_telemetry
             telemetry = JSONLLogger(settings, enabled=telemetry_enabled)
@@ -440,6 +468,16 @@ def fix(
                 
                 if not patch_approved:
                     console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
+                    
+                    # Special diagnostic if critic returned empty feedback
+                    if "empty llm response" in review_reason.lower():
+                        telemetry.log_event("critic_empty_llm_response", {
+                            "iteration": iteration,
+                            "critic_max_tokens": critic_max_tokens,
+                            "critic_retries": critic_retries
+                        })
+                        console.print("[yellow]⚠ The critic returned empty output. Consider increasing --critic-max-tokens or --critic-retries, or check your LLM API health.[/yellow]")
+                    
                     # Store critic feedback for next iteration
                     state.critic_feedback = review_reason
                     telemetry.log_event("critic_rejected", {

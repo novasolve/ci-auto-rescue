@@ -5,12 +5,12 @@ This is the production agent for Nova CI-Rescue that uses GPT-4/5 or Claude.
 
 import json
 import os
-import time
 import re
 import ast
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set, Tuple
-from nova.agent.llm_client import LLMClient, parse_plan, build_planner_prompt, build_patch_prompt
+from nova.agent.llm_client import parse_plan, build_planner_prompt, build_patch_prompt
+from nova.agent.llm_interface import UnifiedLLMInterface
 from nova.config import get_settings
 from nova.agent.llm_client_complete_fix import (
     build_comprehensive_planner_prompt, 
@@ -26,7 +26,7 @@ class EnhancedLLMAgent:
     def __init__(self, repo_path: Path, verbose: bool = False):
         self.repo_path = repo_path
         self.settings = get_settings()
-        self.llm = LLMClient()  # Use the unified LLM client
+        self.llm = UnifiedLLMInterface(verbose=verbose)  # Use the unified LLM interface
         self.verbose = verbose
     
     def _read_file_with_cache(self, file_path: Path, state=None) -> str:
@@ -157,40 +157,10 @@ class EnhancedLLMAgent:
                 "Follow the exact format requested."
             ).format(len(failing_tests))
             
-            # Add retries for actor too
-            retries = int(getattr(self.settings, "actor_retries", int(os.getenv("NOVA_ACTOR_RETRIES", "3"))))
-            base_tokens = 8000  # Keep high for actor since it generates full file contents
-            
-            response = ""
-            for attempt in range(max(1, retries)):
-                try:
-                    # Use temperature=1.0 for GPT-5 (actor needs to be creative)
-                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
-                    temp = 1.0  # Actor always uses 1.0 for creativity
-                    print(f"[Nova Debug - Actor] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens}")
-                    # Actor uses high reasoning for best code generation
-                    response = self.llm.complete(
-                        system=system_prompt,
-                        user=prompt,
-                        temperature=temp,
-                        max_tokens=base_tokens,  # Increased to prevent truncation
-                        reasoning_effort="high",  # High for best code generation
-                        verbosity="high" if is_gpt5 else "medium"  # Comprehensive code with comments
-                    )
-                    if response and response.strip():
-                        print(f"[Nova Debug - Actor] Got response of {len(response)} chars")
-                        break
-                    else:
-                        print(f"[Nova Debug - Actor] WARNING: Empty response from LLM on attempt {attempt + 1}")
-                except Exception as e:
-                    print(f"[Nova Debug - Actor] LLM error on attempt {attempt + 1}: {type(e).__name__}: {e}")
-                    response = ""
-                # brief backoff
-                if attempt < retries - 1:
-                    time.sleep(0.3 * (attempt + 1))
+            # Use unified interface for actor
+            response = self.llm.actor_generate(system_prompt, prompt)
             
             if not response:
-                print(f"[Nova Debug - Actor] ERROR: No response from LLM after {retries} attempts")
                 return None
             
             # Parse the response to extract file contents
@@ -435,42 +405,14 @@ class EnhancedLLMAgent:
             if self.verbose:
                 print(f"[Nova Debug - Critic] Full prompt preview (first 500 chars):\n{user_prompt[:500]}...")
             
-            # Tunables (settings or env with sensible defaults)
-            retries = int(getattr(self.settings, "critic_retries", int(os.getenv("NOVA_CRITIC_RETRIES", "3"))))
-            base_tokens = int(getattr(self.settings, "critic_max_tokens", int(os.getenv("NOVA_CRITIC_MAX_TOKENS", "800"))))
+            # Use unified interface for critic
+            response = self.llm.critic_review(system_prompt, user_prompt)
             
-            # Retry logic for better reliability
-            response = ""
-            last_err: Optional[Exception] = None
-            for attempt in range(max(1, retries)):
-                try:
-                    # Use temperature=1.0 for GPT-5
-                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
-                    temp = 1.0 if is_gpt5 else (0.1 if attempt == 0 else 0.2)
-                    print(f"[Nova Debug - Critic] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
-                    # Critic uses minimal reasoning for fast responses
-                    response = self.llm.complete(
-                        system=system_prompt,
-                        user=user_prompt,
-                        temperature=temp,
-                        max_tokens=base_tokens + (attempt * 200),
-                        reasoning_effort="minimal" if is_gpt5 else "high",  # Minimal for GPT-5 critic
-                        verbosity="low" if is_gpt5 else "medium"  # Concise feedback
-                    )
-                    # Log response details
-                    print(f"[Nova Debug - Critic] LLM response length: {len(response) if response else 0} chars")
-                    if response and response.strip():
-                        print(f"[Nova Debug - Critic] Response preview (first 200 chars): {response[:200]}...")
-                        break
-                    else:
-                        print(f"[Nova Debug - Critic] WARNING: Empty response from LLM on attempt {attempt + 1}")
-                except Exception as e:
-                    last_err = e
-                    print(f"[Nova Debug - Critic] LLM error on attempt {attempt + 1}: {type(e).__name__}: {e}")
-                    response = ""
-                # brief backoff
-                if attempt < retries - 1:
-                    time.sleep(0.2 * (attempt + 1))
+            # Log response details (interface handles most logging, but we add context-specific logs)
+            if response:
+                print(f"[Nova Debug - Critic] Response preview (first 200 chars): {response[:200]}...")
+            else:
+                print(f"[Nova Debug - Critic] WARNING: Empty response from LLM!")
             
             # Parse JSON response
             if response and '{' in response and '}' in response:
@@ -490,7 +432,7 @@ class EnhancedLLMAgent:
             # Parsing failed – use raw response as feedback
             critic_feedback = (response or "").strip()
             if not critic_feedback:
-                print(f"[Nova Debug - Critic] Empty critic response after {retries} attempts")
+                print(f"[Nova Debug - Critic] Empty critic response after retries")
                 # Fail CLOSED by default if the critic is silent.
                 # Allow opt-in auto-approval via settings or env var.
                 auto_approve = bool(getattr(self.settings, "critic_auto_approve_small_safe", False))
@@ -560,40 +502,10 @@ class EnhancedLLMAgent:
                 "Your plan must address EVERY SINGLE failing test in one go."
             )
             
-            # Add retries for planner too
-            retries = int(getattr(self.settings, "planner_retries", int(os.getenv("NOVA_PLANNER_RETRIES", "3"))))
-            base_tokens = int(getattr(self.settings, "planner_max_tokens", int(os.getenv("NOVA_PLANNER_MAX_TOKENS", "800"))))
-            
-            response = ""
-            for attempt in range(max(1, retries)):
-                try:
-                    # Use temperature=1.0 for GPT-5
-                    is_gpt5 = self.llm.provider == "openai" and "gpt-5" in self.llm.model.lower()
-                    temp = 1.0 if is_gpt5 else (0.3 if attempt == 0 else 0.4)
-                    print(f"[Nova Debug - Planner] Attempt {attempt + 1}/{retries}, temperature={temp}, max_tokens={base_tokens + (attempt * 200)}")
-                    # Planner uses medium reasoning for balanced planning
-                    response = self.llm.complete(
-                        system=system_prompt,
-                        user=prompt,
-                        temperature=temp,
-                        max_tokens=base_tokens + (attempt * 200),
-                        reasoning_effort="medium" if is_gpt5 else "high",  # Medium for GPT-5 planner
-                        verbosity="medium"  # Detailed plans
-                    )
-                    if response and response.strip():
-                        print(f"[Nova Debug - Planner] Got response of {len(response)} chars")
-                        break
-                    else:
-                        print(f"[Nova Debug - Planner] WARNING: Empty response from LLM on attempt {attempt + 1}")
-                except Exception as e:
-                    print(f"[Nova Debug - Planner] LLM error on attempt {attempt + 1}: {type(e).__name__}: {e}")
-                    response = ""
-                # brief backoff
-                if attempt < retries - 1:
-                    time.sleep(0.2 * (attempt + 1))
+            # Use unified interface for planner
+            response = self.llm.planner_plan(system_prompt, prompt)
             
             if not response:
-                print(f"[Nova Debug - Planner] ERROR: No response from LLM after {retries} attempts")
                 return {"approach": "Failed to get plan from LLM", "target_tests": failing_tests, "steps": ["Fix failing tests"]}
             
             print(f"[Nova Debug] Plan response from LLM: {response[:200]}...")

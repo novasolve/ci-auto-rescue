@@ -8,7 +8,7 @@ import requests
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-from nova.agent.llm_client import LLMClient
+from nova.agent.llm_interface import UnifiedLLMInterface
 
 
 class PRGenerator:
@@ -16,7 +16,7 @@ class PRGenerator:
     
     def __init__(self, repo_path: Path):
         self.repo_path = Path(repo_path)
-        self.llm = LLMClient()
+        self.llm = UnifiedLLMInterface(verbose=False)
     
     def generate_pr_content(self, 
                           fixed_tests: List[Dict],
@@ -81,11 +81,11 @@ Execution details:
 Now generate the PR title and body."""
         
         try:
-            # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
-            response = self.llm.complete(
+            # Use unified interface for PR content generation (general task)
+            response = self.llm.general_complete(
                 system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
                 user=prompt,
-                max_tokens=2000  # Will be handled by LLMClient with reasoning_effort=high
+                max_tokens=2000
             )
             
             # Debug: log the response

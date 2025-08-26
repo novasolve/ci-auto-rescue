@@ -140,6 +140,14 @@ def fix(
     state = None
     
     try:
+        # Check for clean working tree before starting
+        if not git_manager._check_clean_working_tree():
+            console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
+            from rich.prompt import Confirm
+            if not Confirm.ask("Proceed and potentially lose these changes?"):
+                console.print("[dim]Aborting nova fix due to uncommitted changes.[/dim]")
+                raise typer.Exit(1)
+        
         # Create the nova-fix branch
         branch_name = git_manager.create_fix_branch()
         console.print(f"[dim]Working on branch: {branch_name}[/dim]")
@@ -368,13 +376,20 @@ def fix(
             result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
             
             if not result["success"]:
-                console.print(f"[red]❌ Failed to apply patch[/red]")
-                state.final_status = "patch_error"
+                console.print(f"[red]❌ Failed to apply patch: {result.get('error', 'unknown error')}[/red]")
+                # Provide feedback for next iteration
+                state.critic_feedback = "Patch failed to apply – likely incorrect context."
                 telemetry.log_event("patch_error", {
                     "iteration": iteration,
-                    "step": result.get("step_number", 0)
+                    "step": result.get("step_number", 0),
+                    "error": result.get('error', 'unknown')
                 })
-                break
+                if iteration < state.max_iterations:
+                    console.print(f"[yellow]↻ Retrying with a new patch in iteration {iteration+1}...[/yellow]")
+                    continue  # go to next iteration without breaking
+                else:
+                    state.final_status = "patch_error"
+                    break
             else:
                 # Log successful patch application (only if not already done by fallback)
                 console.print(f"[green]✓ Patch applied and committed (step {result['step_number']})[/green]")
@@ -437,6 +452,8 @@ def fix(
                 console.print(f"[green]✓ Progress: Fixed {fixed_count} test(s), {state.total_failures} remaining[/green]")
             else:
                 console.print(f"[yellow]⚠ No progress: {state.total_failures} test(s) still failing[/yellow]")
+                # Let the planner/critic know that the last patch had no effect
+                state.critic_feedback = "No progress in reducing failures – try a different approach."
             
             # Check timeout
             if state.check_timeout():

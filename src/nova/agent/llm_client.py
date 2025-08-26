@@ -4,6 +4,7 @@ Unified LLM client for Nova CI-Rescue supporting OpenAI and Anthropic.
 
 import json
 from typing import Dict, List, Optional, Any
+import os
 from pathlib import Path
 
 try:
@@ -21,7 +22,9 @@ from nova.tools.http import AllowedHTTPClient
 
 
 class LLMClient:
-    """Unified LLM client that supports OpenAI and Anthropic models."""
+    """Unified LLM client that supports OpenAI and Anthropic with correct param shapes."""
+    _warned_fixed_temp: bool = False
+    _responses_empty_streak: int = 0
     
     def __init__(self):
         self.settings = get_settings()
@@ -49,27 +52,21 @@ class LLMClient:
             raise ValueError("No valid API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
     
     def _get_openai_model_name(self) -> str:
-        """Get the OpenAI model name to use."""
-        model = self.settings.default_llm_model
-        
-        # Map special names to actual API model names
-        if model == "gpt-5-chat-latest":
-            # Use full GPT-5 model
-            return "gpt-5"
-        elif "gpt-5" in model.lower():
-            # Use the GPT-5 variant requested
-            if "mini" in model.lower():
-                return "gpt-5-mini"
-            elif "nano" in model.lower():
-                return "gpt-5-nano"
-            else:
-                # Default to full GPT-5 model for best reasoning
-                return "gpt-5"
-        elif model in ["gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]:
-            return model
+        """Resolve aliases into API model names and print the result once."""
+        raw = (self.settings.default_llm_model or "gpt-4o").strip()
+        name = raw.lower()
+        if name in {"gpt-5-chat-latest", "gpt5", "gpt-5"}:
+            resolved = "gpt-5"
+        elif "gpt-5-mini" in name:
+            resolved = "gpt-5-mini"
+        elif "gpt-5-nano" in name:
+            resolved = "gpt-5-nano"
         else:
-            # Default to GPT-4o
-            return "gpt-4o"
+            resolved = raw  # pass-through for gpt-4o, gpt-4o-mini, etc.
+        if not getattr(self, "_printed_resolved_model", False):
+            print(f"[Nova Debug - LLM] Resolved OpenAI model: {raw} → {resolved}")
+            self._printed_resolved_model = True
+        return resolved
     
     def _get_anthropic_model_name(self) -> str:
         """Get the Anthropic model name to use."""
@@ -88,7 +85,14 @@ class LLMClient:
             # Default to Claude 3.5 Sonnet
             return "claude-3-5-sonnet-20241022"
     
-    def complete(self, system: str, user: str, temperature: float = 0.3, max_tokens: int = 2000) -> str:
+    def complete(
+        self,
+        system: str,
+        user: str,
+        temperature: float = 0.3,
+        max_tokens: int = 2000,
+        reasoning_effort: str = "high",
+    ) -> str:
         """
         Get a completion from the LLM.
         
@@ -108,53 +112,88 @@ class LLMClient:
         print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
         
         if self.provider == "openai":
-            return self._complete_openai(system, user, temperature, max_tokens)
+            return self._complete_openai(system, user, temperature, max_tokens, reasoning_effort)
         elif self.provider == "anthropic":
             return self._complete_anthropic(system, user, temperature, max_tokens)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
     
-    def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
-        """Complete using OpenAI API."""
-        try:
-            # Use Chat Completions API for all models
-            # Build kwargs
-            kwargs = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user}
-                ]
-            }
-            
-            # Handle model-specific parameters
-            if "gpt-5" in self.model.lower():
-                # GPT-5 uses max_completion_tokens instead of max_tokens
-                kwargs["max_completion_tokens"] = max_tokens
-                # GPT-5 only supports temperature=1.0
-                if temperature != 1.0:
-                    print(f"[Nova Debug - LLM] WARNING: GPT-5 only supports temperature=1.0, but got {temperature}")
-                kwargs["temperature"] = 1.0
-                # Set reasoning effort to high for maximum reasoning quality
-                kwargs["reasoning_effort"] = "high"
+    def _complete_openai(self, system, user, temperature, max_tokens, reasoning_effort="high") -> str:
+        """Use Responses API for GPT‑5 by default, with automatic Chat fallback on empty output."""
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        is_gpt5 = "gpt-5" in self.model.lower()
+        prefer_responses = is_gpt5 and (os.getenv("NOVA_FORCE_OPENAI_CHAT") != "1")
+
+        # GPT‑5 temperature is fixed to 1.0 (enforce once, non‑spammy)
+        if is_gpt5 and temperature != 1.0 and not self.__class__._warned_fixed_temp:
+            print(f"[Nova Debug - LLM] NOTE: {self.model} enforces temperature=1.0. Overriding {temperature}.")
+            self.__class__._warned_fixed_temp = True
+        if is_gpt5:
+            temperature = 1.0
+
+        def _parse_responses_output(resp) -> str:
+            text = getattr(resp, "output_text", None)
+            if text:
+                return text.strip()
+            parts: List[str] = []
+            for item in getattr(resp, "output", []) or []:
+                for c in getattr(item, "content", []) or []:
+                    t = getattr(c, "text", None)
+                    if t:
+                        parts.append(t)
+            return "".join(parts).strip()
+
+        # 1) Preferred path for GPT‑5: Responses API
+        if prefer_responses:
+            try:
+                print("[Nova Debug - LLM] Using Responses API (input=messages, max_output_tokens, reasoning.effort).")
+                resp = self.client.responses.create(
+                    model=self.model,
+                    input=messages,
+                    temperature=temperature,
+                    max_output_tokens=max_tokens,
+                    reasoning={"effort": reasoning_effort} if reasoning_effort else None,
+                )
+                content = _parse_responses_output(resp)
+                if content:
+                    self._responses_empty_streak = 0
+                    print(f"[Nova Debug - LLM] Responses output length: {len(content)}")
+                    return content
+                # empty => bump streak and consider fallback
+                self._responses_empty_streak += 1
+                print("[Nova Debug - LLM] WARNING: Responses API returned empty content!")
+            except Exception as e:
+                print(f"[Nova Debug - LLM] Responses API error: {type(e).__name__}: {e}")
+                self._responses_empty_streak += 1
+
+            # Automatic fallback to Chat after repeated empties (unless disabled)
+            threshold = int(os.getenv("NOVA_RESPONSES_EMPTY_THRESHOLD", "2"))
+            if self._responses_empty_streak >= threshold and os.getenv("NOVA_DISABLE_CHAT_FALLBACK") != "1":
+                print("[Nova Debug - LLM] Auto-fallback: Responses→Chat after repeated empty outputs.")
             else:
-                kwargs["max_tokens"] = max_tokens
-                kwargs["temperature"] = temperature
-            
-            response = self.client.chat.completions.create(**kwargs)
-            content = response.choices[0].message.content
-            if content:
-                content = content.strip()
-                print(f"[Nova Debug - LLM] OpenAI response length: {len(content)} chars")
-                print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
-            else:
-                print(f"[Nova Debug - LLM] WARNING: OpenAI returned None/empty content!")
-                content = ""
-            return content
-                
-        except Exception as e:
-            print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
-            raise
+                # Give the caller a chance to retry; return empty string
+                return ""
+
+        # 2) Chat Completions path (default for non‑GPT‑5; fallback for GPT‑5)
+        kwargs = {"model": self.model, "messages": messages}
+        if is_gpt5:
+            print("[Nova Debug - LLM] Using Chat Completions (max_completion_tokens, reasoning_effort).")
+            kwargs["temperature"] = 1.0
+            kwargs["max_completion_tokens"] = max_tokens
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
+        else:
+            kwargs["temperature"] = temperature
+            kwargs["max_tokens"] = max_tokens
+
+        resp = self.client.chat.completions.create(**kwargs)
+        content = (resp.choices[0].message.content or "").strip()
+        if not content:
+            print("[Nova Debug - LLM] WARNING: Chat returned empty content!")
+        return content
     
     def _complete_anthropic(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
         """Complete using Anthropic API."""

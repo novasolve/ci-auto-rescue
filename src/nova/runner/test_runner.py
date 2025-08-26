@@ -117,62 +117,55 @@ class TestRunner:
         
         failing_tests = []
         
-        # Extract failing tests from the report
-        for test in report.get('tests', []):
-            if test.get('outcome') in ['failed', 'error']:
-                # Extract test details
-                nodeid = test.get('nodeid', '')
-                
-                # Parse file and line from nodeid (format: path/to/test.py::TestClass::test_method)
-                if '::' in nodeid:
-                    file_part, test_part = nodeid.split('::', 1)
-                    test_name = test_part.replace('::', '.')
-                else:
-                    file_part = nodeid
-                    test_name = Path(nodeid).stem
-                
-                # Normalize the file path to be relative to repo root
-                # Remove repo directory prefix if it's included in the path
-                repo_name = self.repo_path.name
-                if file_part.startswith(f"{repo_name}/"):
-                    file_part = file_part[len(repo_name)+1:]
-                
-                # Get the traceback
-                call_info = test.get('call', {})
-                longrepr = call_info.get('longrepr', '')
-                
-                # Extract short traceback - capture up to the assertion error line
-                traceback_lines = longrepr.split('\n') if longrepr else []
-                short_trace = []
-                for line in traceback_lines:
-                    short_trace.append(line)
-                    if line.strip().startswith("E"):  # error/exception line
+        # Extract failing tests from all phases (setup/call/teardown)
+        for test in report.get("tests", []):
+            outcome = test.get("outcome")
+            if outcome not in {"failed", "error"}:
+                continue
+            nodeid = test.get("nodeid", "")
+            file_part = nodeid.split("::", 1)[0] if "::" in nodeid else nodeid
+            test_name = nodeid.split("::")[-1] if "::" in nodeid else Path(nodeid).stem
+            # Normalize file relative to repo root
+            repo_name = self.repo_path.name
+            if file_part.startswith(f"{repo_name}/"):
+                file_part = file_part[len(repo_name)+1:]
+            # Phase-prefer: call > setup > teardown
+            phase = None
+            longrepr = ""
+            for ph in ("call", "setup", "teardown"):
+                if ph in test:
+                    phase = ph
+                    longrepr = test[ph].get("longrepr", "") or longrepr
+                    if test[ph].get("outcome") in {"failed", "error"}:
                         break
-                    if len(short_trace) >= 5:
+            # Line extraction
+            line_no = 0
+            for ln in (longrepr or "").splitlines():
+                if file_part in ln and ":" in ln:
+                    parts = ln.split(":")
+                    try:
+                        idx = parts.index(file_part) if file_part in parts else 0
+                        cand = parts[idx+1] if idx+1 < len(parts) else parts[1]
+                        line_no = int("".join([c for c in cand if c.isdigit()]))
                         break
-                short_traceback = '\n'.join(short_trace) if short_trace else 'Test failed'
-                
-                # Try to get line number from the traceback
-                line_no = 0
-                for line in traceback_lines:
-                    if file_part in line and ':' in line:
-                        try:
-                            # Extract line number from traceback line like "test.py:42"
-                            parts = line.split(':')
-                            for i, part in enumerate(parts):
-                                if file_part in part and i + 1 < len(parts):
-                                    line_no = int(parts[i + 1].split()[0])
-                                    break
-                        except (ValueError, IndexError):
-                            pass
-                
-                failing_tests.append(FailingTest(
-                    name=test_name,
-                    file=file_part,
-                    line=line_no,
-                    short_traceback=short_traceback,
-                    full_traceback=longrepr,
-                ))
+                    except Exception:
+                        pass
+            # Short traceback (first E-line or up to 5 lines)
+            tlines = (longrepr or "").splitlines()
+            short = []
+            for ln in tlines:
+                short.append(ln)
+                if ln.strip().startswith("E"):
+                    break
+                if len(short) >= 5:
+                    break
+            failing_tests.append(FailingTest(
+                name=test_name,
+                file=file_part,
+                line=line_no,
+                short_traceback="\n".join(short) or "Test failed",
+                full_traceback=longrepr or None,
+            ))
         
         return failing_tests
     

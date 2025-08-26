@@ -107,14 +107,29 @@ class GitBranchManager:
         owner, repo = m.group(1), m.group(2)
         return owner, repo
 
-    def _check_clean_working_tree(self) -> bool:
-        """Check if the working tree is clean (ignoring submodules and untracked files)."""
-        success, output = self._run_git_command(
-            "status", "--porcelain", "--ignore-submodules=dirty", "--untracked-files=no"
-        )
-        if not success:
+    def _check_clean_working_tree(self, ignore_globs: Optional[List[str]] = None) -> bool:
+        """
+        Check if the working tree is clean, ignoring submodules and specific globs.
+        """
+        ignore_globs = ignore_globs or ["examples/demos/**"]
+        # Tracked changes?
+        ok_tracked, _ = self._run_git_command("diff", "--no-ext-diff", "--quiet", "--exit-code")
+        ok_indexed, _ = self._run_git_command("diff", "--no-ext-diff", "--cached", "--quiet", "--exit-code")
+        if not (ok_tracked and ok_indexed):
             return False
-        return output.strip() == ""
+        # Untracked? Filter by globs.
+        ok_ls, out = self._run_git_command("ls-files", "-o", "--exclude-standard")
+        if not ok_ls:
+            return False
+        untracked = [p for p in out.splitlines() if p.strip()]
+        def _ignored(p: str) -> bool:
+            from fnmatch import fnmatch
+            return any(fnmatch(p, g) for g in ignore_globs)
+        for p in untracked:
+            if not _ignored(p):
+                return False
+        # Submodules: ignore dirtiness
+        return True
 
     def get_default_branch(self) -> str:
         """Get the default branch name (main, master, etc.)."""
@@ -464,7 +479,8 @@ def managed_fix_branch(repo_path: Path, verbose: bool = False):
     manager = GitBranchManager(repo_path, verbose)
 
     try:
-        if not manager._check_clean_working_tree():
+        ignore_globs = ["examples/demos/**"]
+        if not manager._check_clean_working_tree(ignore_globs=ignore_globs):
             console.print("[yellow]⚠️  Warning: Working tree is not clean. Uncommitted changes may be lost.[/yellow]")
             response = input("Continue anyway? (y/N): ")
             if response.lower() != "y":

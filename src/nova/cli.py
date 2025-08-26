@@ -150,6 +150,11 @@ def fix(
         "--auto-pr",
         help="Automatically create PR without prompting",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Bypass clean working tree check (use with caution).",
+    ),
     no_telemetry: bool = typer.Option(
         False,
         "--no-telemetry",
@@ -188,7 +193,8 @@ def fix(
     try:
         with nova_lock(repo_path, wait=False):
             # Check for clean working tree before starting
-            if not git_manager._check_clean_working_tree():
+            ignore_globs = ["examples/demos/**"]
+            if not force and not git_manager._check_clean_working_tree(ignore_globs=ignore_globs):
                 console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
                 from rich.prompt import Confirm
                 if not Confirm.ask("Proceed and potentially lose these changes?"):

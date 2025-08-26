@@ -190,47 +190,33 @@ class EnhancedLLMAgent:
                 print(f"[Nova Debug - Actor] ERROR: No response from LLM after {retries} attempts")
                 return None
             
-            # Parse the response to extract file contents
-            files_to_fix = {}
-            current_file = None
-            current_content = []
-            in_code_block = False
-            
-            for line in response.split('\n'):
-                if line.startswith("FILE:"):
-                    # Save previous file if any
-                    if current_file and current_content:
-                        files_to_fix[current_file] = '\n'.join(current_content)
-                    # Start new file
-                    current_file = line[5:].strip()
-                    current_content = []
-                    in_code_block = False
-                elif line.strip() == "```python" or line.strip() == "```":
-                    if line.strip() == "```python":
-                        in_code_block = True
-                    else:
-                        in_code_block = False
-                elif in_code_block and current_file:
-                    current_content.append(line)
-            
-            # Save last file
-            if current_file and current_content:
-                files_to_fix[current_file] = '\n'.join(current_content)
-            
-            # Convert full files to patches
+            # Parse and validate full-file blocks
+            files_to_fix = self._extract_full_files(response)
             if not files_to_fix:
-                print("Warning: No files found in LLM response")
+                print("[Actor] No files found in LLM response")
                 return None
+            # Guardrails
+            if len(files_to_fix) > int(os.getenv("NOVA_MAX_FILE_REPLACEMENTS", "3")):
+                print("[Actor] Too many files in whole-file mode; rejecting.")
+                return None
+            allowlist = tuple(os.getenv("NOVA_FILE_ALLOWLIST", "src/").split(","))
+            for path in files_to_fix:
+                if not path.startswith(allowlist):
+                    print(f"[Actor] File outside allowlist: {path}")
+                    return None
+            # Validate each file vs. original and tests
+            for path, content in files_to_fix.items():
+                if not self._validate_full_file(path, content, source_contents, failing_tests):
+                    print(f"[Actor] File validation failed for {path}")
+                    return None
+
+
             
             # Check if we're in whole file mode
             if state and hasattr(state, 'whole_file_mode') and state.whole_file_mode:
-                # In whole file mode, return a special format that indicates files to replace
-                # Format: FILE_REPLACE:<path>\n<content>\nEND_FILE_REPLACE
                 combined_output = ""
                 for file_path, new_content in files_to_fix.items():
-                    combined_output += f"FILE_REPLACE:{file_path}\n"
-                    combined_output += new_content
-                    combined_output += "\nEND_FILE_REPLACE\n"
+                    combined_output += f"FILE_REPLACE:{file_path}\n```python\n{new_content}\n```\nEND_FILE_REPLACE\n"
                 return combined_output.strip()
             else:
                 # Generate unified diff for each file (normal patch mode)
@@ -632,3 +618,72 @@ class EnhancedLLMAgent:
                 "source_files": [],
                 "iteration": iteration
             }
+    
+    def _extract_full_files(self, text: str) -> Dict[str, str]:
+        """Expected format:
+        FILE: path
+        ```python
+        <content>
+        ```
+        """
+        files: Dict[str, str] = {}
+        current = None
+        in_block = False
+        buf: List[str] = []
+        for line in text.splitlines():
+            if line.startswith("FILE:"):
+                if current and buf and in_block is False:
+                    files[current] = "\n".join(buf).strip()
+                current = line.split(":", 1)[1].strip()
+                buf, in_block = [], False
+                continue
+            if line.strip().startswith("```python"):
+                in_block = True
+                continue
+            if line.strip() == "```":
+                in_block = False
+                if current:
+                    files[current] = "\n".join(buf).strip()
+                    buf = []
+                continue
+            if in_block and current:
+                buf.append(line)
+        return files
+
+    def _validate_full_file(
+        self,
+        path: str,
+        new_content: str,
+        old_files: Dict[str, str],
+        failing_tests: List[Dict[str, Any]],
+    ) -> bool:
+        """Basic safety and completeness checks."""
+        # Closing fence already enforced by parser.
+        if not new_content or len(new_content) < max(32, int(0.25 * len((old_files.get(path) or "")) or 0)):
+            print("[Actor] New content too small relative to source.")
+            return False
+        # Preserve header/docstring for .py files (first non-empty line heuristic)
+        if path.endswith(".py"):
+            old = (old_files.get(path) or "").splitlines()
+            new = new_content.splitlines()
+            if old and new:
+                def _first_sig(lines):
+                    for s in lines:
+                        if s.strip():
+                            return s.strip()
+                    return ""
+                if _first_sig(old).startswith('"""') and not _first_sig(new).startswith('"""'):
+                    print("[Actor] Module docstring/header missing.")
+                    return False
+        # Verify key symbols referenced in failing tests exist in replacement
+        want = set()
+        for t in failing_tests:
+            seg = (t.get("short_traceback") or "") + " " + t.get("name", "")
+            for token in ("factorial", "add", "subtract", "multiply", "divide", "power", "square_root", "percentage"):
+                if token in seg:
+                    want.add(token)
+        for sym in want:
+            if f"def {sym}(" not in new_content and f"class {sym}" not in new_content:
+                print(f"[Actor] Expected symbol missing: {sym}")
+                return False
+        return True

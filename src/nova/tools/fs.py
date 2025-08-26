@@ -344,13 +344,23 @@ def apply_and_commit_patch(
                         return False, []
                 i += 1
             
-            # Commit if we have a git manager
-            if git_manager and changed_files:
-                from nova.tools.git import GitBranchManager
-                if isinstance(git_manager, GitBranchManager):
-                    commit_success = git_manager.commit_patch(step_number, changed_files)
-                    if not commit_success and verbose:
-                        print(f"Warning: Failed to commit step {step_number}")
+                    # Commit if we have a git manager
+        if git_manager and changed_files:
+            from nova.tools.git import GitBranchManager
+            if isinstance(git_manager, GitBranchManager):
+                # Zero-diff check to avoid empty commits
+                ok, _ = git_manager._run_git_command("diff", "--cached", "--quiet")
+                if ok:
+                    if verbose:
+                        console.print("[dim]No staged changes after patch; skipping commit.[/dim]")
+                    return True, []
+                
+                commit_args = ["commit", "-m", f"nova: step {step_number}"]
+                if os.getenv("NOVA_ALLOW_EMPTY_COMMIT") == "1":
+                    commit_args.insert(1, "--allow-empty")
+                ok, out = git_manager._run_git_command(*commit_args)
+                if not ok and verbose:
+                    print(f"Warning: Failed to commit step {step_number}: {out}")
             
             return True, changed_files
         
@@ -403,9 +413,19 @@ def apply_and_commit_patch(
             # Import here to avoid circular dependency
             from nova.tools.git import GitBranchManager
             if isinstance(git_manager, GitBranchManager):
-                commit_success = git_manager.commit_patch(step_number, changed_files)
-                if not commit_success and verbose:
-                    print(f"Warning: Failed to commit step {step_number}")
+                # Zero-diff check to avoid empty commits
+                ok, _ = git_manager._run_git_command("diff", "--cached", "--quiet")
+                if ok:
+                    if verbose:
+                        console.print("[dim]No staged changes after patch; skipping commit.[/dim]")
+                    return True, []
+                
+                commit_args = ["commit", "-m", f"nova: step {step_number}"]
+                if os.getenv("NOVA_ALLOW_EMPTY_COMMIT") == "1":
+                    commit_args.insert(1, "--allow-empty")
+                ok, out = git_manager._run_git_command(*commit_args)
+                if not ok and verbose:
+                    print(f"Warning: Failed to commit step {step_number}: {out}")
         
         return True, changed_files
     except ValueError as e:

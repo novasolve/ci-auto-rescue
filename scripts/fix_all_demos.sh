@@ -14,10 +14,38 @@ set -e  # Exit on error
 
 # Parse arguments
 DRY_RUN=false
-if [[ "$1" == "--dry-run" ]]; then
-    DRY_RUN=true
-    echo "🔍 DRY RUN MODE - No changes will be made"
-fi
+DEBUG=false
+PYTHON_TRACEBACK=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dry-run)
+            DRY_RUN=true
+            echo "🔍 DRY RUN MODE - No changes will be made"
+            shift
+            ;;
+        --debug)
+            DEBUG=true
+            PYTHON_TRACEBACK="PYTHONTRACEBACK=1"
+            echo "🐛 DEBUG MODE - Full tracebacks enabled"
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --dry-run    Show what would be done without actually running"
+            echo "  --debug      Enable debug mode with full Python tracebacks"
+            echo "  -h, --help   Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use -h or --help for usage information"
+            exit 1
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -78,21 +106,43 @@ for demo_dir in demo_*/; do
             echo "Would run: nova fix \"$DEMOS_DIR/$demo_dir\" --verbose"
             successful_demos+=("$demo_name (dry-run)")
         else
-            # Run Nova CI-Rescue on the demo directory
-            if nova fix "$DEMOS_DIR/$demo_dir" --verbose; then
+            # Create log directory for this demo
+            LOG_DIR="$DEMOS_DIR/.nova_logs/$demo_name"
+            mkdir -p "$LOG_DIR"
+            
+            # Run Nova CI-Rescue on the demo directory with full logging
+            LOG_FILE="$LOG_DIR/nova_run_$(date +%Y%m%d_%H%M%S).log"
+            echo -e "${BLUE}📝 Logging to: ${LOG_FILE#$REPO_ROOT/}${NC}"
+            
+            # Run with full error capture
+            if $PYTHON_TRACEBACK nova fix "$DEMOS_DIR/$demo_dir" --verbose 2>&1 | tee "$LOG_FILE"; then
                 echo -e "${GREEN}✅ Successfully fixed: $demo_name${NC}"
                 successful_demos+=("$demo_name")
                 
-                # List saved patches if any exist
+                # Save patches and telemetry
                 if [[ -d "$demo_dir/.nova" ]]; then
-                    echo -e "${BLUE}📄 Saved patches:${NC}"
+                    echo -e "${BLUE}📄 Artifacts saved:${NC}"
+                    
+                    # Copy patches to log directory
                     find "$demo_dir/.nova" -name "*.patch" -type f 2>/dev/null | while read -r patch; do
-                        echo "   - ${patch#$demo_dir/}"
+                        cp "$patch" "$LOG_DIR/"
+                        echo "   - Patch: ${patch#$demo_dir/}"
+                    done
+                    
+                    # Copy telemetry logs
+                    find "$demo_dir/.nova" -name "*.jsonl" -type f 2>/dev/null | while read -r jsonl; do
+                        cp "$jsonl" "$LOG_DIR/"
+                        echo "   - Telemetry: ${jsonl#$demo_dir/}"
                     done
                 fi
             else
-                echo -e "${RED}❌ Failed to fix: $demo_name${NC}"
+                EXIT_CODE=$?
+                echo -e "${RED}❌ Failed to fix: $demo_name (exit code: $EXIT_CODE)${NC}"
                 failed_demos+=("$demo_name")
+                
+                # Extract error details from log
+                echo -e "${RED}📋 Error details:${NC}"
+                grep -E "Error:|Exception:|Traceback|datetime.*float|unsupported operand" "$LOG_FILE" | tail -20
             fi
         fi
         
@@ -136,6 +186,16 @@ if [[ ${#skipped_demos[@]} -gt 0 ]]; then
     for demo in "${skipped_demos[@]}"; do
         echo "   - $demo"
     done
+    echo ""
+fi
+
+# Log information
+if [[ "$DRY_RUN" != "true" ]]; then
+    echo -e "${BLUE}📁 Logs saved to: $DEMOS_DIR/.nova_logs/${NC}"
+    echo -e "${DIM}   Each demo has its own subdirectory with:${NC}"
+    echo -e "${DIM}   - Full execution logs${NC}"
+    echo -e "${DIM}   - Applied patches${NC}"
+    echo -e "${DIM}   - Telemetry data${NC}"
     echo ""
 fi
 

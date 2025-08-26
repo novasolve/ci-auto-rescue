@@ -30,16 +30,17 @@
   - `examples/demos/demo_test_repo`
   - `examples/sample_repos/nova_demo_workspace`
 
-### 4. **Datetime - Float Arithmetic Error (PERSISTENT)**
+### 4. **Datetime - Float Arithmetic Error (CRITICAL - STILL BROKEN)**
 
-- **Issue**: Despite attempted fixes, datetime arithmetic errors still occur
+- **Issue**: Despite multiple fix attempts, datetime arithmetic errors still occur
 - **Error**: `unsupported operand type(s) for -: 'datetime.datetime' and 'float'`
-- **Status**: Partially fixed - still occurring in production runs
-- **Files**:
-  - `src/nova/cli.py:519` - Fixed but issue persists
-  - `src/nova/nodes/reflect.py:52` - Fixed but needs testing
-  - Potentially other locations not yet identified
-- **Root Cause**: Inconsistent handling of `start_time` which can be either float or datetime
+- **Status**: CRITICAL - Fixes applied but error persists, blocking all nova runs
+- **Fixed Files** (in PR fix/p0-bugs-cleanup):
+  - `src/nova/cli.py:82-85, 542-545` - Added isinstance checks ✅
+  - `src/nova/nodes/reflect.py:55-57` - Added isinstance checks ✅
+- **Error Still Occurs**: After "⚠ No progress: 5 test(s) still failing"
+- **Root Cause**: There's another location performing datetime arithmetic that we haven't found
+- **Next Steps**: Need full stack trace to identify exact location
 
 ### 5. **JUnit Report Path Not Interpolated**
 
@@ -149,6 +150,29 @@
 
 - **Issue**: Error messages truncated to 50-200 chars in various places
 - **Impact**: May lose critical debugging information
+
+## ✅ Fixes Applied in PR fix/p0-bugs-cleanup
+
+### P0 (Critical) Fixes - Completed
+1. **Branch Preservation** - Fixed cleanup(success=True) when PR created ✅
+2. **Critic Auto-Approval** - Now defaults to rejection on JSON parse failure ✅  
+3. **Test Discovery** - Removed explicit path to allow subfolder discovery ✅
+4. **False Success** - Removed max_failures limit to run all tests ✅
+5. **Patch Step Numbering** - Uses iteration number instead of current_step ✅
+6. **Git Diff Base** - Handles zero patches case properly ✅
+7. **JUnit Path** - Fixed f-string interpolation ✅
+
+### P1 (High Priority) Fixes - Completed
+1. **Uncommitted Changes Check** - Warns user before creating fix branch ✅
+2. **Patch Failure Recovery** - Retries on next iteration instead of aborting ✅
+3. **Stagnation Detection** - Provides feedback when no progress is made ✅
+
+### P2 (Medium Priority) Fixes - Partial
+1. **Default Branch Detection** - Auto-detects main/master from origin ✅
+2. **--auto-pr Flag** - Added for automatic PR creation ✅
+
+### Still Broken Despite Fixes
+- **Datetime Error** - Applied fixes but error persists in unknown location 🔴
 
 ## 📋 Recommendations
 

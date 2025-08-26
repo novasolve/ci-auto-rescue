@@ -90,6 +90,24 @@
 - **Issue**: `subprocess.run` with `shell=True`
 - **Risk**: Command injection if user input is passed
 
+## 🟡 High Priority Issues (continued)
+
+### 16. **Nova Cannot Find Tests in Subfolders**
+
+- **Issue**: When running `nova fix .` in a parent directory, Nova reports "No failing tests found" even when subdirectories contain failing tests
+- **Impact**: Users must manually navigate to each subdirectory to fix tests
+- **Example**: Running `nova fix .` in `examples/demos/` doesn't find failing tests in `demo_file_io/`, `demo_oop/`, etc.
+- **Root Cause**: Test discovery logic may not be recursively searching subdirectories properly
+
+### 17. **Nova Creates Incomplete/Broken Fixes**
+
+- **Issue**: Nova reports "All tests passing" but actually leaves the codebase in a broken state
+- **Examples Observed**:
+  - `demo_file_io`: Nova fixed 5 tests but deleted functions needed by 6 other tests (copy_file, get_file_size, file_exists, create_directory, list_files, delete_file)
+  - `demo_oop`: Nova deleted the Employee class entirely, causing import errors
+- **Impact**: False positives where Nova claims success but the codebase is actually more broken than before
+- **Root Cause**: Nova may only be running a subset of tests or not properly validating the full test suite after changes
+
 ## 🟢 Minor Issues & TODOs
 
 ### 12. **Unimplemented Features**
@@ -156,6 +174,8 @@
 - ❌ Bare exception handlers
 - ❌ Resource cleanup in error paths
 - ⚠️ Race condition prevention (documented risk)
+- 🔴 **Nova creates broken fixes** - This is a CRITICAL issue that makes the tool dangerous to use
+- 🔴 **Nova cannot find tests in subfolders** - Major usability issue
 
 **Nice to have**:
 
@@ -163,4 +183,11 @@
 - Better error messages
 - Platform compatibility
 
-**Verdict**: The codebase is functional but has several robustness issues that could cause problems under load or edge cases. The critical bare exception handlers should be fixed before launch to ensure errors are properly reported rather than silently suppressed.
+**Verdict**: **NOT READY FOR LAUNCH**. The codebase has critical issues that make it unsafe for production use:
+
+1. **Nova creates broken "fixes"** that delete necessary code while claiming success. This could destroy user codebases.
+2. **Subfolder test discovery is broken**, severely limiting usability for real projects.
+3. **Multiple bare exception handlers** hide real errors.
+4. **Resource leaks** in error paths could cause system issues.
+
+These issues MUST be fixed before any public launch. The tool currently poses a risk of damaging user code while providing false confidence through incorrect success messages.

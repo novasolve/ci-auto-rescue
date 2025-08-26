@@ -8,6 +8,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from rich.console import Console
+
+console = Console()
 
 
 # -------- Basic FS helpers --------
@@ -476,8 +479,7 @@ def apply_patch_with_git(
             # Patch cannot be applied
             error_msg = f"Patch validation failed: {output}"
             if verbose:
-                from rich.console import Console
-                console = Console()
+
                 console.print(f"[red]✗ {error_msg}[/red]")
                 
                 # Try to provide more specific error information
@@ -533,8 +535,7 @@ def apply_patch_with_git(
             # This shouldn't happen if --check passed, but handle it anyway
             error_msg = f"Patch application failed: {output}"
             if verbose:
-                from rich.console import Console
-                console = Console()
+
                 console.print(f"[red]✗ {error_msg}[/red]")
             
             if telemetry and hasattr(telemetry, 'log_event'):
@@ -586,8 +587,7 @@ def apply_patch_with_git(
             ]
             
             if verbose:
-                from rich.console import Console
-                console = Console()
+
                 console.print(f"[green]✓ Patch applied successfully[/green]")
                 if changed_files:
                     console.print(f"[dim]Changed files: {', '.join([f.name for f in changed_files])}[/dim]")

@@ -26,7 +26,13 @@ class NovaLogger:
     
     def __init__(self, console: Optional[Console] = None, level: LogLevel = LogLevel.NORMAL):
         self.console = console or Console()
-        self.level = level
+        # Ensure level is a LogLevel instance
+        if isinstance(level, str):
+            self.level = LogLevel[level.upper()]
+        elif isinstance(level, int):
+            self.level = LogLevel(level)
+        else:
+            self.level = level
         self._indent_level = 0
         self._section_stack: List[str] = []
         self._components_filter: Optional[List[str]] = None

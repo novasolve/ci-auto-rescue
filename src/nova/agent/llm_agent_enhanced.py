@@ -115,7 +115,7 @@ class EnhancedLLMAgent:
         # Debug log removed for demo
         
         for test in failing_tests[:5]:  # Limit to first 5 tests for context
-            test_file = test.get("file", "")
+            test_file = test.file if hasattr(test, 'file') else test.get("file", "") if isinstance(test, dict) else ""
             if test_file and test_file not in test_contents:
                 # Handle case where test_file might already include the project path
                 test_path = Path(test_file)
@@ -228,9 +228,12 @@ class EnhancedLLMAgent:
         # Add failure information
         prompt += "FAILING TESTS:\n"
         for i, test in enumerate(failing_tests[:3], 1):
-            prompt += f"\n{i}. Test: {test.get('name', 'unknown')}\n"
-            prompt += f"   File: {test.get('file', 'unknown')}\n"
-            prompt += f"   Error: {test.get('short_traceback', 'No traceback')}\n"
+            test_name = test.name if hasattr(test, 'name') else test.get('name', 'unknown') if isinstance(test, dict) else 'unknown'
+            test_file = test.file if hasattr(test, 'file') else test.get('file', 'unknown') if isinstance(test, dict) else 'unknown'
+            test_error = test.short_traceback if hasattr(test, 'short_traceback') else test.get('short_traceback', 'No traceback') if isinstance(test, dict) else 'No traceback'
+            prompt += f"\n{i}. Test: {test_name}\n"
+            prompt += f"   File: {test_file}\n"
+            prompt += f"   Error: {test_error}\n"
         
         # Add source code (this is what needs to be fixed!)
         if source_contents:
@@ -260,7 +263,7 @@ class EnhancedLLMAgent:
     def _extract_relevant_test_functions(self, test_content: str, failing_tests: List[Dict[str, Any]]) -> str:
         """Extract only the relevant test functions from test file."""
         relevant = []
-        test_names = {test.get('name', '') for test in failing_tests}
+        test_names = {test.name if hasattr(test, 'name') else test.get('name', '') if isinstance(test, dict) else '' for test in failing_tests}
         
         lines = test_content.split('\n')
         in_test = False
@@ -591,7 +594,7 @@ class EnhancedLLMAgent:
             # Identify source files that need fixes
             source_files = set()
             for test in failing_tests[:5]:  # Check first 5 tests
-                test_file = test.get("file", "")
+                test_file = test.file if hasattr(test, 'file') else test.get("file", "") if isinstance(test, dict) else ""
                 if test_file:
                     # Handle case where test_file might already include the project path
                     test_path = Path(test_file)

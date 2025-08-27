@@ -47,10 +47,10 @@ class PlannerNode:
             "failing_tests_count": len(state.failing_tests),
             "failing_tests": [
                 {
-                    "name": test.get("name"),
-                    "file": test.get("file"),
-                    "line": test.get("line"),
-                    "error_preview": test.get("short_traceback", "")
+                    "name": test.name if hasattr(test, 'name') else test.get("name") if isinstance(test, dict) else 'unknown',
+                    "file": test.file if hasattr(test, 'file') else test.get("file") if isinstance(test, dict) else 'unknown',
+                    "line": test.line if hasattr(test, 'line') else test.get("line") if isinstance(test, dict) else 0,
+                    "error_preview": test.short_traceback if hasattr(test, 'short_traceback') else test.get("short_traceback", "") if isinstance(test, dict) else ""
                 }
                 for test in state.failing_tests[:5]  # Log first 5 tests
             ],

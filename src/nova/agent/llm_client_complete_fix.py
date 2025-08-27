@@ -28,7 +28,7 @@ def build_comprehensive_planner_prompt(failing_tests: List[Dict[str, Any]],
     # Group tests by file for better understanding
     tests_by_file = {}
     for test in failing_tests:
-        file_path = test.get('file', 'unknown')
+        file_path = test.file if hasattr(test, 'file') else test.get('file', 'unknown') if isinstance(test, dict) else 'unknown'
         if file_path not in tests_by_file:
             tests_by_file[file_path] = []
         tests_by_file[file_path].append(test)
@@ -38,11 +38,16 @@ def build_comprehensive_planner_prompt(failing_tests: List[Dict[str, Any]],
         prompt += f"\n📁 File: {file_path}\n"
         prompt += "-" * 40 + "\n"
         for test in tests:
-            prompt += f"\n❌ Test: {test.get('name', 'unknown')}\n"
-            prompt += f"   Line: {test.get('line', 0)}\n"
-            prompt += f"   Error Type: {test.get('error_type', 'Unknown')}\n"
+            test_name = test.name if hasattr(test, 'name') else test.get('name', 'unknown') if isinstance(test, dict) else 'unknown'
+            test_line = test.line if hasattr(test, 'line') else test.get('line', 0) if isinstance(test, dict) else 0
+            test_error_type = getattr(test, 'error_type', 'Unknown') if hasattr(test, 'error_type') else test.get('error_type', 'Unknown') if isinstance(test, dict) else 'Unknown'
+            test_traceback = test.short_traceback if hasattr(test, 'short_traceback') else test.get('short_traceback', 'No traceback') if isinstance(test, dict) else 'No traceback'
+            
+            prompt += f"\n❌ Test: {test_name}\n"
+            prompt += f"   Line: {test_line}\n"
+            prompt += f"   Error Type: {test_error_type}\n"
             prompt += f"   Full Error:\n"
-            error_msg = test.get('short_traceback', 'No traceback')
+            error_msg = test_traceback
             prompt += f"   {error_msg}\n"
             prompt += "\n"
     
@@ -109,7 +114,7 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
     # Group by error pattern to help identify common fixes
     error_patterns = {}
     for test in failing_tests:
-        error = test.get('short_traceback', '')
+        error = test.short_traceback if hasattr(test, 'short_traceback') else test.get('short_traceback', '') if isinstance(test, dict) else ''
         # Extract key error indicators
         if 'assert' in error and '==' in error:
             pattern = "Assertion mismatch"
@@ -129,7 +134,9 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
         prompt += f"\n🔍 Pattern: {pattern} ({len(tests)} tests)\n"
         prompt += "-" * 40 + "\n"
         for test in tests:
-            prompt += f"• {test.get('name')}: {test.get('short_traceback', '')}\n"
+            test_name = test.name if hasattr(test, 'name') else test.get('name', 'unknown') if isinstance(test, dict) else 'unknown'
+            test_traceback = test.short_traceback if hasattr(test, 'short_traceback') else test.get('short_traceback', '') if isinstance(test, dict) else ''
+            prompt += f"• {test_name}: {test_traceback}\n"
     
     prompt += "\n" + "=" * 80 + "\n\n"
     

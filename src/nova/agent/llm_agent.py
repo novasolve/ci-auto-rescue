@@ -44,7 +44,7 @@ class LLMAgent:
         # Read the test files
         test_contents = {}
         for test in failing_tests:
-            test_file = test.get("file", "")
+            test_file = test.file if hasattr(test, 'file') else test.get("file", "") if isinstance(test, dict) else ""
             if test_file and test_file not in test_contents:
                 test_path = self.repo_path / test_file
                 if test_path.exists():
@@ -92,10 +92,15 @@ class LLMAgent:
         # Add failure information
         prompt += "FAILING TESTS:\n"
         for i, test in enumerate(failing_tests[:3], 1):  # Limit to first 3 tests
-            prompt += f"\n{i}. Test: {test.get('name', 'unknown')}\n"
-            prompt += f"   File: {test.get('file', 'unknown')}\n"
-            prompt += f"   Line: {test.get('line', 0)}\n"
-            prompt += f"   Error:\n{test.get('short_traceback', 'No traceback available')}\n"
+            test_name = test.name if hasattr(test, 'name') else test.get('name', 'unknown') if isinstance(test, dict) else 'unknown'
+            test_file = test.file if hasattr(test, 'file') else test.get('file', 'unknown') if isinstance(test, dict) else 'unknown'
+            test_line = test.line if hasattr(test, 'line') else test.get('line', 0) if isinstance(test, dict) else 0
+            test_traceback = test.short_traceback if hasattr(test, 'short_traceback') else test.get('short_traceback', 'No traceback available') if isinstance(test, dict) else 'No traceback available'
+            
+            prompt += f"\n{i}. Test: {test_name}\n"
+            prompt += f"   File: {test_file}\n"
+            prompt += f"   Line: {test_line}\n"
+            prompt += f"   Error:\n{test_traceback}\n"
         
         # Add test file contents
         prompt += "\n\nTEST FILE CONTENTS:\n"

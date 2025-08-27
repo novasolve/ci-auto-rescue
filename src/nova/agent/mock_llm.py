@@ -32,9 +32,9 @@ class MockLLMAgent:
         # Fix tests one at a time
         test_index = min(iteration - 1, len(failing_tests) - 1)
         test = failing_tests[test_index]
-        test_file = test.get("file", "")
-        test_name = test.get("name", "")
-        traceback = test.get("short_traceback", "")
+        test_file = test.file if hasattr(test, 'file') else test.get("file", "") if isinstance(test, dict) else ""
+        test_name = test.name if hasattr(test, 'name') else test.get("name", "") if isinstance(test, dict) else ""
+        traceback = test.short_traceback if hasattr(test, 'short_traceback') else test.get("short_traceback", "") if isinstance(test, dict) else ""
         
         # Read the test file
         test_path = self.repo_path / test_file
@@ -216,19 +216,22 @@ class MockLLMAgent:
         # Create a simple mock plan based on the test failures
         steps = []
         
-        if any("assertion" in str(test.get("short_traceback", "")).lower() for test in failing_tests):
+        def get_traceback(test):
+            return test.short_traceback if hasattr(test, 'short_traceback') else test.get("short_traceback", "") if isinstance(test, dict) else ""
+        
+        if any("assertion" in str(get_traceback(test)).lower() for test in failing_tests):
             steps.append("Fix assertion failures")
         
-        if any("ZeroDivisionError" in str(test.get("short_traceback", "")) for test in failing_tests):
+        if any("ZeroDivisionError" in str(get_traceback(test)) for test in failing_tests):
             steps.append("Fix division by zero errors")
         
-        if any("NameError" in str(test.get("short_traceback", "")) for test in failing_tests):
+        if any("NameError" in str(get_traceback(test)) for test in failing_tests):
             steps.append("Define undefined variables")
         
-        if any("IndexError" in str(test.get("short_traceback", "")) for test in failing_tests):
+        if any("IndexError" in str(get_traceback(test)) for test in failing_tests):
             steps.append("Fix list index errors")
         
-        if any("TypeError" in str(test.get("short_traceback", "")) for test in failing_tests):
+        if any("TypeError" in str(get_traceback(test)) for test in failing_tests):
             steps.append("Fix type errors")
         
         if not steps:

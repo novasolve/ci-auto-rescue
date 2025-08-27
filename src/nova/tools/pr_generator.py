@@ -414,10 +414,10 @@ The following files were modified:
                 file = getattr(test, 'file', 'unknown')
                 error = getattr(test, 'short_traceback', 'No error details')
             else:
-                # Dict format
-                name = test.get('name', 'Unknown')
-                file = test.get('file', 'unknown')
-                error = test.get('short_traceback', test.get('error', 'No error details'))
+                # Dict format or FailingTest object
+                name = test.name if hasattr(test, 'name') else test.get('name', 'Unknown') if isinstance(test, dict) else 'Unknown'
+                file = test.file if hasattr(test, 'file') else test.get('file', 'unknown') if isinstance(test, dict) else 'unknown'
+                error = test.short_traceback if hasattr(test, 'short_traceback') else test.get('short_traceback', test.get('error', 'No error details')) if isinstance(test, dict) else 'No error details'
             formatted.append(f"- `{name}` in {file}: {error}")
         
         if len(tests) > 10:

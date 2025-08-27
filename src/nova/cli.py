@@ -37,7 +37,7 @@ app = typer.Typer(
 console = Console(theme=nova_theme)
 
 
-def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None, llm_agent=None) -> None:
+def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None, llm_agent=None, verbose: bool = False) -> None:
     """
     Print a comprehensive summary when exiting the agent loop.
     
@@ -45,6 +45,8 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         state: The current agent state
         reason: The reason for exit (timeout, max_iters, success, etc.)
         elapsed_seconds: Optional elapsed time in seconds
+        llm_agent: The LLM agent instance for token usage display
+        verbose: Enable verbose output
     """
     console.print("\n" + "=" * 60)
     console.print("[bold]EXECUTION SUMMARY[/bold]")
@@ -116,7 +118,7 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
                     else:
                         console.print("  [dim](No patches saved)[/dim]")
         except Exception as e:
-            if state.verbose:
+            if verbose:
                 console.print(f"[dim]Could not list patches: {e}[/dim]")
     
     # Display token usage in verbose mode
@@ -320,6 +322,7 @@ def fix(
                 max_iterations=max_iters,
                 timeout_seconds=timeout,
                 whole_file_mode=whole_file,
+                verbose=verbose,
             )
             state.start_time = now_utc()  # Track start time for PR generation
             
@@ -772,7 +775,7 @@ def fix(
             
             # Print exit summary
             if state and state.final_status:
-                print_exit_summary(state, state.final_status, llm_agent=llm_agent)
+                print_exit_summary(state, state.final_status, llm_agent=llm_agent, verbose=verbose)
             
             # Log final completion status
             telemetry.log_event("completion", {
@@ -786,7 +789,7 @@ def fix(
     except KeyboardInterrupt:
         if state:
             state.final_status = "interrupted"
-            print_exit_summary(state, "interrupted", llm_agent=llm_agent)
+            print_exit_summary(state, "interrupted", llm_agent=llm_agent, verbose=verbose)
         else:
             console.print("\n[yellow]Interrupted by user[/yellow]")
         if telemetry:
@@ -796,7 +799,7 @@ def fix(
         console.print(f"\n[red]Error: {e}[/red]")
         if state:
             state.final_status = "error"
-            print_exit_summary(state, "error", llm_agent=llm_agent)
+            print_exit_summary(state, "error", llm_agent=llm_agent, verbose=verbose)
         if telemetry:
             telemetry.log_event("error", {"error": str(e)})
         success = False

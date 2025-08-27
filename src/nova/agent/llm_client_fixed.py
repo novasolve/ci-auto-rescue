@@ -47,12 +47,17 @@ def build_full_file_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, A
     # Include failing test details
     prompt += "FAILING TESTS TO FIX:\n"
     for i, test in enumerate(failing_tests[:3], 1):
-        prompt += f"\n{i}. Test: {test.get('name', 'unknown')}\n"
-        prompt += f"   File: {test.get('file', 'unknown')}\n"
-        prompt += f"   Line: {test.get('line', 0)}\n"
+        test_name = test.name if hasattr(test, 'name') else test.get('name', 'unknown') if isinstance(test, dict) else 'unknown'
+        test_file = test.file if hasattr(test, 'file') else test.get('file', 'unknown') if isinstance(test, dict) else 'unknown'
+        test_line = test.line if hasattr(test, 'line') else test.get('line', 0) if isinstance(test, dict) else 0
+        test_traceback = test.short_traceback if hasattr(test, 'short_traceback') else test.get('short_traceback', 'No traceback') if isinstance(test, dict) else 'No traceback'
+        
+        prompt += f"\n{i}. Test: {test_name}\n"
+        prompt += f"   File: {test_file}\n"
+        prompt += f"   Line: {test_line}\n"
         
         # Extract actual vs expected from error message if present
-        error_msg = test.get('short_traceback', 'No traceback')
+        error_msg = test_traceback
         prompt += f"   Error:\n{error_msg}\n"
     
     # Include test file contents if provided

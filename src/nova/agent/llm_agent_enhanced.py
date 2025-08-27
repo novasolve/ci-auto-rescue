@@ -394,8 +394,6 @@ class EnhancedLLMAgent:
             
             # Log critic prompt for debugging
             # Debug logs removed for demo
-            if self.verbose:
-                # Debug log removed for demo
             
             # Increased max_tokens for better responses
             # Debug log removed for demo

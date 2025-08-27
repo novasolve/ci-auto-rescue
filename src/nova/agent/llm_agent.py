@@ -24,13 +24,16 @@ class LLMAgent:
         self.client = OpenAI(api_key=self.settings.openai_api_key)
         self.model = self.settings.default_llm_model
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None, state=None) -> Optional[str]:
         """
         Generate a patch to fix failing tests using LLM.
         
         Args:
             failing_tests: List of failing test details
             iteration: Current iteration number
+            plan: Optional plan from the planner
+            critic_feedback: Optional feedback from previous critic rejection
+            state: Optional agent state (unused in this implementation)
             
         Returns:
             Unified diff string or None if no patch can be generated

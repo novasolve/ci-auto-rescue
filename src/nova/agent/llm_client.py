@@ -186,8 +186,6 @@ class LLMClient:
         except Exception:
             # Never block on usage tracking
             pass
-        else:
-            raise ValueError(f"Unknown provider: {self.provider}")
     
     def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
         """Complete using OpenAI API."""

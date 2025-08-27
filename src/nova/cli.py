@@ -907,12 +907,12 @@ def fix(
                     # Push the branch first
                     with logger.subsection("Pushing to remote"):
                         logger.info("Pushing branch to remote...")
-                    push_result = subprocess.run(
-                        ["git", "push", "origin", branch_name],
-                        capture_output=True,
-                        text=True,
-                        cwd=repo_path
-                    )
+                        push_result = subprocess.run(
+                            ["git", "push", "origin", branch_name],
+                            capture_output=True,
+                            text=True,
+                            cwd=repo_path
+                        )
                     
                     if push_result.returncode != 0:
                         logger.warning(f"Failed to push branch: {push_result.stderr}")

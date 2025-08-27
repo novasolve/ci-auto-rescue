@@ -680,8 +680,10 @@ def fix(
                         console.print("[dim]Skipping PR creation: no failing tests fixed or no changes applied.[/dim]")
                         pr_created = False
                         raise typer.Exit(0)
-                    console.print("\n[cyan]🤖 Using GPT-5 to generate a pull request...[/cyan]")
-                    
+                    logger = get_logger()
+                    with logger.section("Pull Request Generation", "🤖", show_in_normal=True):
+                        logger.info("Using GPT-5 to generate pull request...")
+                        
                     # Calculate execution time
                     if hasattr(state, 'start_time'):
                         if isinstance(state.start_time, float):
@@ -712,8 +714,7 @@ def fix(
                             if result.returncode == 0:
                                 changed_files = [f for f in result.stdout.strip().split('\n') if f]
                         except Exception as e:
-                            if verbose:
-                                console.print(f"[yellow]Could not list changed files: {e}[/yellow]")
+                            logger.warning(f"Could not list changed files: {e}")
                     
                     # Gather reasoning logs from telemetry
                     reasoning_logs = []
@@ -739,10 +740,11 @@ def fix(
                                                     # Skip malformed JSON lines
                                                     pass
                         except Exception as e:
-                            print(f"[yellow]Could not read reasoning logs: {e}[/yellow]")
+                            logger.warning(f"Could not read reasoning logs: {e}")
                     
                     # Generate PR content using GPT-5
-                    console.print("[dim]Generating PR title and description...[/dim]")
+                    with logger.subsection("Generating PR content"):
+                        logger.verbose("Calling GPT-5 to generate title and description...", component="PR")
                     title, description = pr_gen.generate_pr_content(
                         fixed_tests=fixed_tests,
                         patches_applied=state.patches_applied,
@@ -751,12 +753,17 @@ def fix(
                         reasoning_logs=reasoning_logs
                     )
                     
-                    console.print(f"\n[bold]PR Title:[/bold] {title}")
-                    console.print(f"\n[bold]PR Description:[/bold]")
-                    console.print(description[:500] + "..." if len(description) > 500 else description)
+                    logger.info(f"\nPR Title: {title}")
+                    logger.info("\nPR Description:")
+                    # Show full description in verbose mode, truncated in normal
+                    if logger.level.value >= 1:  # verbose or higher
+                        logger.info(description)
+                    else:
+                        logger.info(description[:500] + "..." if len(description) > 500 else description)
                     
                     # Push the branch first
-                    console.print("\n[cyan]Pushing branch to remote...[/cyan]")
+                    with logger.subsection("Pushing to remote"):
+                        logger.info("Pushing branch to remote...")
                     push_result = subprocess.run(
                         ["git", "push", "origin", branch_name],
                         capture_output=True,
@@ -765,11 +772,12 @@ def fix(
                     )
                     
                     if push_result.returncode != 0:
-                        console.print(f"[yellow]Warning: Failed to push branch: {push_result.stderr}[/yellow]")
-                        console.print("[dim]Attempting to create PR anyway...[/dim]")
+                        logger.warning(f"Failed to push branch: {push_result.stderr}")
+                        logger.verbose("Attempting to create PR anyway...", component="Git")
                     
                     # Create the PR
-                    console.print("\n[cyan]Creating pull request...[/cyan]")
+                    with logger.subsection("Creating pull request"):
+                        logger.info("Submitting PR to GitHub...")
                     # Detect the default branch
                     base_branch = git_manager.get_default_branch()
                     success_pr, pr_url_or_error = pr_gen.create_pr(

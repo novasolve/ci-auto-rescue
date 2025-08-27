@@ -407,9 +407,17 @@ The following files were modified:
         
         formatted = []
         for test in tests[:10]:  # Limit to 10 for space
-            name = test.get('name', 'Unknown')
-            file = test.get('file', 'unknown')
-            error = test.get('short_traceback', test.get('error', 'No error details'))
+            # Handle both dict and FailingTest object formats
+            if hasattr(test, 'name'):
+                # FailingTest object
+                name = getattr(test, 'name', 'Unknown')
+                file = getattr(test, 'file', 'unknown')
+                error = getattr(test, 'short_traceback', 'No error details')
+            else:
+                # Dict format
+                name = test.get('name', 'Unknown')
+                file = test.get('file', 'unknown')
+                error = test.get('short_traceback', test.get('error', 'No error details'))
             formatted.append(f"- `{name}` in {file}: {error}")
         
         if len(tests) > 10:

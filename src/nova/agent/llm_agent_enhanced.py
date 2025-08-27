@@ -420,6 +420,7 @@ class EnhancedLLMAgent:
                     return approved, reason
                 except json.JSONDecodeError as e:
                     # Debug logs removed for demo
+                    pass
             
             # Parsing failed – use raw response as feedback
             critic_feedback = (response or "").strip()

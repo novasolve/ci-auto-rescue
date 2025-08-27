@@ -5,7 +5,7 @@ Provides hierarchical, context-aware logging with multiple verbosity levels.
 """
 
 from typing import Optional, Dict, Any, List
-from enum import Enum
+from enum import IntEnum
 from contextlib import contextmanager
 from rich.console import Console
 from rich.table import Table
@@ -14,7 +14,7 @@ from rich.text import Text
 from rich.tree import Tree
 import os
 
-class LogLevel(Enum):
+class LogLevel(IntEnum):
     """Logging verbosity levels"""
     NORMAL = 0    # Default - clean output only
     VERBOSE = 1   # --verbose - show operation details

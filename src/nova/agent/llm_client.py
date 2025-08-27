@@ -243,19 +243,19 @@ class LLMClient:
             )
             if response.content and len(response.content) > 0:
                 content = response.content[0].text
-                                    logger = get_logger()
-                    if content:
-                        content = content.strip()
-                        logger.verbose(f"Response length: {len(content)} chars", component="LLM")
-                        logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
-                        logger.trace("Full Response", content, component="LLM")
-                    else:
-                        logger.warning("Anthropic returned None/empty text!")
-                        content = ""
-                            else:
-                    logger = get_logger()
-                    logger.warning("Anthropic returned empty content array!")
+                logger = get_logger()
+                if content:
+                    content = content.strip()
+                    logger.verbose(f"Response length: {len(content)} chars", component="LLM")
+                    logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
+                    logger.trace("Full Response", content, component="LLM")
+                else:
+                    logger.warning("Anthropic returned None/empty text!")
                     content = ""
+            else:
+                logger = get_logger()
+                logger.warning("Anthropic returned empty content array!")
+                content = ""
             return content
         except Exception as e:
             logger = get_logger()

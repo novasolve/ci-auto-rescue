@@ -406,7 +406,7 @@ class EnhancedLLMAgent:
                     console.print("[cyan]🧪 Critic running tests with patch applied...[/cyan]")
                     
                     # Debug: Show patch format
-                    if self.verbose:
+                    if hasattr(self, 'verbose') and self.verbose:
                         console.print(f"[dim]Patch format: {'FILE_REPLACE' if 'FILE_REPLACE:' in patch else 'unified diff'}[/dim]")
                         if 'FILE_REPLACE:' in patch:
                             # Show more info about the FILE_REPLACE patch
@@ -444,12 +444,12 @@ class EnhancedLLMAgent:
                             "remaining_test_names": [f.get('name', 'unknown') for f in new_failures[:5]]
                         }
                         
-                        if self.verbose:
+                        if hasattr(self, 'verbose') and self.verbose:
                             console.print(f"[dim]Test results: {fixed_count}/{original_count} tests fixed[/dim]")
                     else:
                         # Don't set actual_test_results if patch didn't apply
                         # This will make the critic analyze the patch itself rather than saying it wasn't applied
-                        if self.verbose:
+                        if hasattr(self, 'verbose') and self.verbose:
                             console.print("[dim]Patch could not be applied for testing, will review based on code analysis[/dim]")
                     
                 finally:

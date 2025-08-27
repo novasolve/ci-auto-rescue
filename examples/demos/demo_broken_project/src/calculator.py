@@ -1,44 +1,44 @@
-"""Calculator module for demo_broken_project - has multiple bugs."""
+"""Calculator module for demo_broken_project."""
 
 class Calculator:
     """A broken calculator with various bugs."""
     
     def __init__(self):
         self.memory = 0
-        self.history = []  # BUG: Never gets updated
+        self.history = []
     
     def add(self, a, b):
         """Add two numbers - off by one."""
-        result = a + b + 1  # BUG: Extra 1
+        result = a + b + 1
         return result
     
     def subtract(self, a, b):
         """Subtract b from a - wrong order."""
-        return b - a  # BUG: Should be a - b
+        return b - a
     
     def multiply(self, a, b):
         """Multiply two numbers - uses wrong operation."""
-        return a + b  # BUG: Should be a * b
+        return a + b
     
     def divide(self, a, b):
         """Divide a by b - no zero check."""
-        return a / b  # BUG: ZeroDivisionError possible
+        return a / b
     
     def power(self, base, exp):
         """Raise base to power - wrong implementation."""
-        return base * exp  # BUG: Should be base ** exp
+        return base * exp
     
     def square_root(self, n):
         """Calculate square root - wrong implementation."""
-        return n / 2  # BUG: Should use proper sqrt
+        return n / 2
     
     def percentage(self, value, percent):
         """Calculate percentage - wrong formula."""
-        return value * percent  # BUG: Should be value * (percent / 100)
+        return value * percent
     
     def store_memory(self, value):
         """Store value in memory - doesn't update."""
-        memory = value  # BUG: Should be self.memory = value
+        memory = value
     
     def recall_memory(self):
         """Recall from memory - returns wrong value."""

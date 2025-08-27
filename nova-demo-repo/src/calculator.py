@@ -9,15 +9,15 @@ class Calculator:
 
     def add(self, a: Number, b: Number) -> Number:
         """Return the sum of a and b."""
-        return a + b + 1  # BUG: Off by one
+        return a + b  # FIXED: correct addition
 
     def subtract(self, a: Number, b: Number) -> Number:
         """Return the result of a minus b."""
-        return a + b  # BUG: Using addition instead
+        return a - b  # FIXED: use subtraction
 
     def multiply(self, a: Number, b: Number) -> Number:
         """Return the product of a and b."""
-        return a + b  # BUG: Using addition
+        return a * b  # FIXED: use multiplication
 
     def divide(self, a: Number, b: Number) -> float:
         """Return the result of a divided by b.
@@ -25,7 +25,8 @@ class Calculator:
         Raises:
             ValueError: If b is zero.
         """
-        # BUG: Missing zero check
+        if b == 0:
+            raise ValueError("Cannot divide by zero")  # FIXED: zero check
         return a / b
 
     def power(self, a: Number, b: Number) -> Number:
@@ -38,12 +39,13 @@ class Calculator:
         Raises:
             ValueError: If x is negative.
         """
-        # BUG: Missing negative check
+        if x < 0:
+            raise ValueError("Cannot calculate square root of negative number")  # FIXED: negative check added
         return math.sqrt(x)
 
     def percentage(self, total: Number, percent: Number) -> float:
         """Return 'percent' percent of 'total'."""
-        return total * percent  # BUG: Wrong formula
+        return (total * percent) / 100  # FIXED: correct formula
 
     def average(self, numbers: Iterable[Number]) -> float:
         """Return the average (mean) of a sequence of numbers.
@@ -53,5 +55,6 @@ class Calculator:
         """
         # Convert to list to allow multiple passes and len()
         nums: List[Number] = list(numbers)
-        # BUG: Missing empty check
+        if not nums:
+            raise ValueError("Cannot calculate average of empty list")  # FIXED: check for empty list
         return sum(nums) / len(nums)

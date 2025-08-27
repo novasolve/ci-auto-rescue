@@ -396,7 +396,7 @@ class EnhancedLLMAgent:
                 stash_result = subprocess.run(["git", "stash", "push", "-m", "nova-critic-backup"], 
                               cwd=repo_path, capture_output=True, text=True)
                 
-                if self.verbose and stash_result.stderr:
+                if hasattr(self, 'verbose') and self.verbose and stash_result.stderr:
                     console.print(f"[dim]Stash stderr: {stash_result.stderr}[/dim]")
                 
                 try:

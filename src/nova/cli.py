@@ -718,6 +718,18 @@ def fix(
                     "decision": "continue",
                     "reason": "more_failures_to_fix"
                 })
+                
+                # Display iteration summary with timing in verbose mode
+                if verbose:
+                    iteration_duration = time.time() - iteration_start
+                    console.print(f"\n[dim]━━━ Iteration {iteration} Summary ━━━[/dim]")
+                    console.print(f"[dim]  • Total iteration time: {iteration_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Planner: {planner_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Actor: {actor_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Critic: {critic_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Apply patch: {patch_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Run tests: {test_duration:.1f}s[/dim]")
+                    console.print(f"[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
             
             # Print exit summary
             if state and state.final_status:

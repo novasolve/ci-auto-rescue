@@ -3,6 +3,7 @@ Test runner module for capturing pytest failures.
 """
 
 import json
+import re
 import subprocess
 import tempfile
 import shlex
@@ -59,12 +60,12 @@ class TestRunner:
         junit_xml_content = None
         
         try:
-            # Run pytest with JSON and JUnit reports
+            # Run pytest with JSON and JUnit reports (use correct --junitxml flag)
             cmd = [
                 "python", "-m", "pytest",
                 "--json-report",
                 f"--json-report-file={json_report_path}",
-                f"--junit-xml={junit_report_path}",
+                f"--junitxml={junit_report_path}",
                 "--tb=short",
                 "-q",  # Quiet mode
                 "--no-header",
@@ -191,9 +192,8 @@ class TestRunner:
                 if file_part.startswith(f"{repo_name}/"):
                     file_part = file_part[len(repo_name)+1:]
                 
-                # Get the traceback
-                call_info = test.get('call', {})
-                longrepr = call_info.get('longrepr', '')
+                # Choose best available traceback among call/setup/teardown phases
+                longrepr = self._pick_longrepr_from_json_test(test)
                 
                 # Extract short traceback - capture up to the assertion error line
                 traceback_lines = longrepr.split('\n') if longrepr else []
@@ -206,19 +206,26 @@ class TestRunner:
                         break
                 short_traceback = '\n'.join(short_trace) if short_trace else 'Test failed'
                 
-                # Try to get line number from the traceback
+                # Try to get line number from the traceback (prefer regex match path:line)
                 line_no = 0
-                for line in traceback_lines:
-                    if file_part in line and ':' in line:
+                if longrepr:
+                    m = re.search(rf"({re.escape(file_part)})[:](\\d+)", longrepr)
+                    if m:
                         try:
-                            # Extract line number from traceback line like "test.py:42"
-                            parts = line.split(':')
-                            for i, part in enumerate(parts):
-                                if file_part in part and i + 1 < len(parts):
-                                    line_no = int(parts[i + 1].split()[0])
-                                    break
-                        except (ValueError, IndexError):
-                            pass
+                            line_no = int(m.group(2))
+                        except ValueError:
+                            line_no = 0
+                if line_no == 0:
+                    for line in traceback_lines:
+                        if file_part in line and ':' in line:
+                            try:
+                                parts = line.split(':')
+                                for i, part in enumerate(parts):
+                                    if file_part in part and i + 1 < len(parts):
+                                        line_no = int(parts[i + 1].split()[0])
+                                        break
+                            except (ValueError, IndexError):
+                                pass
                 
                 failing_tests.append(FailingTest(
                     name=test_name,
@@ -255,6 +262,20 @@ class TestRunner:
                 ))
 
         return failing_tests
+
+    def _pick_longrepr_from_json_test(self, test: Dict[str, Any]) -> str:
+        """Pick the most relevant longrepr among call/setup/teardown phases from JSON report entry."""
+        for phase in ("call", "setup", "teardown"):
+            sec = test.get(phase) or {}
+            longrepr = sec.get("longrepr")
+            if isinstance(longrepr, str) and longrepr.strip():
+                return longrepr
+            if longrepr:
+                try:
+                    return str(longrepr)
+                except Exception:
+                    pass
+        return ""
 
     def _parse_junit_report(self, report_path: str) -> List[FailingTest]:
         """Parse JUnit XML report (xunit2) to extract failing/error tests as fallback.

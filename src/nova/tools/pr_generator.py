@@ -248,10 +248,11 @@ The following files were modified:
                         # Fall through to REST API with token
                         pass
             
-            # REST API with token (GITHUB_TOKEN/GH_TOKEN)
-            token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+            # REST API with token (GH_TOKEN/GITHUB_TOKEN)
+            # Prioritize GH_TOKEN for better CI/local compatibility
+            token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
             if not token:
-                return False, "GITHUB CLI failed and no GITHUB_TOKEN/GH_TOKEN available"
+                return False, "GITHUB CLI failed and no GH_TOKEN/GITHUB_TOKEN available"
             # Normalize to GITHUB_TOKEN for any downstream use
             os.environ['GITHUB_TOKEN'] = token
 
@@ -286,7 +287,8 @@ The following files were modified:
     def check_pr_exists(self, branch_name: str) -> bool:
         """Check if a PR already exists for this branch using GitHub API."""
         try:
-            token = os.environ.get('GITHUB_TOKEN')
+            # Prioritize GH_TOKEN for better CI/local compatibility
+            token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
             if not token:
                 return False
             

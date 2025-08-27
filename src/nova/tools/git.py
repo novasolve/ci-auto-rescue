@@ -155,10 +155,13 @@ class GitBranchManager:
     def ensure_github_token_env(self) -> Optional[str]:
         """
         Ensure a token is available in env (GITHUB_TOKEN).
-        Try existing env, then gh CLI, return token or None.
+        Try existing env (GH_TOKEN first for CI/local compat), then gh CLI, return token or None.
         """
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        # Prioritize GH_TOKEN for better CI/local compatibility
+        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
         if token:
+            # Normalize to GITHUB_TOKEN for downstream use
+            os.environ["GITHUB_TOKEN"] = token
             return token
         token = self._gh_token_from_cli()
         if token:

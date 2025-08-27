@@ -3,7 +3,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nova-ci-rescue"
-version = "0.3.1.dev0"
+version = "0.4.0.dev0"
 description = "Nova CI-Rescue: automated test fixing agent (MVP)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -33,6 +33,7 @@ dependencies = [
     "pytest>=7.0.0",
     "pytest-json-report>=1.5.0",
     "tomli>=2.0.0;python_version<'3.11'",
+    "openai>=1.0.0",
 ]
 
 [project.urls]

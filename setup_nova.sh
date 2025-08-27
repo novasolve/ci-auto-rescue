@@ -16,6 +16,14 @@ if [ ! -d "$VENV_DIR" ]; then
   python3 -m venv "$VENV_DIR"
 fi
 
+# Ensure Python symlink exists (fix for macOS Python version issues)
+if [ -d "$VENV_DIR" ] && [ ! -e "$VENV_DIR/bin/python3.12" ]; then
+  PYTHON_VERSION=$(python3 -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
+  if [ -e "$VENV_DIR/bin/$PYTHON_VERSION" ]; then
+    ln -sf "$PYTHON_VERSION" "$VENV_DIR/bin/python3.12"
+  fi
+fi
+
 # Activate venv
 source "$VENV_DIR/bin/activate"
 
@@ -49,16 +57,6 @@ if [ -n "${CI:-}" ]; then
   pip install --quiet --upgrade pip wheel
 else
   pip install --upgrade pip wheel
-fi
-
-# Install demo dependencies if available
-if [ -f "demo-requirements.txt" ]; then
-  echo "📦 Installing demo dependencies..."
-  if [ -n "${CI:-}" ]; then
-    pip install --quiet -r demo-requirements.txt
-  else
-    pip install -r demo-requirements.txt
-  fi
 fi
 
 # Uninstall any existing nova first to ensure clean install

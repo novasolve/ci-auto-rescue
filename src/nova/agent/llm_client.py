@@ -122,7 +122,7 @@ class LLMClient:
                 try:
                     max_tok = int(os.environ.get("MAX_TOKENS", "20000"))
                 except Exception:
-                    max_tok = 10000
+                    max_tok = 20000
                 return self._complete_openai(system, user, temperature=1.0, max_tokens=max_tok)
             elif self.provider == "anthropic":
                 return self._complete_anthropic(system, user, temperature=1.0, max_tokens=max_tokens)

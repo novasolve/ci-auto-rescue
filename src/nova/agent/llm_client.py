@@ -163,9 +163,9 @@ class LLMClient:
             warn_pct = float(getattr(self.settings, "warn_daily_llm_calls_pct", 0.8) or 0.8)
             if max_calls > 0:
                 warn_threshold = int(max_calls * warn_pct)
-                if counts["calls"] == warn_threshold:
+                if counts["calls"] == warn_threshold and self._verbose:
                     print(f"[Nova Warn] Daily LLM calls reached {counts['calls']}/{max_calls} ({int(warn_pct*100)}%).")
-                if counts["calls"] > max_calls:
+                if counts["calls"] > max_calls and self._verbose:
                     print(f"[Nova Warn] Daily LLM calls exceeded limit: {counts['calls']}/{max_calls}. Consider pausing or lowering usage.")
         except Exception:
             # Never block on usage tracking

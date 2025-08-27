@@ -156,7 +156,7 @@ def fix(
         help="Disable telemetry collection for this run",
     ),
     whole_file: bool = typer.Option(
-        False,
+        True,
         "--whole-file",
         "-w",
         help="Replace entire files instead of using patches (simpler, more reliable)",

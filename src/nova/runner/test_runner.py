@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from rich.console import Console
+import xml.etree.ElementTree as ET
 
 console = Console()
 
@@ -91,6 +92,24 @@ class TestRunner:
                 cwd=str(self.repo_path),
                 timeout=120,
             )
+
+            # If the pytest-json-report plugin is missing, rerun without json flags so JUnit is produced
+            combined_output = (result.stderr or '') + '\n' + (result.stdout or '')
+            if 'unrecognized arguments: --json-report' in combined_output:
+                cmd_no_json = [
+                    arg for arg in cmd
+                    if not (arg == '--json-report' or arg.startswith('--json-report-file='))
+                ]
+                if self.verbose:
+                    console.print(f"[dim]Re-running without json-report: {' '.join(cmd_no_json)}[/dim]")
+                result = subprocess.run(
+                    cmd_no_json,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(self.repo_path),
+                    timeout=120,
+                )
+                combined_output = (result.stderr or '') + '\n' + (result.stdout or '')
             
             # Parse the JSON report
             failing_tests = self._parse_json_report(json_report_path)
@@ -100,6 +119,14 @@ class TestRunner:
             if junit_path.exists():
                 junit_xml_content = junit_path.read_text()
             
+            # Fallback: if no failures parsed from JSON, try JUnit XML
+            if not failing_tests:
+                try:
+                    failing_tests = self._parse_junit_report(junit_report_path)
+                except Exception:
+                    # Ignore XML parsing issues; we'll handle as collection/config error below
+                    pass
+
             if not failing_tests:
                 # If pytest returned non-zero but we have no parsed failures, treat as collection/config error
                 if result.returncode != 0:
@@ -226,6 +253,71 @@ class TestRunner:
                     short_traceback=short_msg,
                     full_traceback=longrepr or None,
                 ))
+
+        return failing_tests
+
+    def _parse_junit_report(self, report_path: str) -> List[FailingTest]:
+        """Parse JUnit XML report (xunit2) to extract failing/error tests as fallback.
+
+        This covers environments where pytest-json-report is not installed.
+        """
+        path = Path(report_path)
+        if not path.exists():
+            return []
+
+        try:
+            tree = ET.parse(str(path))
+            root = tree.getroot()
+        except ET.ParseError:
+            return []
+
+        failing_tests: List[FailingTest] = []
+
+        # pytest xunit2 places test cases under testsuite/testcase
+        for testcase in root.iter('testcase'):
+            # A failure or error element indicates a failing test
+            failure_el = testcase.find('failure')
+            error_el = testcase.find('error')
+            if failure_el is None and error_el is None:
+                continue
+
+            problem_el = failure_el or error_el
+
+            test_name = testcase.get('name') or '<unknown>'
+            classname = testcase.get('classname') or ''
+            file_part = testcase.get('file') or ''
+            line_no_str = testcase.get('line') or '0'
+            try:
+                line_no = int(line_no_str)
+            except ValueError:
+                line_no = 0
+
+            # Compose a more descriptive name if possible
+            if classname and test_name and '::' not in test_name:
+                display_name = f"{classname}::{test_name}"
+            else:
+                display_name = test_name
+
+            # Fallbacks if file attribute is missing
+            if not file_part and classname:
+                # Convert python module path to file-ish hint
+                file_part = classname.replace('.', '/') + '.py'
+
+            # Short traceback/message
+            message = (problem_el.get('message') or '').strip()
+            text = (problem_el.text or '').strip()
+            short_trace = message or text or 'Test failed'
+
+            # Full traceback can include the element text
+            full_traceback = text or None
+
+            failing_tests.append(FailingTest(
+                name=display_name,
+                file=file_part or '<unknown>',
+                line=line_no,
+                short_traceback=short_trace[:200],
+                full_traceback=full_traceback,
+            ))
 
         return failing_tests
     

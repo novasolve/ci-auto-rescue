@@ -389,27 +389,29 @@ class EnhancedLLMAgent:
                 import subprocess
                 import tempfile
                 from pathlib import Path
+                from nova.tools.fs import apply_and_commit_patch
                 
                 # Save current state
                 subprocess.run(["git", "stash", "push", "-m", "nova-critic-backup"], 
                               cwd=repo_path, capture_output=True)
                 
                 try:
-                    # Apply patch temporarily
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
-                        f.write(patch)
-                        patch_file = f.name
+                    # Apply patch temporarily using nova's apply function that handles FILE_REPLACE
+                    from rich.console import Console
+                    console = Console()
+                    console.print("[cyan]🧪 Critic running tests with patch applied...[/cyan]")
                     
-                    result = subprocess.run(
-                        ["git", "apply", patch_file],
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True
+                    # Use Nova's patch application that handles FILE_REPLACE format
+                    success, changed_files = apply_and_commit_patch(
+                        repo_root=repo_path,
+                        diff_text=patch,
+                        step_number=999,  # Temporary step number
+                        git_manager=None,  # Don't commit
+                        verbose=False
                     )
                     
-                    if result.returncode == 0:
+                    if success:
                         # Run tests
-                        print("[cyan]🧪 Critic running tests with patch applied...[/cyan]")
                         new_failures, _ = test_runner.run_tests()
                         
                         # Calculate results
@@ -428,12 +430,8 @@ class EnhancedLLMAgent:
                     else:
                         actual_test_results = {
                             "patch_applied": False,
-                            "error": result.stderr or "Failed to apply patch"
+                            "error": "Failed to apply patch"
                         }
-                    
-                    # Clean up temp file
-                    import os
-                    os.unlink(patch_file)
                     
                 finally:
                     # Always restore original state

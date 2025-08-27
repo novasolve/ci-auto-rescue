@@ -118,8 +118,12 @@ class LLMClient:
         start = time.time()
         try:
             if self.provider == "openai":
-                # Force OpenAI params per request: temp=1.0, max_tokens=10000
-                return self._complete_openai(system, user, temperature=1.0, max_tokens=10000)
+                # Force OpenAI params, respecting env MAX_TOKENS
+                try:
+                    max_tok = int(os.environ.get("MAX_TOKENS", "10000"))
+                except Exception:
+                    max_tok = 10000
+                return self._complete_openai(system, user, temperature=1.0, max_tokens=max_tok)
             elif self.provider == "anthropic":
                 return self._complete_anthropic(system, user, temperature, max_tokens)
             else:

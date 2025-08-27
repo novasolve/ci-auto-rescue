@@ -93,7 +93,7 @@ class LLMClient:
             # Default to Claude 3.5 Sonnet
             return "claude-3-5-sonnet-20241022"
     
-    def complete(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 2000) -> str:
+    def complete(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 20000) -> str:
         """
         Get a completion from the LLM.
         
@@ -120,7 +120,7 @@ class LLMClient:
             if self.provider == "openai":
                 # Force OpenAI params, respecting env MAX_TOKENS
                 try:
-                    max_tok = int(os.environ.get("MAX_TOKENS", "10000"))
+                    max_tok = int(os.environ.get("MAX_TOKENS", "20000"))
                 except Exception:
                     max_tok = 10000
                 return self._complete_openai(system, user, temperature=1.0, max_tokens=max_tok)
@@ -229,17 +229,21 @@ class LLMClient:
                 content = response.content[0].text
                 if content:
                     content = content.strip()
-                    print(f"[Nova Debug - LLM] Anthropic response length: {len(content)} chars")
-                    print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+                    if self._verbose:
+                        print(f"[Nova Debug - LLM] Anthropic response length: {len(content)} chars")
+                        print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
                 else:
-                    print(f"[Nova Debug - LLM] WARNING: Anthropic returned None/empty text!")
+                    if self._verbose:
+                        print(f"[Nova Debug - LLM] WARNING: Anthropic returned None/empty text!")
                     content = ""
             else:
-                print(f"[Nova Debug - LLM] WARNING: Anthropic returned empty content array!")
+                if self._verbose:
+                    print(f"[Nova Debug - LLM] WARNING: Anthropic returned empty content array!")
                 content = ""
             return content
         except Exception as e:
-            print(f"[Nova Debug - LLM] Anthropic API error: {type(e).__name__}: {e}")
+            if self._verbose:
+                print(f"[Nova Debug - LLM] Anthropic API error: {type(e).__name__}: {e}")
             raise
 
 

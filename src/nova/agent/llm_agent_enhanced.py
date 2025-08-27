@@ -159,7 +159,7 @@ class EnhancedLLMAgent:
             response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
-                max_tokens=8000  # Increased to prevent truncation
+                max_tokens=20000  # Set to 20k as requested
             )
             
             # Parse the response to extract file contents (do not truncate prompt content)
@@ -401,7 +401,7 @@ class EnhancedLLMAgent:
                 system=system_prompt,
                 user=user_prompt,
                 temperature=1.0,
-                max_tokens=2000  # Increased to prevent truncation
+                max_tokens=20000  # Set to 20k as requested
             )
             
             # Log response details
@@ -486,7 +486,7 @@ class EnhancedLLMAgent:
                 system=system_prompt,
                 user=prompt,
                 temperature=1.0,
-                max_tokens=500
+                max_tokens=20000  # Set to 20k as requested
             )
             
             # Debug log removed for demo

@@ -375,8 +375,14 @@ def fix(
                 
                 # Determine which model we're using
                 model_name = settings.default_llm_model
+                reasoning_effort = settings.reasoning_effort
+                
+                # Display model and reasoning effort
                 if "gpt" in model_name.lower():
-                    console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing[/dim]")
+                    if "gpt-5" in model_name.lower():
+                        console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing (reasoning effort: {reasoning_effort})[/dim]")
+                    else:
+                        console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing[/dim]")
                 elif "claude" in model_name.lower():
                     console.print(f"[dim]Using Anthropic {model_name} for autonomous test fixing[/dim]")
                 else:
@@ -409,6 +415,9 @@ def fix(
                 # 1. PLANNER: Generate a plan based on failing tests
                 console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
                 
+                # Start timing for planner
+                planner_start = time.time()
+                
                 # Log planner start
                 telemetry.log_event("planner_start", {
                     "iteration": iteration,
@@ -421,6 +430,11 @@ def fix(
                 
                 # Store plan in state for reference
                 state.plan = plan
+                
+                # Calculate and display planner duration
+                planner_duration = time.time() - planner_start
+                if verbose:
+                    console.print(f"[dim]✓ Planning completed in {planner_duration:.1f}s[/dim]")
                 
                 # Display plan summary
                 if verbose:

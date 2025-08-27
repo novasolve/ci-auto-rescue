@@ -177,7 +177,7 @@ class TestRunner:
                 return [], junit_xml_content
 
             logger = get_logger()
-            logger.info(f"Found {len(failing_tests)} failing test(s)", "⚠️")
+            # logger.info(f"Found {len(failing_tests)} failing test(s)", "⚠️")
             return failing_tests, junit_xml_content
 
         except FileNotFoundError:

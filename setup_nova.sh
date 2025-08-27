@@ -80,10 +80,10 @@ else
 fi
 
 # Ready to use Nova demo version!
-echo
-echo "✨ Nova demo version installed successfully!"
-echo "   - GPT-5 model with high reasoning effort"
-echo "   - Temperature set to 1.0"
-echo "   - No warnings or frequency caps"
-echo ""
-echo "Try running: nova fix <path-to-repo> --whole-file"
+# echo
+# echo "✨ Nova demo version installed successfully!"
+# echo "   - GPT-5 model with high reasoning effort"
+# echo "   - Temperature set to 1.0"
+# echo "   - No warnings or frequency caps"
+# echo ""
+# echo "Try running: nova fix <path-to-repo> --whole-file"

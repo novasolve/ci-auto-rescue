@@ -166,10 +166,10 @@ def fix(
         help="Disable telemetry collection for this run",
     ),
     whole_file: bool = typer.Option(
-        True,
-        "--whole-file",
-        "-w",
-        help="Replace entire files instead of using patches (simpler, more reliable)",
+        None,  # Will use config default if not specified
+        "--whole-file/--patch-mode",
+        "-w/-p",
+        help="Replace entire files instead of using patches (default: from config or env NOVA_WHOLE_FILE_MODE)",
     ),
     test: Optional[str] = typer.Option(
         None,
@@ -276,6 +276,10 @@ def fix(
                 telemetry.start_run(repo_path)
         
             # Initialize agent state
+            # Use config default if whole_file not specified on command line
+            if whole_file is None:
+                whole_file = settings.whole_file_mode
+            
             state = AgentState(
                 repo_path=repo_path,
                 max_iterations=max_iters,

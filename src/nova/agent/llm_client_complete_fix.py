@@ -188,6 +188,9 @@ def build_strict_critic_prompt(patch: str, failing_tests: List[Dict[str, Any]],
     """
     Build a strict critic prompt that rejects partial solutions.
     """
+    # Check if this is FILE_REPLACE format or unified diff
+    is_file_replace = "FILE_REPLACE:" in patch
+    
     prompt = f"""You are a STRICT code reviewer. Your job is to ensure the fix addresses ALL test failures.
 
 ORIGINAL SITUATION:
@@ -195,11 +198,23 @@ ORIGINAL SITUATION:
 - Tests that MUST be fixed: {len(failing_tests)}
 
 PATCH TO REVIEW:
+"""
+    
+    if is_file_replace:
+        prompt += f"""
+(This is a FILE REPLACEMENT format - entire files will be replaced)
+```
+{patch}
+```
+"""
+    else:
+        prompt += f"""
 ```diff
 {patch}
 ```
-
 """
+    
+    prompt += "\n"
     
     # Add actual test results if available
     if actual_test_results:
@@ -230,7 +245,7 @@ REQUIREMENTS FOR APPROVAL:
 
 """
     
-    if actual_test_results and actual_test_results.get("patch_applied"):
+    if actual_test_results and actual_test_results.get("patch_applied", False):
         prompt += f"""
 VERDICT BASED ON ACTUAL TEST RESULTS:
 - The patch {'DOES' if actual_test_results['all_fixed'] else 'DOES NOT'} fix all tests

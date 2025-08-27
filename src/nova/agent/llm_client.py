@@ -34,6 +34,14 @@ class LLMClient:
         # Verbose controlled via env NOVA_VERBOSE=true set by CLI --verbose
         self._verbose = os.environ.get("NOVA_VERBOSE", "").lower() in {"1", "true", "yes", "on"}
         
+        # Token usage tracking
+        self.token_usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "calls": []  # List of individual call details
+        }
+        
         # Determine which provider to use based on model name and available API keys
         model_name = self.settings.default_llm_model.lower()
         

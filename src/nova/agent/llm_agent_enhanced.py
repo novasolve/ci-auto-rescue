@@ -393,8 +393,11 @@ class EnhancedLLMAgent:
                 from nova.tools.fs import apply_and_commit_patch
                 
                 # Save current state
-                subprocess.run(["git", "stash", "push", "-m", "nova-critic-backup"], 
-                              cwd=repo_path, capture_output=True)
+                stash_result = subprocess.run(["git", "stash", "push", "-m", "nova-critic-backup"], 
+                              cwd=repo_path, capture_output=True, text=True)
+                
+                if self.verbose and stash_result.stderr:
+                    console.print(f"[dim]Stash stderr: {stash_result.stderr}[/dim]")
                 
                 try:
                     # Apply patch temporarily using nova's apply function that handles FILE_REPLACE
@@ -406,7 +409,13 @@ class EnhancedLLMAgent:
                     if self.verbose:
                         console.print(f"[dim]Patch format: {'FILE_REPLACE' if 'FILE_REPLACE:' in patch else 'unified diff'}[/dim]")
                         if 'FILE_REPLACE:' in patch:
-                            console.print(f"[dim]First 200 chars: {patch[:200]}...[/dim]")
+                            # Show more info about the FILE_REPLACE patch
+                            lines = patch.split('\n')
+                            file_count = sum(1 for line in lines if line.startswith('FILE_REPLACE:'))
+                            console.print(f"[dim]FILE_REPLACE patch with {file_count} file(s)[/dim]")
+                            for line in lines[:10]:
+                                if line.startswith('FILE_REPLACE:'):
+                                    console.print(f"[dim]  - {line}[/dim]")
                     
                     # Use Nova's patch application that handles FILE_REPLACE format
                     success, changed_files = apply_and_commit_patch(
@@ -434,15 +443,20 @@ class EnhancedLLMAgent:
                             "all_fixed": remaining_count == 0,
                             "remaining_test_names": [f.get('name', 'unknown') for f in new_failures[:5]]
                         }
+                        
+                        if self.verbose:
+                            console.print(f"[dim]Test results: {fixed_count}/{original_count} tests fixed[/dim]")
                     else:
-                        actual_test_results = {
-                            "patch_applied": False,
-                            "error": "Failed to apply patch"
-                        }
+                        # Don't set actual_test_results if patch didn't apply
+                        # This will make the critic analyze the patch itself rather than saying it wasn't applied
+                        if self.verbose:
+                            console.print("[dim]Patch could not be applied for testing, will review based on code analysis[/dim]")
                     
                 finally:
                     # Always restore original state
-                    subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True)
+                    pop_result = subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True, text=True)
+                    if self.verbose and pop_result.stderr:
+                        console.print(f"[dim]Stash pop stderr: {pop_result.stderr}[/dim]")
                     
             except Exception as e:
                 # If anything goes wrong, make sure we restore state

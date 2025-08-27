@@ -204,12 +204,8 @@ class GitBranchManager:
         if self.verbose:
             console.print(f"[dim]Created branch: {self.branch_name}[/dim]")
 
-        nested_repos = self._detect_nested_git_repos()
-        if nested_repos:
-            console.print("[yellow]⚠️  Warning: Detected nested git repositories:[/yellow]")
-            for repo_path in nested_repos:
-                console.print(f"[yellow]   - {repo_path}[/yellow]")
-            console.print("[yellow]These will be ignored as only specific changed files will be staged.[/yellow]")
+        # Nested repos check removed for demo
+        pass
 
         return self.branch_name
 

@@ -58,7 +58,7 @@ class LLMAgent:
                     {"role": "system", "content": "You are an expert software engineer tasked with fixing failing tests. Generate a unified diff patch that fixes the test failures."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
+                temperature=1.0,
                 max_tokens=2000
             )
             
@@ -200,7 +200,7 @@ Respond with a JSON plan:
                     {"role": "system", "content": "You are a test fixing strategist. Create concise plans."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
+                temperature=1.0,
                 max_tokens=200
             )
             

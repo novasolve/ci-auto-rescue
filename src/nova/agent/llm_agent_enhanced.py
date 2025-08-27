@@ -492,7 +492,7 @@ class EnhancedLLMAgent:
             response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
-                temperature=0.3,
+                temperature=1.0,
                 max_tokens=500
             )
             

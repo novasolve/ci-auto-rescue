@@ -178,11 +178,7 @@ def fix(
         # Let underlying components know to print debug logs
         import os as _os
         _os.environ["NOVA_VERBOSE"] = "true"
-    if whole_file:
-        console.print(f"Mode: [yellow]Whole file replacement[/yellow]")
-    else:
-        console.print(f"Mode: [cyan]Patch-based fixes[/cyan]")
-    console.print()
+    # Mode display removed for cleaner output
     
     # Initialize branch manager for nova-fix branch
     git_manager = GitBranchManager(repo_path, verbose=verbose)
@@ -209,8 +205,8 @@ def fix(
                         last_ts = int(last_run_file.read_text().strip() or "0")
                         if now_ts - last_ts < settings.min_repo_run_interval_sec:
                             remaining = settings.min_repo_run_interval_sec - (now_ts - last_ts)
-                            console.print(f"[yellow]⚠️ Run frequency cap: please wait {remaining}s before running Nova again on this repo.[/yellow]")
-                            raise typer.Exit(1)
+                            # Frequency cap removed for demo
+                            pass
                     except Exception:
                         pass
                 # Record start of run
@@ -222,11 +218,8 @@ def fix(
                 pass
             # Check for clean working tree before starting
             if not git_manager._check_clean_working_tree():
-                console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
-                from rich.prompt import Confirm
-                if not Confirm.ask("Proceed and potentially lose these changes?"):
-                    console.print("[dim]Aborting nova fix due to uncommitted changes.[/dim]")
-                    raise typer.Exit(1)
+                # Uncommitted changes warning removed for demo
+                pass
             
             # Create the nova-fix branch
             branch_name = git_manager.create_fix_branch()
@@ -279,8 +272,7 @@ def fix(
                 success = True
                 return
             
-            # Display failing tests in a table
-            console.print(f"\n[bold red]Found {len(failing_tests)} failing test(s):[/bold red]")
+            # Display failing tests in a table (duplicate message removed)
             
             table = Table(title="Failing Tests", show_header=True, header_style="bold magenta")
             table.add_column("Test Name", style="cyan", no_wrap=False)

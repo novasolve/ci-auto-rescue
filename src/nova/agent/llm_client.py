@@ -20,6 +20,7 @@ except ImportError:
 
 from nova.config import get_settings
 from nova.tools.http import AllowedHTTPClient
+from nova.logger import get_logger
 import time
 
 
@@ -106,12 +107,25 @@ class LLMClient:
         Returns:
             The LLM's response text
         """
-        # Log the request details (verbose only)
-        if self._verbose:
-            print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
-            print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
-            print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
-            print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
+        # Get logger
+        logger = get_logger()
+        
+        # Log the request details
+        logger.debug("LLM Request Configuration", {
+            "provider": self.provider,
+            "model": self.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }, component="LLM")
+        
+        logger.debug("Prompt Statistics", {
+            "system_length": f"{len(system)} chars",
+            "user_length": f"{len(user)} chars",
+            "total_length": f"{len(system) + len(user)} chars"
+        }, component="LLM")
+        
+        logger.trace("System Prompt", system[:200] + "..." if len(system) > 200 else system, component="LLM")
+        logger.trace("User Prompt", user[:200] + "..." if len(user) > 200 else user, component="LLM")
         
         # Daily usage tracking and alerts
         self._increment_daily_usage()
@@ -130,8 +144,9 @@ class LLMClient:
                 raise ValueError(f"Unknown provider: {self.provider}")
         finally:
             elapsed = time.time() - start
-            if elapsed > self.settings.llm_call_timeout_sec and self._verbose:
-                print(f"[Nova Warn] LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
+            logger = get_logger()
+            if elapsed > self.settings.llm_call_timeout_sec:
+                logger.warning(f"LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
 
     def _usage_path(self) -> Path:
         root = Path(os.path.expanduser("~")) / ".nova"
@@ -163,10 +178,11 @@ class LLMClient:
             warn_pct = float(getattr(self.settings, "warn_daily_llm_calls_pct", 0.8) or 0.8)
             if max_calls > 0:
                 warn_threshold = int(max_calls * warn_pct)
-                if counts["calls"] == warn_threshold and self._verbose:
-                    print(f"[Nova Warn] Daily LLM calls reached {counts['calls']}/{max_calls} ({int(warn_pct*100)}%).")
-                if counts["calls"] > max_calls and self._verbose:
-                    print(f"[Nova Warn] Daily LLM calls exceeded limit: {counts['calls']}/{max_calls}. Consider pausing or lowering usage.")
+                logger = get_logger()
+                if counts["calls"] == warn_threshold:
+                    logger.warning(f"Daily LLM calls reached {counts['calls']}/{max_calls} ({int(warn_pct*100)}%).")
+                if counts["calls"] > max_calls:
+                    logger.warning(f"Daily LLM calls exceeded limit: {counts['calls']}/{max_calls}. Consider pausing or lowering usage.")
         except Exception:
             # Never block on usage tracking
             pass
@@ -197,20 +213,20 @@ class LLMClient:
             
             response = self.client.chat.completions.create(**kwargs)
             content = response.choices[0].message.content
+            logger = get_logger()
             if content:
                 content = content.strip()
-                if self._verbose:
-                    print(f"[Nova Debug - LLM] OpenAI response length: {len(content)} chars")
-                    print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+                logger.verbose(f"Response length: {len(content)} chars", component="LLM")
+                logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
+                logger.trace("Full Response", content, component="LLM")
             else:
-                if self._verbose:
-                    print(f"[Nova Debug - LLM] WARNING: OpenAI returned None/empty content!")
+                logger.warning("OpenAI returned None/empty content!")
                 content = ""
             return content
                 
         except Exception as e:
-            if self._verbose:
-                print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
+            logger = get_logger()
+            logger.error(f"OpenAI API error: {type(e).__name__}: {e}")
             raise
     
     def _complete_anthropic(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 40000) -> str:
@@ -227,23 +243,23 @@ class LLMClient:
             )
             if response.content and len(response.content) > 0:
                 content = response.content[0].text
-                if content:
-                    content = content.strip()
-                    if self._verbose:
-                        print(f"[Nova Debug - LLM] Anthropic response length: {len(content)} chars")
-                        print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
-                else:
-                    if self._verbose:
-                        print(f"[Nova Debug - LLM] WARNING: Anthropic returned None/empty text!")
+                                    logger = get_logger()
+                    if content:
+                        content = content.strip()
+                        logger.verbose(f"Response length: {len(content)} chars", component="LLM")
+                        logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
+                        logger.trace("Full Response", content, component="LLM")
+                    else:
+                        logger.warning("Anthropic returned None/empty text!")
+                        content = ""
+                            else:
+                    logger = get_logger()
+                    logger.warning("Anthropic returned empty content array!")
                     content = ""
-            else:
-                if self._verbose:
-                    print(f"[Nova Debug - LLM] WARNING: Anthropic returned empty content array!")
-                content = ""
             return content
         except Exception as e:
-            if self._verbose:
-                print(f"[Nova Debug - LLM] Anthropic API error: {type(e).__name__}: {e}")
+            logger = get_logger()
+            logger.error(f"Anthropic API error: {type(e).__name__}: {e}")
             raise
 
 
@@ -409,18 +425,14 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
         prompt += "\n\nTEST FILE CONTENTS (modify ONLY if tests have wrong expectations):\n"
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
-            prompt += content[:2000]
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
+            prompt += content
     
     # Include source file contents if provided
     if source_contents:
         prompt += "\n\nSOURCE CODE (FIX THESE FILES):\n"
         for file_path, content in source_contents.items():
             prompt += f"\n=== {file_path} ===\n"
-            prompt += content[:2000]
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
+            prompt += content
     
     prompt += "\n\n"
     prompt += "Generate a unified diff patch that fixes these test failures.\n"

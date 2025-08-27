@@ -26,6 +26,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 import xml.etree.ElementTree as ET
+from nova.logger import get_logger
 
 try:
     from rich.console import Console
@@ -72,7 +73,8 @@ class TestRunner:
         Returns:
             Tuple of (List of FailingTest objects, JUnit XML report content)
         """
-        _print("[cyan]Running pytest to identify failing tests...[/cyan]")
+        logger = get_logger()
+        logger.info("Running pytest to identify failing tests...", "🔍")
 
         # Create temp files for reports
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
@@ -93,8 +95,8 @@ class TestRunner:
                 except ValueError:
                     cmd.append(self.pytest_args)
 
-            if self.verbose:
-                _print(f"[dim]Running: {' '.join(cmd)}[/dim]")
+            logger = get_logger()
+            logger.verbose(f"Command: {' '.join(cmd)}", component="Test Runner")
 
             # Run pytest (it may exit non-zero when tests fail/collect fails)
             result = subprocess.run(
@@ -113,8 +115,8 @@ class TestRunner:
                     a for a in cmd
                     if not (a == "--json-report" or a.startswith("--json-report-file="))
                 ]
-                if self.verbose:
-                    _print(f"[dim]Re-running without json-report: {' '.join(cmd_no_json)}[/dim]")
+                logger = get_logger()
+                logger.verbose(f"Re-running without json-report: {' '.join(cmd_no_json)}", component="Test Runner")
                 result = subprocess.run(
                     cmd_no_json,
                     capture_output=True,
@@ -155,10 +157,12 @@ class TestRunner:
                         short_traceback=summarized,
                         full_traceback=combined_output.strip() or None,
                     )
-                    _print("[yellow]⚠ No tests were collected (pytest exit code 5).[/yellow]")
+                    logger = get_logger()
+                    logger.warning("No tests were collected (pytest exit code 5).")
                     return [dummy], junit_xml_content
                 if result.returncode != 0:
-                    _print(f"[red]⚠ Pytest exited with code {result.returncode} but no test failures were parsed. Likely a collection/config error.[/red]")
+                    logger = get_logger()
+                    logger.error(f"Pytest exited with code {result.returncode} but no test failures were parsed. Likely a collection/config error.")
                     summarized = self._summarize_first_line(combined_output) or f"Pytest failed with exit code {result.returncode}"
                     dummy = FailingTest(
                         name="<pytest collection error>",
@@ -168,20 +172,25 @@ class TestRunner:
                         full_traceback=combined_output.strip() or None,
                     )
                     return [dummy], junit_xml_content
-                _print("[green]✓ No failing tests found![/green]")
+                logger = get_logger()
+                logger.success("No failing tests found!")
                 return [], junit_xml_content
 
-            _print(f"[yellow]Found {len(failing_tests)} failing test(s)[/yellow]")
+            logger = get_logger()
+            logger.info(f"Found {len(failing_tests)} failing test(s)", "⚠️")
             return failing_tests, junit_xml_content
 
         except FileNotFoundError:
-            _print("[red]Error: pytest not found in the current interpreter. Activate your venv and install pytest.[/red]")
+            logger = get_logger()
+            logger.error("pytest not found in the current interpreter. Activate your venv and install pytest.")
             return [], None
         except subprocess.TimeoutExpired:
-            _print("[red]Error: pytest timed out.[/red]")
+            logger = get_logger()
+            logger.error("pytest timed out.")
             return [], None
         except Exception as e:
-            _print(f"[red]Error running tests: {e}[/red]")
+            logger = get_logger()
+            logger.error(f"Error running tests: {e}")
             return [], None
         finally:
             # Best-effort cleanup

@@ -18,6 +18,7 @@ from nova.agent import AgentState
 from nova.telemetry.logger import JSONLLogger
 from nova.config import get_settings
 from nova.tools.git import GitBranchManager
+from nova.logger import create_logger, set_logger, get_logger
 
 app = typer.Typer(
     name="nova",
@@ -176,6 +177,10 @@ def fix(
     """
     Fix failing tests in a repository.
     """
+    # Set up the logger based on verbosity
+    logger = create_logger(verbose=verbose)
+    set_logger(logger)
+    
     console.print(f"[green]Nova CI-Rescue[/green] 🚀")
     console.print(f"Repository: {repo_path}")
     console.print(f"Max iterations: {max_iters}")

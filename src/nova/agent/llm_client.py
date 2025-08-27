@@ -30,6 +30,8 @@ class LLMClient:
         self.settings = get_settings()
         self.client = None
         self.provider = None
+        # Verbose controlled via env NOVA_VERBOSE=true set by CLI --verbose
+        self._verbose = os.environ.get("NOVA_VERBOSE", "").lower() in {"1", "true", "yes", "on"}
         
         # Determine which provider to use based on model name and available API keys
         model_name = self.settings.default_llm_model.lower()
@@ -104,25 +106,27 @@ class LLMClient:
         Returns:
             The LLM's response text
         """
-        # Log the request details
-        print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
-        print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
-        print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
-        print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
+        # Log the request details (verbose only)
+        if self._verbose:
+            print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
+            print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
+            print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
+            print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
         
         # Daily usage tracking and alerts
         self._increment_daily_usage()
         start = time.time()
         try:
             if self.provider == "openai":
-                return self._complete_openai(system, user, temperature, max_tokens)
+                # Force OpenAI params per request: temp=1.0, max_tokens=10000
+                return self._complete_openai(system, user, temperature=1.0, max_tokens=10000)
             elif self.provider == "anthropic":
                 return self._complete_anthropic(system, user, temperature, max_tokens)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
         finally:
             elapsed = time.time() - start
-            if elapsed > self.settings.llm_call_timeout_sec:
+            if elapsed > self.settings.llm_call_timeout_sec and self._verbose:
                 print(f"[Nova Warn] LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
 
     def _usage_path(self) -> Path:
@@ -180,11 +184,8 @@ class LLMClient:
             
             # Handle model-specific parameters
             if "gpt-5" in self.model.lower():
-                # GPT-5 uses max_completion_tokens instead of max_tokens
                 kwargs["max_completion_tokens"] = max_tokens
-                # GPT-5 only supports temperature=1.0
-                kwargs["temperature"] = 1.0
-                # Set reasoning effort to high for maximum reasoning quality
+                kwargs["temperature"] = temperature
                 kwargs["reasoning_effort"] = "high"
             else:
                 kwargs["max_tokens"] = max_tokens
@@ -194,15 +195,18 @@ class LLMClient:
             content = response.choices[0].message.content
             if content:
                 content = content.strip()
-                print(f"[Nova Debug - LLM] OpenAI response length: {len(content)} chars")
-                print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+                if self._verbose:
+                    print(f"[Nova Debug - LLM] OpenAI response length: {len(content)} chars")
+                    print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
             else:
-                print(f"[Nova Debug - LLM] WARNING: OpenAI returned None/empty content!")
+                if self._verbose:
+                    print(f"[Nova Debug - LLM] WARNING: OpenAI returned None/empty content!")
                 content = ""
             return content
                 
         except Exception as e:
-            print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
+            if self._verbose:
+                print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
             raise
     
     def _complete_anthropic(self, system: str, user: str, temperature: float, max_tokens: int) -> str:

@@ -888,13 +888,13 @@ def fix(
                     # Generate PR content using GPT-5
                     with logger.subsection("Generating PR content"):
                         logger.verbose("Calling GPT-5 to generate title and description...", component="PR")
-                    title, description = pr_gen.generate_pr_content(
-                        fixed_tests=fixed_tests,
-                        patches_applied=state.patches_applied,
-                        changed_files=changed_files,
-                        execution_time=execution_time,
-                        reasoning_logs=reasoning_logs
-                    )
+                        title, description = pr_gen.generate_pr_content(
+                            fixed_tests=fixed_tests,
+                            patches_applied=state.patches_applied,
+                            changed_files=changed_files,
+                            execution_time=execution_time,
+                            reasoning_logs=reasoning_logs
+                        )
                     
                     logger.info(f"\nPR Title: {title}")
                     logger.info("\nPR Description:")
@@ -921,15 +921,15 @@ def fix(
                     # Create the PR
                     with logger.subsection("Creating pull request"):
                         logger.info("Submitting PR to GitHub...")
-                    # Detect the default branch
-                    base_branch = git_manager.get_default_branch()
-                    success_pr, pr_url_or_error = pr_gen.create_pr(
-                        branch_name=branch_name,
-                        title=title,
-                        description=description,
-                        base_branch=base_branch,
-                        draft=False
-                    )
+                        # Detect the default branch
+                        base_branch = git_manager.get_default_branch()
+                        success_pr, pr_url_or_error = pr_gen.create_pr(
+                            branch_name=branch_name,
+                            title=title,
+                            description=description,
+                            base_branch=base_branch,
+                            draft=False
+                        )
                     
                     if success_pr:
                         console.print(f"\n[bold green]🎉 Pull Request created successfully![/bold green]")

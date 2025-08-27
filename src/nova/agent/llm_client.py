@@ -451,6 +451,7 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
     prompt += "6. Be minimal and focused\n"
     prompt += "7. DO NOT introduce arbitrary constants or magic numbers just to make tests pass\n"
     prompt += "8. DO NOT add/remove spaces or characters unless they logically belong there\n"
+    prompt += "9. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
     prompt += "\n"
     prompt += "WARNING: Avoid quick hacks like hardcoding values. Focus on the root cause.\n"
     prompt += "If the test's expected value is mathematically or logically wrong, fix the test.\n"

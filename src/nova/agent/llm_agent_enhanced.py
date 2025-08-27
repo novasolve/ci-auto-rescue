@@ -152,6 +152,7 @@ class EnhancedLLMAgent:
                 "You are a coding assistant who MUST fix ALL test failures in ONE complete solution. "
                 "Generate the COMPLETE corrected file contents that fix ALL {0} failing tests. "
                 "Partial solutions are FAILURES. Fix EVERYTHING in one go. "
+                "DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.). "
                 "Follow the exact format requested."
             ).format(len(failing_tests))
             
@@ -250,6 +251,7 @@ class EnhancedLLMAgent:
         prompt += "The tests define the correct expected behavior. "
         prompt += "Include proper @@ hunk headers with line numbers. "
         prompt += "Use --- a/filename and +++ b/filename format.\n"
+        prompt += "DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.).\n"
         prompt += "Return ONLY the diff, no explanations.\n"
         
         return prompt

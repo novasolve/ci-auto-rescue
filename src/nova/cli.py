@@ -12,6 +12,7 @@ from datetime import datetime
 from nova.tools.datetime_utils import now_utc, delta_between, seconds_between
 from rich.console import Console
 from rich.table import Table
+from rich.theme import Theme
 
 from nova.runner import TestRunner
 from nova.agent import AgentState
@@ -20,12 +21,20 @@ from nova.config import get_settings
 from nova.tools.git import GitBranchManager
 from nova.logger import create_logger, set_logger, get_logger
 
+# Define custom theme with softer colors
+nova_theme = Theme({
+    "error": "#CD5C5C",  # Indian Red - softer than pure red
+    "warning": "#DAA520",  # Goldenrod - softer yellow
+    "success": "#228B22",  # Forest Green - softer green
+    "info": "#4682B4",  # Steel Blue
+})
+
 app = typer.Typer(
     name="nova",
     help="Nova CI-Rescue: Automated test fixing agent",
     add_completion=False,
 )
-console = Console()
+console = Console(theme=nova_theme)
 
 
 def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None) -> None:
@@ -510,7 +519,7 @@ def fix(
                     console.print(f"[dim]Critic review: {review_reason}[/dim]")
                 
                 if not patch_approved:
-                    console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
+                    console.print(f"[error]❌ Patch rejected: {review_reason}[/error]")
                     # Store critic feedback for next iteration
                     state.critic_feedback = review_reason
                     telemetry.log_event("critic_rejected", {

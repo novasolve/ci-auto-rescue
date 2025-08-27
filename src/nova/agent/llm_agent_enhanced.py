@@ -406,10 +406,6 @@ class EnhancedLLMAgent:
             
             # Log response details
             # Debug log removed for demo
-            if response:
-                # Debug log removed for demo
-            else:
-                # Debug log removed for demo
             
             # Parse JSON response
             if response and '{' in response and '}' in response:

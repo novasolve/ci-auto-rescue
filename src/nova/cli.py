@@ -737,7 +737,7 @@ def fix(
             
             # Print exit summary
             if state and state.final_status:
-                print_exit_summary(state, state.final_status)
+                print_exit_summary(state, state.final_status, llm_agent=llm_agent)
             
             # Log final completion status
             telemetry.log_event("completion", {
@@ -751,7 +751,7 @@ def fix(
     except KeyboardInterrupt:
         if state:
             state.final_status = "interrupted"
-            print_exit_summary(state, "interrupted")
+            print_exit_summary(state, "interrupted", llm_agent=llm_agent)
         else:
             console.print("\n[yellow]Interrupted by user[/yellow]")
         if telemetry:
@@ -761,7 +761,7 @@ def fix(
         console.print(f"\n[red]Error: {e}[/red]")
         if state:
             state.final_status = "error"
-            print_exit_summary(state, "error")
+            print_exit_summary(state, "error", llm_agent=llm_agent)
         if telemetry:
             telemetry.log_event("error", {"error": str(e)})
         success = False

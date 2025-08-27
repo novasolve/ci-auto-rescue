@@ -226,10 +226,30 @@ class LLMClient:
             
             response = self.client.chat.completions.create(**kwargs)
             content = response.choices[0].message.content
+            
+            # Track token usage
+            if hasattr(response, 'usage'):
+                prompt_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                completion_tokens = getattr(response.usage, 'completion_tokens', 0)
+                total_tokens = getattr(response.usage, 'total_tokens', 0)
+                
+                self.token_usage['prompt_tokens'] += prompt_tokens
+                self.token_usage['completion_tokens'] += completion_tokens
+                self.token_usage['total_tokens'] += total_tokens
+                self.token_usage['calls'].append({
+                    'model': self.model,
+                    'prompt_tokens': prompt_tokens,
+                    'completion_tokens': completion_tokens,
+                    'total_tokens': total_tokens,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+            
             logger = get_logger()
             if content:
                 content = content.strip()
                 logger.verbose(f"Response length: {len(content)} chars", component="LLM")
+                if hasattr(response, 'usage'):
+                    logger.verbose(f"Tokens used: {prompt_tokens} prompt + {completion_tokens} completion = {total_tokens} total", component="LLM")
                 logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
                 logger.trace("Full Response", content, component="LLM")
             else:
@@ -254,12 +274,32 @@ class LLMClient:
                 temperature=temperature,
                 max_tokens=max_tokens
             )
+            
+            # Track token usage (Anthropic provides usage info)
+            if hasattr(response, 'usage'):
+                prompt_tokens = getattr(response.usage, 'input_tokens', 0)
+                completion_tokens = getattr(response.usage, 'output_tokens', 0)
+                total_tokens = prompt_tokens + completion_tokens
+                
+                self.token_usage['prompt_tokens'] += prompt_tokens
+                self.token_usage['completion_tokens'] += completion_tokens
+                self.token_usage['total_tokens'] += total_tokens
+                self.token_usage['calls'].append({
+                    'model': self.model,
+                    'prompt_tokens': prompt_tokens,
+                    'completion_tokens': completion_tokens,
+                    'total_tokens': total_tokens,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+            
             if response.content and len(response.content) > 0:
                 content = response.content[0].text
                 logger = get_logger()
                 if content:
                     content = content.strip()
                     logger.verbose(f"Response length: {len(content)} chars", component="LLM")
+                    if hasattr(response, 'usage'):
+                        logger.verbose(f"Tokens used: {prompt_tokens} prompt + {completion_tokens} completion = {total_tokens} total", component="LLM")
                     logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
                     logger.trace("Full Response", content, component="LLM")
                 else:

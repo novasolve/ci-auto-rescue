@@ -249,11 +249,6 @@ def fix(
             runner = TestRunner(repo_path, verbose=verbose, pytest_args=pytest_args)
             failing_tests, initial_junit_xml = runner.run_tests()
             
-            # For demo speed, only fix the first failing test
-            if failing_tests and len(failing_tests) > 1:
-                console.print(f"[dim]Found {len(failing_tests)} failing tests, but only fixing the first one for demo speed[/dim]")
-                failing_tests = failing_tests[:1]
-            
             # Save initial test report
             if initial_junit_xml:
                 telemetry.save_test_report(0, initial_junit_xml, report_type="junit")

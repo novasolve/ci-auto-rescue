@@ -94,7 +94,7 @@ Additionally, emphasize these changes if present:
             response = self.llm.complete(
                 system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
                 user=prompt,
-                max_tokens=20000  # Will be handled by LLMClient with reasoning_effort=high
+                max_tokens=40000  # Will be handled by LLMClient with reasoning_effort=high
             )
             
             # Debug: log the response

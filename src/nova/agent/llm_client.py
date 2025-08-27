@@ -93,7 +93,7 @@ class LLMClient:
             # Default to Claude 3.5 Sonnet
             return "claude-3-5-sonnet-20241022"
     
-    def complete(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 20000) -> str:
+    def complete(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 40000) -> str:
         """
         Get a completion from the LLM.
         
@@ -120,9 +120,9 @@ class LLMClient:
             if self.provider == "openai":
                 # Force OpenAI params, respecting env MAX_TOKENS
                 try:
-                    max_tok = int(os.environ.get("MAX_TOKENS", "20000"))
+                    max_tok = int(os.environ.get("MAX_TOKENS", "40000"))
                 except Exception:
-                    max_tok = 20000
+                    max_tok = 40000
                 return self._complete_openai(system, user, temperature=1.0, max_tokens=max_tok)
             elif self.provider == "anthropic":
                 return self._complete_anthropic(system, user, temperature=1.0, max_tokens=max_tokens)
@@ -213,7 +213,7 @@ class LLMClient:
                 print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
             raise
     
-    def _complete_anthropic(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 20000) -> str:
+    def _complete_anthropic(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 40000) -> str:
         """Complete using Anthropic API."""
         try:
             response = self.client.messages.create(

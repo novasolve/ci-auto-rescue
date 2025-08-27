@@ -59,7 +59,7 @@ class LLMAgent:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=1.0,
-                max_tokens=20000  # Set to 20k as requested
+                max_tokens=40000  # Set to 40k as requested
             )
             
             patch_diff = response.choices[0].message.content.strip()
@@ -151,7 +151,7 @@ Respond with JSON:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=1.0,
-                max_tokens=20000  # Set to 20k as requested
+                max_tokens=40000  # Set to 40k as requested
             )
             
             review = response.choices[0].message.content.strip()
@@ -201,7 +201,7 @@ Respond with a JSON plan:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=1.0,
-                max_tokens=20000  # Set to 20k as requested
+                max_tokens=40000  # Set to 40k as requested
             )
             
             plan_text = response.choices[0].message.content.strip()

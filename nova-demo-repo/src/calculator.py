@@ -9,15 +9,15 @@ class Calculator:
 
     def add(self, a: Number, b: Number) -> Number:
         """Return the sum of a and b."""
-        return a + b
+        return a + b + 1  # BUG: Off by one
 
     def subtract(self, a: Number, b: Number) -> Number:
         """Return the result of a minus b."""
-        return a - b
+        return a + b  # BUG: Using addition instead
 
     def multiply(self, a: Number, b: Number) -> Number:
         """Return the product of a and b."""
-        return a * b
+        return a + b  # BUG: Using addition
 
     def divide(self, a: Number, b: Number) -> float:
         """Return the result of a divided by b.
@@ -25,8 +25,7 @@ class Calculator:
         Raises:
             ValueError: If b is zero.
         """
-        if b == 0:
-            raise ValueError("Cannot divide by zero")
+        # BUG: Missing zero check
         return a / b
 
     def power(self, a: Number, b: Number) -> Number:
@@ -39,13 +38,12 @@ class Calculator:
         Raises:
             ValueError: If x is negative.
         """
-        if x < 0:
-            raise ValueError("Cannot calculate square root of negative number")
+        # BUG: Missing negative check
         return math.sqrt(x)
 
     def percentage(self, total: Number, percent: Number) -> float:
         """Return 'percent' percent of 'total'."""
-        return (total * percent) / 100.0
+        return total * percent  # BUG: Wrong formula
 
     def average(self, numbers: Iterable[Number]) -> float:
         """Return the average (mean) of a sequence of numbers.
@@ -55,6 +53,5 @@ class Calculator:
         """
         # Convert to list to allow multiple passes and len()
         nums: List[Number] = list(numbers)
-        if len(nums) == 0:
-            raise ValueError("Cannot calculate average of empty list")
+        # BUG: Missing empty check
         return sum(nums) / len(nums)

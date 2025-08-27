@@ -173,6 +173,11 @@ def fix(
         "--pytest-args",
         help="Additional arguments to pass to pytest (e.g., -k 'pattern' -m 'slow')",
     ),
+    ci_mode: bool = typer.Option(
+        False,
+        "--ci",
+        help="CI mode: apply fixes to current branch instead of creating new branch",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -191,12 +196,13 @@ def fix(
         _os.environ["NOVA_VERBOSE"] = "true"
     # Mode display removed for cleaner output
     
-    # Initialize branch manager for nova-fix branch
+    # Initialize branch manager
     git_manager = GitBranchManager(repo_path, verbose=verbose)
     branch_name: Optional[str] = None
     success = False
     telemetry = None
     state = None
+    original_branch = None
     
     # Check for concurrent runs
     from nova.tools.lock import nova_lock
@@ -232,9 +238,22 @@ def fix(
                 # Uncommitted changes warning removed for demo
                 pass
             
-            # Create the nova-fix branch
-            branch_name = git_manager.create_fix_branch()
-            console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+            if ci_mode:
+                # In CI mode, work on the current branch
+                import subprocess
+                result = subprocess.run(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    cwd=repo_path
+                )
+                branch_name = result.stdout.strip() if result.returncode == 0 else "HEAD"
+                original_branch = branch_name
+                console.print(f"[dim]CI mode: Working on current branch: {branch_name}[/dim]")
+            else:
+                # Create the nova-fix branch
+                branch_name = git_manager.create_fix_branch()
+                console.print(f"[dim]Working on branch: {branch_name}[/dim]")
             
             # Set up signal handler for Ctrl+C
             git_manager.setup_signal_handler()
@@ -661,9 +680,9 @@ def fix(
             telemetry.log_event("error", {"error": str(e)})
         success = False
     finally:
-        # If successful, offer to create a PR
+        # If successful, offer to create a PR (skip in CI mode)
         pr_created = False
-        if success and state and branch_name and git_manager and getattr(state, "initial_failures", 0) > 0:
+        if success and state and branch_name and git_manager and getattr(state, "initial_failures", 0) > 0 and not ci_mode:
             try:
                 console.print("\n[bold green]✅ Success! Changes saved to branch:[/bold green] " + branch_name)
                 
@@ -799,16 +818,24 @@ def fix(
             except Exception as e:
                 console.print(f"\n[yellow]Error creating PR: {e}[/yellow]")
                 console.print(f"[dim]You can manually create a PR from branch: {branch_name}[/dim]")
+        elif success and ci_mode and state and getattr(state, "initial_failures", 0) > 0:
+            # In CI mode, just show success message
+            console.print(f"\n[bold green]✅ Success! Changes applied directly to branch: {branch_name}[/bold green]")
+            console.print(f"[dim]Fixed {state.initial_failures} failing test(s)[/dim]")
         
-        # Clean up branch and restore original state (unless PR was created)
+        # Clean up branch and restore original state
         if git_manager and branch_name:
-            if pr_created:
+            if ci_mode:
+                # In CI mode, don't clean up or switch branches
+                console.print(f"\n[dim]CI mode: Changes applied to branch '{branch_name}'[/dim]")
+                git_manager.restore_signal_handler()
+            elif pr_created:
                 # Don't delete the branch if we created a PR
                 git_manager.cleanup(success=True)  # Preserve branch if PR was created
                 console.print(f"\n[dim]Branch '{branch_name}' preserved for PR[/dim]")
             else:
                 git_manager.cleanup(success=success)
-            git_manager.restore_signal_handler()
+                git_manager.restore_signal_handler()
         # Ensure telemetry run is ended if not already done
         if telemetry and not success and (state is None or state.final_status is None):
             telemetry.end_run(success=False)

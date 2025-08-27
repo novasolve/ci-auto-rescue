@@ -8,25 +8,18 @@ The demo includes intentionally broken implementations of classic algorithms:
 
 1. **Kadane's Algorithm** - Maximum subarray sum
    - Bug: Doesn't handle all-negative arrays correctly
-   
 2. **Longest Increasing Subsequence (LIS)** - Dynamic programming
    - Bug: Off-by-one error in DP recurrence relation
-   
 3. **Dijkstra's Shortest Path** - Graph algorithm
    - Bug: Path reconstruction returns reversed path
-   
 4. **Merge Intervals** - Array manipulation
    - Bugs: Missing sort, wrong overlap condition
-   
 5. **3Sum Problem** - Two-pointer technique
    - Bug: Duplicate handling issues
-   
 6. **0/1 Knapsack** - Dynamic programming
    - Bugs: Wrong DP table dimensions and indices
-   
 7. **Topological Sort** - Graph algorithm (Kahn's)
    - Bug: No cycle detection
-   
 8. **Coin Change** - Dynamic programming
    - Bugs: Array indexing errors
 
@@ -66,6 +59,7 @@ This demo illustrates that Nova can:
 ## CI Integration
 
 The demo includes a GitHub Actions workflow (`auto-fix-ci.yml`) that:
+
 - Runs tests on every PR
 - Automatically invokes Nova when tests fail
 - Creates a fix PR with all corrections

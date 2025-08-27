@@ -77,7 +77,7 @@ class EnhancedLLMAgent:
                 try:
                     if pf.exists() and self.repo_path in pf.parents:
                         rel = pf.relative_to(self.repo_path)
-                        print(f"[Nova Debug] Found source candidate for '{module_name}': {rel}")
+                        # Debug logs removed for demo
                         source_files.add(str(rel))
                 except Exception:
                     continue
@@ -112,7 +112,7 @@ class EnhancedLLMAgent:
         source_contents = {}
         source_files = set()
         
-        print(f"\n[Nova Debug] Looking for source files from {len(failing_tests)} failing test(s)...")
+        # Debug log removed for demo
         
         for test in failing_tests[:5]:  # Limit to first 5 tests for context
             test_file = test.get("file", "")
@@ -128,12 +128,12 @@ class EnhancedLLMAgent:
                             test_file = parts[-1].lstrip("/")
                     test_path = self.repo_path / test_file
                 
-                print(f"[Nova Debug] Checking test file: {test_path}")
+                # Debug log removed for demo
                 if test_path.exists():
                     test_contents[test_file] = self._read_file_with_cache(test_path, state)
                     # Find source files imported by this test
                     found_files = self.find_source_files_from_test(test_path)
-                    print(f"[Nova Debug] Found source files: {found_files}")
+                    # Debug log removed for demo
                     source_files.update(found_files)
         
         # Read source files
@@ -496,7 +496,7 @@ class EnhancedLLMAgent:
                 max_tokens=500
             )
             
-            print(f"[Nova Debug] Plan response from LLM: {response[:200]}...")
+            # Debug log removed for demo
             
             # Parse the comprehensive plan
             plan = parse_comprehensive_plan(response)
@@ -526,8 +526,7 @@ class EnhancedLLMAgent:
             plan['source_files'] = list(source_files)
             plan['target_tests'] = failing_tests[:3] if len(failing_tests) > 3 else failing_tests
             
-            print(f"[Nova Debug] Plan created with source files: {plan.get('source_files', [])}")
-            print(f"[Nova Debug] Plan approach: {plan.get('approach', 'NO APPROACH')}")
+            # Debug logs removed for demo
             
             return plan
             

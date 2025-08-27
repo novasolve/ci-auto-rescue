@@ -147,6 +147,7 @@ class LLMClient:
             logger = get_logger()
             if elapsed > self.settings.llm_call_timeout_sec:
                 # logger.warning(f"LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
+                pass
 
     def _usage_path(self) -> Path:
         root = Path(os.path.expanduser("~")) / ".nova"

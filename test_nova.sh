@@ -47,13 +47,43 @@ echo "Nova version:"
 nova version 2>/dev/null || echo "Nova CI-Rescue (demo version)"
 echo
 
-# Create a test bug in calculator
-echo "🐛 Introducing bug in calculator.py..."
+# Create test bugs in ALL calculator functions
+echo "🐛 Introducing bugs in ALL calculator.py functions..."
 # Use different sed syntax for macOS vs Linux
 if [[ "$OSTYPE" == "darwin"* ]]; then
+  # Add bug: multiply instead of add
+  sed -i '' 's/return a + b/return a * b  # BUG: Using multiplication instead of addition/' src/calculator.py
+  # Subtract bug: add instead of subtract
   sed -i '' 's/return a - b/return a + b  # BUG: Using addition instead of subtraction/' src/calculator.py
+  # Multiply bug: add instead of multiply
+  sed -i '' 's/return a \* b/return a + b  # BUG: Using addition instead of multiplication/' src/calculator.py
+  # Divide bug: subtract instead of divide
+  sed -i '' 's/return a \/ b/return a - b  # BUG: Using subtraction instead of division/' src/calculator.py
+  # Power bug: multiply instead of power
+  sed -i '' 's/return a \*\* b/return a * b  # BUG: Using multiplication instead of power/' src/calculator.py
+  # Square root bug: return number instead of sqrt
+  sed -i '' 's/return math.sqrt(a)/return a  # BUG: Returning number instead of square root/' src/calculator.py
+  # Percentage bug: wrong calculation
+  sed -i '' 's/return (a \* b) \/ 100/return a + b  # BUG: Wrong percentage calculation/' src/calculator.py
+  # Average bug: return sum instead of average
+  sed -i '' 's/return sum(numbers) \/ len(numbers)/return sum(numbers)  # BUG: Returning sum instead of average/' src/calculator.py
 else
+  # Add bug: multiply instead of add
+  sed -i 's/return a + b/return a * b  # BUG: Using multiplication instead of addition/' src/calculator.py
+  # Subtract bug: add instead of subtract
   sed -i 's/return a - b/return a + b  # BUG: Using addition instead of subtraction/' src/calculator.py
+  # Multiply bug: add instead of multiply
+  sed -i 's/return a \* b/return a + b  # BUG: Using addition instead of multiplication/' src/calculator.py
+  # Divide bug: subtract instead of divide
+  sed -i 's/return a \/ b/return a - b  # BUG: Using subtraction instead of division/' src/calculator.py
+  # Power bug: multiply instead of power
+  sed -i 's/return a \*\* b/return a * b  # BUG: Using multiplication instead of power/' src/calculator.py
+  # Square root bug: return number instead of sqrt
+  sed -i 's/return math.sqrt(a)/return a  # BUG: Returning number instead of square root/' src/calculator.py
+  # Percentage bug: wrong calculation
+  sed -i 's/return (a \* b) \/ 100/return a + b  # BUG: Wrong percentage calculation/' src/calculator.py
+  # Average bug: return sum instead of average
+  sed -i 's/return sum(numbers) \/ len(numbers)/return sum(numbers)  # BUG: Returning sum instead of average/' src/calculator.py
 fi
 
 # Run Nova to fix it (whole-file is now default, no need to specify)
@@ -67,4 +97,4 @@ echo "✅ Verifying fix..."
 pytest tests/ -v
 
 echo
-echo "🎉 Nova successfully fixed the bug!"
+echo "🎉 Nova successfully fixed ALL the bugs in calculator.py!"

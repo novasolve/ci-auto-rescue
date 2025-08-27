@@ -59,7 +59,7 @@ class LLMAgent:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=1.0,
-                max_tokens=20000  # Set to 20k as requested00  # Set to 20k as requested
+                max_tokens=20000  # Set to 20k as requested
             )
             
             patch_diff = response.choices[0].message.content.strip()

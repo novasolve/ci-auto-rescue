@@ -185,8 +185,14 @@ class TestRunner:
             return [], None
         finally:
             # Best-effort cleanup
-            try: Path(json_report_path).unlink(missing_ok=True)
-            except Exception: pass
+            try:
+                Path(json_report_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+            try:
+                Path(junit_report_path).unlink(missing_ok=True)
+            except Exception:
+                pass
 
     # ---- Command construction ------------------------------------------
 
@@ -218,8 +224,6 @@ class TestRunner:
 
         # 3) Fallback: the interpreter running Nova (may be pyenv/global)
         return [sys.executable, "-m", "pytest"] + args
-            try: Path(junit_report_path).unlink(missing_ok=True)
-            except Exception: pass
 
     @staticmethod
     def format_failures_table(failures: List[FailingTest]) -> str:

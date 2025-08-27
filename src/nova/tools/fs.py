@@ -425,8 +425,7 @@ def apply_and_commit_patch(
             import traceback
             print(f"Error applying patch: {e}")
             print(f"Patch content (first 500 chars):\n{diff_text[:500]}")
-            if verbose:
-                traceback.print_exc()
+            traceback.print_exc()
         return False, []
 
 

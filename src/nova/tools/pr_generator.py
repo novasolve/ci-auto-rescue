@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import shutil
 from nova.agent.llm_client import LLMClient
+from nova.config import get_settings
 
 
 class PRGenerator:
@@ -17,7 +18,14 @@ class PRGenerator:
     
     def __init__(self, repo_path: Path):
         self.repo_path = Path(repo_path)
+        # Create LLM client with PR-specific model
+        settings = get_settings()
+        # Temporarily override the default model for PR generation
+        original_model = settings.default_llm_model
+        settings.default_llm_model = settings.pr_llm_model
         self.llm = LLMClient()
+        # Restore original model
+        settings.default_llm_model = original_model
     
     def generate_pr_content(self, 
                           fixed_tests: List[Dict],

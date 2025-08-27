@@ -8,64 +8,64 @@ class Calculator:
         self.history = []
     
     def add(self, a, b):
-        """Add two numbers - off by one."""
+        """Add two numbers."""
         result = a + b + 1
         return result
     
     def subtract(self, a, b):
-        """Subtract b from a - wrong order."""
+        """Subtract b from a."""
         return b - a
     
     def multiply(self, a, b):
-        """Multiply two numbers - uses wrong operation."""
+        """Multiply two numbers."""
         return a + b
     
     def divide(self, a, b):
-        """Divide a by b - no zero check."""
+        """Divide a by b."""
         return a / b
     
     def power(self, base, exp):
-        """Raise base to power - wrong implementation."""
+        """Raise base to power."""
         return base * exp
     
     def square_root(self, n):
-        """Calculate square root - wrong implementation."""
+        """Calculate square root."""
         return n / 2
     
     def percentage(self, value, percent):
-        """Calculate percentage - wrong formula."""
+        """Calculate percentage."""
         return value * percent
     
     def store_memory(self, value):
-        """Store value in memory - doesn't update."""
+        """Store value in memory."""
         memory = value
     
     def recall_memory(self):
-        """Recall from memory - returns wrong value."""
-        return 0  # BUG: Should return self.memory
+        """Recall from memory."""
+        return 0
     
     def clear_memory(self):
-        """Clear memory - doesn't clear."""
-        pass  # BUG: Should set self.memory = 0
+        """Clear memory."""
+        pass
     
     def factorial(self, n):
-        """Calculate factorial - wrong base case."""
+        """Calculate factorial."""
         if n <= 0:
-            return 0  # BUG: Should return 1
+            return 0
         return n * self.factorial(n - 1)
     
     def is_even(self, n):
-        """Check if number is even - wrong logic."""
-        return n % 2 == 1  # BUG: Should be == 0
+        """Check if number is even."""
+        return n % 2 == 1
     
     def absolute(self, n):
-        """Get absolute value - incomplete."""
+        """Get absolute value."""
         if n > 0:
             return n
-        # BUG: Missing else case for negative numbers
+
     
     def average(self, numbers):
-        """Calculate average - integer division."""
+        """Calculate average."""
         if not numbers:
             return None
-        return sum(numbers) // len(numbers)  # BUG: Should use / for float
+        return sum(numbers) // len(numbers)

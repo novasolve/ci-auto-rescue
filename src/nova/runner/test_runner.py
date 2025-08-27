@@ -21,6 +21,8 @@ import tempfile
 import shlex
 import sys
 from dataclasses import dataclass
+import os
+import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 import xml.etree.ElementTree as ET
@@ -81,20 +83,8 @@ class TestRunner:
         junit_xml_content = None
 
         try:
-            # Keep flags to well-supported pytest options only.
-            # NOTE: Do NOT pass --no-header/--no-summary/-rN (these are not core pytest flags).
-            base_cmd = [
-                sys.executable, "-m", "pytest",
-                "--tb=short",
-                "-q",  # quieter output; keep it simple and portable
-            ]
-
-            # Ask for both JSON and JUnit; we will fallback intelligently.
-            cmd = base_cmd + [
-                "--json-report",
-                f"--json-report-file={json_report_path}",
-                f"--junitxml={junit_report_path}",
-            ]
+            # Build the pytest command, preferring a repo-local venv or pytest on PATH.
+            cmd = self._build_pytest_cmd(json_report_path, junit_report_path)
 
             # Append user-provided pytest args (e.g., -k filters)
             if self.pytest_args:
@@ -197,6 +187,37 @@ class TestRunner:
             # Best-effort cleanup
             try: Path(json_report_path).unlink(missing_ok=True)
             except Exception: pass
+
+    # ---- Command construction ------------------------------------------
+
+    def _build_pytest_cmd(self, json_report_path: str, junit_report_path: str) -> List[str]:
+        """
+        Prefer a repo-local venv Python (./.venv/bin/python or ./venv/bin/python).
+        If not found, prefer a pytest executable on PATH.
+        Otherwise, fall back to the current process's interpreter.
+        """
+        args = [
+            "--tb=short",
+            "-q",
+            "--json-report",
+            f"--json-report-file={json_report_path}",
+            f"--junitxml={junit_report_path}",
+        ]
+
+        # 1) Repo-local venv python
+        venv_candidates = [self.repo_path / ".venv" / "bin" / "python",
+                           self.repo_path / "venv" / "bin" / "python"]
+        for py in venv_candidates:
+            if py.exists():
+                return [str(py), "-m", "pytest"] + args
+
+        # 2) Pytest on PATH
+        pytest_exe = shutil.which("pytest", path=os.environ.get("PATH"))
+        if pytest_exe:
+            return [pytest_exe] + args
+
+        # 3) Fallback: the interpreter running Nova (may be pyenv/global)
+        return [sys.executable, "-m", "pytest"] + args
             try: Path(junit_report_path).unlink(missing_ok=True)
             except Exception: pass
 

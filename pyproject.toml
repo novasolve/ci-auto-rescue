@@ -3,7 +3,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nova-ci-rescue"
-version = "0.2.4"
+version = "0.2.5"
 description = "Nova CI-Rescue: automated test fixing agent (MVP)"
 readme = "README.md"
 requires-python = ">=3.10"

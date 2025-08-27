@@ -229,7 +229,7 @@ class EnhancedLLMAgent:
         for i, test in enumerate(failing_tests[:3], 1):
             prompt += f"\n{i}. Test: {test.get('name', 'unknown')}\n"
             prompt += f"   File: {test.get('file', 'unknown')}\n"
-            prompt += f"   Error: {test.get('short_traceback', 'No traceback')[:200]}\n"
+            prompt += f"   Error: {test.get('short_traceback', 'No traceback')}\n"
         
         # Add source code (this is what needs to be fixed!)
         if source_contents:

@@ -152,7 +152,7 @@ class TestRunner:
                         name="<no tests collected>",
                         file="<session>",
                         line=0,
-                        short_traceback=summarized[:200],
+                        short_traceback=summarized,
                         full_traceback=combined_output.strip() or None,
                     )
                     _print("[yellow]⚠ No tests were collected (pytest exit code 5).[/yellow]")
@@ -164,7 +164,7 @@ class TestRunner:
                         name="<pytest collection error>",
                         file="<session>",
                         line=0,
-                        short_traceback=summarized[:200],
+                        short_traceback=summarized,
                         full_traceback=combined_output.strip() or None,
                     )
                     return [dummy], junit_xml_content
@@ -380,7 +380,7 @@ class TestRunner:
                 name=display_name,
                 file=file_part or "<unknown>",
                 line=line_no,
-                short_traceback=short[:200],
+                short_traceback=short,
                 full_traceback=text or None,
             ))
 

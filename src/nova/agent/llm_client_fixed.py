@@ -52,7 +52,7 @@ def build_full_file_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, A
         prompt += f"   Line: {test.get('line', 0)}\n"
         
         # Extract actual vs expected from error message if present
-        error_msg = test.get('short_traceback', 'No traceback')[:400]
+        error_msg = test.get('short_traceback', 'No traceback')
         prompt += f"   Error:\n{error_msg}\n"
     
     # Include test file contents if provided

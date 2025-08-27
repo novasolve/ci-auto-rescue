@@ -330,7 +330,7 @@ def build_planner_prompt(failing_tests: List[Dict[str, Any]], critic_feedback: O
         error = test.get('short_traceback', '')
         if error:
             # Get first line of error
-            error = error.split('\n')[0][:50]
+            error = error.split('\n')[0]
         else:
             error = 'No error details'
         
@@ -396,7 +396,7 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
         prompt += f"   Line: {test.get('line', 0)}\n"
         
         # Extract actual vs expected from error message if present
-        error_msg = test.get('short_traceback', 'No traceback')[:400]
+        error_msg = test.get('short_traceback', 'No traceback')
         prompt += f"   Error:\n{error_msg}\n"
         
         # Highlight the mismatch if we can identify it

@@ -50,7 +50,7 @@ class PlannerNode:
                     "name": test.get("name"),
                     "file": test.get("file"),
                     "line": test.get("line"),
-                    "error_preview": test.get("short_traceback", "")[:200]
+                    "error_preview": test.get("short_traceback", "")
                 }
                 for test in state.failing_tests[:5]  # Log first 5 tests
             ],

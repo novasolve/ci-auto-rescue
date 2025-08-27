@@ -399,7 +399,7 @@ The following files were modified:
         for test in tests[:10]:  # Limit to 10 for space
             name = test.get('name', 'Unknown')
             file = test.get('file', 'unknown')
-            error = test.get('short_traceback', test.get('error', 'No error details'))[:100]
+            error = test.get('short_traceback', test.get('error', 'No error details'))
             formatted.append(f"- `{name}` in {file}: {error}")
         
         if len(tests) > 10:

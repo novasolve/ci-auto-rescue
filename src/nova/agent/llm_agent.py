@@ -131,7 +131,7 @@ PATCH:
 ```
 
 FAILING TESTS IT SHOULD FIX:
-{json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:3]], indent=2)}
+{json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')} for t in failing_tests[:3]], indent=2)}
 
 Evaluate if this patch:
 1. Actually fixes the failing tests
@@ -187,7 +187,7 @@ Respond with JSON:
         
         prompt = f"""Create a plan to fix these failing tests (iteration {iteration}):
 
-{json.dumps([{'name': t.get('name'), 'file': t.get('file'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:5]], indent=2)}
+{json.dumps([{'name': t.get('name'), 'file': t.get('file'), 'error': t.get('short_traceback', '')} for t in failing_tests[:5]], indent=2)}
 
 Respond with a JSON plan:
 {{"approach": "brief strategy", "priority_tests": ["test1", "test2"], "fix_strategy": "how to fix"}}

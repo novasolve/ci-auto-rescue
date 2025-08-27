@@ -129,7 +129,7 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
         prompt += f"\n🔍 Pattern: {pattern} ({len(tests)} tests)\n"
         prompt += "-" * 40 + "\n"
         for test in tests:
-            prompt += f"• {test.get('name')}: {test.get('short_traceback', '')[:100]}...\n"
+            prompt += f"• {test.get('name')}: {test.get('short_traceback', '')}\n"
     
     prompt += "\n" + "=" * 80 + "\n\n"
     

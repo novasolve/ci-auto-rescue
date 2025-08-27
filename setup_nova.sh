@@ -16,6 +16,7 @@ if [ ! -d "$VENV_DIR" ]; then
   python3 -m venv "$VENV_DIR"
 fi
 
+
 # Ensure Python symlink exists (fix for macOS Python version issues)
 if [ -d "$VENV_DIR" ] && [ ! -e "$VENV_DIR/bin/python3.12" ]; then
   PYTHON_VERSION=$(python3 -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
@@ -55,6 +56,7 @@ fi
 # Upgrade pip & wheel (quiet in CI)
 if [ -n "${CI:-}" ]; then
   pip install --quiet --upgrade pip wheel
+  pip install openai
 else
   pip install --upgrade pip wheel
 fi

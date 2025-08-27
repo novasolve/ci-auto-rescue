@@ -101,6 +101,21 @@ class TestRunner:
                 junit_xml_content = junit_path.read_text()
             
             if not failing_tests:
+                # If pytest returned non-zero but we have no parsed failures, treat as collection/config error
+                if result.returncode != 0:
+                    console.print(f"[red]⚠ Pytest exited with code {result.returncode} but no test failures were parsed. Likely a collection/config error.[/red]")
+                    output = (result.stderr or "").strip()
+                    if not output:
+                        output = (result.stdout or "").strip()
+                    summary = (output.splitlines()[0] if output else f"Pytest failed with exit code {result.returncode}")
+                    dummy = FailingTest(
+                        name="<pytest collection error>",
+                        file="<session>",
+                        line=0,
+                        short_traceback=summary[:200],
+                        full_traceback=output or None,
+                    )
+                    return [dummy], junit_xml_content
                 console.print("[green]✓ No failing tests found![/green]")
                 return [], junit_xml_content
             
@@ -186,6 +201,32 @@ class TestRunner:
                     full_traceback=longrepr,
                 ))
         
+        # NEW: include collection errors (collectors)
+        repo_name = self.repo_path.name
+        for collector in report.get('collectors', []):
+            if collector.get('outcome') == 'failed':
+                nodeid = collector.get('nodeid', '') or ''
+                longrepr = collector.get('longrepr', '') or ''
+                # Determine file and name
+                file_part = nodeid.split('::')[0] if nodeid else '<collection>'
+                test_name = Path(nodeid.split('::')[-1] or file_part).stem if nodeid else '<collection error>'
+                if file_part.startswith(f"{repo_name}/"):
+                    file_part = file_part[len(repo_name)+1:]
+                traceback_lines = longrepr.split('\n') if longrepr else []
+                short = []
+                for line in traceback_lines:
+                    short.append(line)
+                    if line.strip().startswith('E') or len(short) >= 5:
+                        break
+                short_msg = '\n'.join(short) if short else 'Test collection failed'
+                failing_tests.append(FailingTest(
+                    name=test_name,
+                    file=file_part,
+                    line=0,
+                    short_traceback=short_msg,
+                    full_traceback=longrepr or None,
+                ))
+
         return failing_tests
     
     def format_failures_table(self, failures: List[FailingTest]) -> str:

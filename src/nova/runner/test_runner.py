@@ -3,12 +3,13 @@ Robust pytest runner with JSON plugin detection, JUnit XML fallback,
 and explicit handling of collection/config errors.
 
 Usage (library):
-    from ci_rescue.test_runner import TestRunner
+    from nova.runner.test_runner import TestRunner
     failures, junit_xml = TestRunner(Path.cwd(), verbose=True, pytest_args="-k foo").run_tests()
     print(TestRunner.format_failures_table(failures))
 
 Usage (CLI):
-    python -m ci_rescue --pytest-args "-k myfilter -q"
+    # Installed as `nova`:
+    nova fix . --verbose
 """
 
 from __future__ import annotations
@@ -27,9 +28,13 @@ import xml.etree.ElementTree as ET
 try:
     from rich.console import Console
     _console = Console()
-    def _print(msg: str): _console.print(msg)
+    def _print(msg: str) -> None:
+        _console.print(msg)
 except Exception:
-    def _print(msg: str): print(msg)
+    # Strip simple [tag]...[/tag] markup when rich is unavailable
+    _TAG_RE = re.compile(r"\[(\/?[a-zA-Z][^\]]*)\]")
+    def _print(msg: str) -> None:
+        print(_TAG_RE.sub("", msg))
 
 @dataclass
 class FailingTest:
@@ -150,6 +155,18 @@ class TestRunner:
 
             # If still nothing and pytest returned non-zero, surface as a collection/config error
             if not failing_tests:
+                # Special-case pytest exit code 5: no tests collected
+                if result.returncode == 5:
+                    summarized = self._summarize_first_line(combined_output) or "No tests were collected."
+                    dummy = FailingTest(
+                        name="<no tests collected>",
+                        file="<session>",
+                        line=0,
+                        short_traceback=summarized[:200],
+                        full_traceback=combined_output.strip() or None,
+                    )
+                    _print("[yellow]⚠ No tests were collected (pytest exit code 5).[/yellow]")
+                    return [dummy], junit_xml_content
                 if result.returncode != 0:
                     _print(f"[red]⚠ Pytest exited with code {result.returncode} but no test failures were parsed. Likely a collection/config error.[/red]")
                     summarized = self._summarize_first_line(combined_output) or f"Pytest failed with exit code {result.returncode}"
@@ -390,7 +407,20 @@ class TestRunner:
         return 0
 
     def _summarize_first_line(self, text: str) -> str:
-        for line in (text or "").splitlines():
+        if not text:
+            return ""
+        # Prefer pytest-style error lines or common import errors
+        patterns = [
+            r"^E +.*",
+            r".*ModuleNotFoundError.*",
+            r".*ImportError.*",
+            r".*ERROR.*",
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, flags=re.MULTILINE)
+            if m:
+                return m.group(0).strip()
+        for line in text.splitlines():
             s = line.strip()
             if s:
                 return s

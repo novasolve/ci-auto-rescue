@@ -645,7 +645,7 @@ def fix(
     finally:
         # If successful, offer to create a PR
         pr_created = False
-        if success and state and branch_name and git_manager:
+        if success and state and branch_name and git_manager and getattr(state, "initial_failures", 0) > 0:
             try:
                 console.print("\n[bold green]✅ Success! Changes saved to branch:[/bold green] " + branch_name)
                 
@@ -657,6 +657,11 @@ def fix(
                 if pr_gen.check_pr_exists(branch_name):
                     console.print("[yellow]A PR already exists for this branch[/yellow]")
                 else:
+                    # Skip PR creation when there were no failing tests fixed or no patches applied
+                    if not state.initial_failing_tests or len(state.patches_applied) == 0:
+                        console.print("[dim]Skipping PR creation: no failing tests fixed or no changes applied.[/dim]")
+                        pr_created = False
+                        raise typer.Exit(0)
                     console.print("\n[cyan]🤖 Using GPT-5 to generate a pull request...[/cyan]")
                     
                     # Calculate execution time

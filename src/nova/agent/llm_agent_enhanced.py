@@ -455,7 +455,7 @@ class EnhancedLLMAgent:
                 finally:
                     # Always restore original state
                     pop_result = subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True, text=True)
-                    if self.verbose and pop_result.stderr:
+                    if hasattr(self, 'verbose') and self.verbose and pop_result.stderr:
                         console.print(f"[dim]Stash pop stderr: {pop_result.stderr}[/dim]")
                     
             except Exception as e:

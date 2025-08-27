@@ -297,7 +297,17 @@ def fix(
                 console.print(f"[dim]Filtering tests: {test}[/dim]")
             
             runner = TestRunner(repo_path, verbose=verbose, pytest_args=combined_pytest_args)
+            
+            # Time the initial test discovery
+            console.print(f"[cyan]🧪 Running initial tests to identify failures...[/cyan]")
+            test_discovery_start = time.time()
+            
             failing_tests, initial_junit_xml = runner.run_tests()
+            
+            # Calculate and display test discovery duration
+            test_discovery_duration = time.time() - test_discovery_start
+            if verbose:
+                console.print(f"[dim]✓ Initial test run completed in {test_discovery_duration:.1f}s[/dim]")
             
             # Save initial test report
             if initial_junit_xml:
@@ -410,6 +420,7 @@ def fix(
             
             while state.increment_iteration():
                 iteration = state.current_iteration
+                iteration_start = time.time()  # Track iteration start time
                 console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
                 
                 # 1. PLANNER: Generate a plan based on failing tests
@@ -578,8 +589,16 @@ def fix(
                 # 4. APPLY PATCH: Apply the approved patch and commit
                 console.print(f"[cyan]📝 Applying patch...[/cyan]")
                 
+                # Start timing for patch application
+                patch_start = time.time()
+                
                 # Use our ApplyPatchNode to apply and commit the patch
                 result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
+                
+                # Calculate and display patch application duration
+                patch_duration = time.time() - patch_start
+                if verbose:
+                    console.print(f"[dim]✓ Patch application completed in {patch_duration:.1f}s[/dim]")
                 
                 if not result["success"]:
                     console.print(f"[red]❌ Failed to apply patch: {result.get('error', 'unknown error')}[/red]")
@@ -611,7 +630,16 @@ def fix(
                 
                 # 5. RUN TESTS: Check if the patch fixed the failures
                 console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
+                
+                # Start timing for test run
+                test_start = time.time()
+                
                 new_failures, junit_xml = runner.run_tests()
+                
+                # Calculate and display test run duration
+                test_duration = time.time() - test_start
+                if verbose:
+                    console.print(f"[dim]✓ Test run completed in {test_duration:.1f}s[/dim]")
                 
                 # Save test report artifact
                 if junit_xml:

@@ -5,6 +5,7 @@ Test runner module for capturing pytest failures.
 import json
 import subprocess
 import tempfile
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
@@ -34,9 +35,10 @@ class FailingTest:
 class TestRunner:
     """Runs pytest and captures failing tests."""
     
-    def __init__(self, repo_path: Path, verbose: bool = False):
+    def __init__(self, repo_path: Path, verbose: bool = False, pytest_args: Optional[str] = None):
         self.repo_path = repo_path
         self.verbose = verbose
+        self.pytest_args = pytest_args
         
     def run_tests(self) -> Tuple[List[FailingTest], Optional[str]]:
         """
@@ -68,6 +70,15 @@ class TestRunner:
                 "--no-summary",
                 "-rN",  # Don't show any summary info
             ]
+            
+            # Append any user-provided pytest args (e.g., -k filters)
+            if self.pytest_args:
+                try:
+                    extra_args = shlex.split(self.pytest_args)
+                    cmd.extend(extra_args)
+                except ValueError:
+                    # Fallback to raw append if splitting fails
+                    cmd.append(self.pytest_args)
             
             if self.verbose:
                 console.print(f"[dim]Running: {' '.join(cmd)}[/dim]")

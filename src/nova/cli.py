@@ -161,6 +161,11 @@ def fix(
         "-w",
         help="Replace entire files instead of using patches (simpler, more reliable)",
     ),
+    pytest_args: Optional[str] = typer.Option(
+        None,
+        "--pytest-args",
+        help="Additional arguments to pass to pytest (e.g., -k 'pattern' -m 'slow')",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -244,7 +249,7 @@ def fix(
             state.start_time = now_utc()  # Track start time for PR generation
             
             # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
-            runner = TestRunner(repo_path, verbose=verbose)
+            runner = TestRunner(repo_path, verbose=verbose, pytest_args=pytest_args)
             failing_tests, initial_junit_xml = runner.run_tests()
             
             # Save initial test report

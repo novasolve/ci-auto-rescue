@@ -213,7 +213,7 @@ class LLMClient:
                 print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
             raise
     
-    def _complete_anthropic(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 2000) -> str:
+    def _complete_anthropic(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 20000) -> str:
         """Complete using Anthropic API."""
         try:
             response = self.client.messages.create(

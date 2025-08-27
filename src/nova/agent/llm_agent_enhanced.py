@@ -389,6 +389,7 @@ class EnhancedLLMAgent:
                 import subprocess
                 import tempfile
                 from pathlib import Path
+                # Import here to avoid circular dependency
                 from nova.tools.fs import apply_and_commit_patch
                 
                 # Save current state
@@ -401,13 +402,19 @@ class EnhancedLLMAgent:
                     console = Console()
                     console.print("[cyan]🧪 Critic running tests with patch applied...[/cyan]")
                     
+                    # Debug: Show patch format
+                    if self.verbose:
+                        console.print(f"[dim]Patch format: {'FILE_REPLACE' if 'FILE_REPLACE:' in patch else 'unified diff'}[/dim]")
+                        if 'FILE_REPLACE:' in patch:
+                            console.print(f"[dim]First 200 chars: {patch[:200]}...[/dim]")
+                    
                     # Use Nova's patch application that handles FILE_REPLACE format
                     success, changed_files = apply_and_commit_patch(
                         repo_root=repo_path,
                         diff_text=patch,
                         step_number=999,  # Temporary step number
                         git_manager=None,  # Don't commit
-                        verbose=False
+                        verbose=True  # Enable verbose to debug
                     )
                     
                     if success:

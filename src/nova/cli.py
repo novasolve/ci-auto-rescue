@@ -464,11 +464,19 @@ def fix(
                 # 2. ACTOR: Generate a patch diff based on the plan
                 console.print(f"[cyan]🎭 Generating patch based on plan...[/cyan]")
                 
+                # Start timing for actor
+                actor_start = time.time()
+                
                 # Log actor start
                 telemetry.log_event("actor_start", {"iteration": iteration})
                 
                 # Generate patch with plan context and critic feedback if available
                 patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan, critic_feedback=critic_feedback, state=state)
+                
+                # Calculate and display actor duration
+                actor_duration = time.time() - actor_start
+                if verbose:
+                    console.print(f"[dim]✓ Patch generation completed in {actor_duration:.1f}s[/dim]")
                 
                 if not patch_diff:
                     console.print("[red]❌ Could not generate a patch[/red]")
@@ -518,6 +526,9 @@ def fix(
                 # 3. CRITIC: Review and approve/reject the patch
                 console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
                 
+                # Start timing for critic
+                critic_start = time.time()
+                
                 # Log critic start
                 telemetry.log_event("critic_start", {"iteration": iteration})
                 
@@ -529,7 +540,10 @@ def fix(
                     repo_path=repo_path
                 )
                 
+                # Calculate and display critic duration
+                critic_duration = time.time() - critic_start
                 if verbose:
+                    console.print(f"[dim]✓ Critic review completed in {critic_duration:.1f}s[/dim]")
                     console.print(f"[dim]Critic review: {review_reason}[/dim]")
                 
                 if not patch_approved:

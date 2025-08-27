@@ -165,11 +165,12 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
     prompt += "   - Wrong arithmetic operators (+ vs -, * vs /)\n"
     prompt += "   - Missing error checks (division by zero, negative square roots, empty lists)\n"
     prompt += "   - Incorrect return values\n"
-    prompt += "4. Your fix MUST address all {0} failing tests\n".format(len(failing_tests))
-    prompt += "5. Generate the COMPLETE file with ALL fixes applied\n"
-    prompt += "6. PRESERVE all docstrings and comments from the original file\n"
-    prompt += "7. Keep the original code style and formatting when possible\n"
-    prompt += "8. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
+    prompt += "4. REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.)\n"
+    prompt += "5. Your fix MUST address all {0} failing tests\n".format(len(failing_tests))
+    prompt += "6. Generate the COMPLETE file with ALL fixes applied\n"
+    prompt += "7. PRESERVE all docstrings and comments from the original file (except BUG comments)\n"
+    prompt += "8. Keep the original code style and formatting when possible\n"
+    prompt += "9. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
     prompt += "\n"
     prompt += "FORMAT YOUR RESPONSE AS:\n"
     prompt += "FILE: <filename>\n"

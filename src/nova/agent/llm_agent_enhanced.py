@@ -251,7 +251,8 @@ class EnhancedLLMAgent:
         prompt += "The tests define the correct expected behavior. "
         prompt += "Include proper @@ hunk headers with line numbers. "
         prompt += "Use --- a/filename and +++ b/filename format.\n"
-        prompt += "DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.).\n"
+        prompt += "REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.) from the code.\n"
+        prompt += "DO NOT add any new comments about bugs or fixes.\n"
         prompt += "Return ONLY the diff, no explanations.\n"
         
         return prompt

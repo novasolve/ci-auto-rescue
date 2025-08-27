@@ -112,7 +112,8 @@ class TestRunner:
             combined_output = (result.stderr or '') + '\n' + (result.stdout or '')
 
             # If JSON plugin is missing, pytest will complain about --json-report
-            if "unrecognized arguments: --json-report" in combined_output:
+            if ("unrecognized arguments" in combined_output and
+                ("--json-report" in combined_output or "--json-report-file" in combined_output)):
                 cmd_no_json = [
                     a for a in cmd
                     if not (a == "--json-report" or a.startswith("--json-report-file="))
@@ -193,8 +194,10 @@ class TestRunner:
 
         for test in failures:
             location = f"{test.file}:{test.line}" if (test.file and test.line > 0) else (test.file or "<unknown>")
-            error = "Test failed"
-            for line in (test.short_traceback or "").splitlines():
+            st = (test.short_traceback or "")
+            error = None
+            # Prefer pytest-style error/assert lines
+            for line in st.splitlines():
                 ls = line.strip()
                 if ls.startswith("E "):
                     error = ls[2:].strip()
@@ -202,6 +205,15 @@ class TestRunner:
                 if "AssertionError" in ls or ls.startswith("assert "):
                     error = ls
                     break
+            # Fallback: first non-empty line (covers collection/config errors)
+            if not error:
+                for line in st.splitlines():
+                    ls = line.strip()
+                    if ls:
+                        error = ls
+                        break
+            if not error:
+                error = "Test failed"
             if len(error) > 120:
                 error = error[:117] + "..."
             table += f"| {test.name} | {location} | {error} |\n"

@@ -13,39 +13,35 @@ class Calculator:
 
     def subtract(self, a: float, b: float) -> float:
         """Subtract b from a."""
-        return a + b
+        return a - b
 
     def multiply(self, a: float, b: float) -> float:
         """Multiply two numbers."""
-        return a + b
+        return a * b
 
     def divide(self, a: float, b: float) -> float:
         """Divide a by b with zero check."""
         if b == 0:
             raise ValueError("Cannot divide by zero")
-        return a * b
+        return a / b
 
     def power(self, base: float, exponent: float) -> float:
         """Raise base to the power of exponent."""
-        return base * exponent
+        return base ** exponent
 
     def square_root(self, n: float) -> float:
         """Calculate square root of n."""
         if n < 0:
             raise ValueError("Cannot calculate square root of negative number")
-        return n
+        return math.sqrt(n)
 
     def percentage(self, value: float, percent: float) -> float:
         """Calculate `percent` percent of `value`."""
-        if percent < 0:
-            raise ValueError("percent must be non-negative")
-        return (value * percent) * 10
+        return (value * percent) / 100
 
     def average(self, numbers: Iterable[float]) -> float:
         """Calculate average of a non-empty iterable of numbers."""
         seq = list(numbers)
         if not seq:
             raise ValueError("Cannot calculate average of empty list")
-        if not all(isinstance(n, (int, float)) for n in seq):
-            raise ValueError("All elements must be numbers")
-        return sum(seq)
+        return sum(seq) / len(seq)

@@ -184,7 +184,7 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
 
 
 def build_strict_critic_prompt(patch: str, failing_tests: List[Dict[str, Any]], 
-                             num_original_failures: int) -> str:
+                             num_original_failures: int, actual_test_results: Optional[Dict[str, Any]] = None) -> str:
     """
     Build a strict critic prompt that rejects partial solutions.
     """
@@ -199,17 +199,52 @@ PATCH TO REVIEW:
 {patch}
 ```
 
+"""
+    
+    # Add actual test results if available
+    if actual_test_results:
+        if actual_test_results.get("patch_applied"):
+            prompt += f"""
+ACTUAL TEST RESULTS (from running tests with this patch):
+- Original failing tests: {actual_test_results['original_failures']}
+- Tests still failing: {actual_test_results['remaining_failures']}
+- Tests fixed: {actual_test_results['fixed_count']}
+- All tests fixed: {'YES' if actual_test_results['all_fixed'] else 'NO'}
+"""
+            if not actual_test_results['all_fixed']:
+                prompt += f"""
+- Remaining failures: {', '.join(actual_test_results['remaining_test_names'])}
+"""
+        else:
+            prompt += f"""
+PATCH COULD NOT BE APPLIED:
+- Error: {actual_test_results.get('error', 'Unknown error')}
+"""
+    
+    prompt += f"""
 REQUIREMENTS FOR APPROVAL:
 1. The patch MUST fix ALL {num_original_failures} failing tests
 2. Partial fixes are UNACCEPTABLE
 3. The fix must be comprehensive and complete
 4. No test should remain failing after this patch
 
+"""
+    
+    if actual_test_results and actual_test_results.get("patch_applied"):
+        prompt += f"""
+VERDICT BASED ON ACTUAL TEST RESULTS:
+- The patch {'DOES' if actual_test_results['all_fixed'] else 'DOES NOT'} fix all tests
+- {'APPROVE' if actual_test_results['all_fixed'] else 'REJECT'} this patch
+"""
+    else:
+        prompt += """
 ANALYZE:
 1. Does this patch address ALL the failing tests listed?
 2. Are there any tests that might still fail after this patch?
 3. Is this a complete solution or just a partial fix?
-
+"""
+    
+    prompt += f"""
 BE EXTREMELY STRICT: If this patch doesn't fix ALL tests in one go, REJECT IT.
 
 Respond with JSON:

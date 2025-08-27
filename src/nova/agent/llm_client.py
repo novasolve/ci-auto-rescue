@@ -205,7 +205,7 @@ class LLMClient:
             if "gpt-5" in self.model.lower():
                 kwargs["max_completion_tokens"] = max_tokens
                 kwargs["temperature"] = temperature
-                kwargs["reasoning_effort"] = "high"
+                kwargs["reasoning_effort"] = self.settings.reasoning_effort
             else:
                 # Limit max_tokens for GPT-4o and other models
                 if "gpt-4o" in self.model.lower():

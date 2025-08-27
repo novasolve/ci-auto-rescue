@@ -498,8 +498,13 @@ def fix(
                 # Log critic start
                 telemetry.log_event("critic_start", {"iteration": iteration})
                 
-                # Use LLM to review patch
-                patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
+                # Use LLM to review patch with actual test results
+                patch_approved, review_reason = llm_agent.review_patch(
+                    patch_diff, 
+                    state.failing_tests,
+                    test_runner=runner,
+                    repo_path=repo_path
+                )
                 
                 if verbose:
                     console.print(f"[dim]Critic review: {review_reason}[/dim]")

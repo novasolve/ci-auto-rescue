@@ -332,13 +332,16 @@ class EnhancedLLMAgent:
         
         return '\n'.join(fixed_lines)
     
-    def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]]) -> Tuple[bool, str]:
+    def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]], 
+                     test_runner=None, repo_path=None) -> Tuple[bool, str]:
         """
-        Review a patch using LLM (Critic node).
+        Review a patch using LLM (Critic node) with actual test results.
         
         Args:
             patch: The patch diff to review
             failing_tests: List of failing tests this patch should fix
+            test_runner: Optional TestRunner to actually run tests (if provided)
+            repo_path: Optional repo path for applying patch temporarily
             
         Returns:
             Tuple of (approved: bool, reason: str)
@@ -379,6 +382,73 @@ class EnhancedLLMAgent:
                 if any(pattern in line for pattern in dangerous_patterns):
                     return False, "Patch modifies protected/configuration files"
         
+        # If we have a test runner, actually run tests with the patch applied
+        actual_test_results = None
+        if test_runner and repo_path:
+            try:
+                import subprocess
+                import tempfile
+                from pathlib import Path
+                
+                # Save current state
+                subprocess.run(["git", "stash", "push", "-m", "nova-critic-backup"], 
+                              cwd=repo_path, capture_output=True)
+                
+                try:
+                    # Apply patch temporarily
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
+                        f.write(patch)
+                        patch_file = f.name
+                    
+                    result = subprocess.run(
+                        ["git", "apply", patch_file],
+                        cwd=repo_path,
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if result.returncode == 0:
+                        # Run tests
+                        print("[cyan]🧪 Critic running tests with patch applied...[/cyan]")
+                        new_failures, _ = test_runner.run_tests()
+                        
+                        # Calculate results
+                        original_count = len(failing_tests)
+                        remaining_count = len(new_failures)
+                        fixed_count = original_count - remaining_count
+                        
+                        actual_test_results = {
+                            "patch_applied": True,
+                            "original_failures": original_count,
+                            "remaining_failures": remaining_count,
+                            "fixed_count": fixed_count,
+                            "all_fixed": remaining_count == 0,
+                            "remaining_test_names": [f.get('name', 'unknown') for f in new_failures[:5]]
+                        }
+                    else:
+                        actual_test_results = {
+                            "patch_applied": False,
+                            "error": result.stderr or "Failed to apply patch"
+                        }
+                    
+                    # Clean up temp file
+                    import os
+                    os.unlink(patch_file)
+                    
+                finally:
+                    # Always restore original state
+                    subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True)
+                    
+            except Exception as e:
+                # If anything goes wrong, make sure we restore state
+                try:
+                    subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True)
+                except:
+                    pass
+                actual_test_results = {
+                    "error": f"Failed to test patch: {str(e)}"
+                }
+        
         # Use LLM for semantic review
         try:
             system_prompt = (
@@ -390,7 +460,8 @@ class EnhancedLLMAgent:
             user_prompt = build_strict_critic_prompt(
                 patch, 
                 failing_tests, 
-                len(failing_tests)
+                len(failing_tests),
+                actual_test_results
             )
             
             # Log critic prompt for debugging

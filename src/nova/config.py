@@ -46,6 +46,7 @@ class NovaSettings(BaseModel):
     # Keep default consistent with from_env fallback:
     default_llm_model: str = "gpt-5"
     pr_llm_model: str = "gpt-4o"  # Faster model for PR generation
+    reasoning_effort: str = "high"  # Reasoning effort for GPT models (low/medium/high)
 
     @classmethod
     def from_env(cls) -> "NovaSettings":
@@ -91,6 +92,7 @@ class NovaSettings(BaseModel):
             enable_telemetry=os.environ.get("NOVA_ENABLE_TELEMETRY", "false").lower() == "true",
             default_llm_model=os.environ.get("NOVA_DEFAULT_LLM_MODEL", "gpt-5"),
             pr_llm_model=os.environ.get("NOVA_PR_LLM_MODEL", "gpt-4o"),
+            reasoning_effort=os.environ.get("NOVA_REASONING_EFFORT", "high"),
         )
 
 

@@ -150,7 +150,7 @@ Respond with JSON:
                     {"role": "system", "content": "You are a code reviewer. Review patches critically but approve if they fix the issues."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
+                temperature=1.0,
                 max_tokens=200
             )
             

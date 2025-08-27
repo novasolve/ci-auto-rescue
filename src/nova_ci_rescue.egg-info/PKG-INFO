@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nova-ci-rescue
-Version: 0.1.0
+Version: 0.2.6
 Summary: Nova CI-Rescue: automated test fixing agent (MVP)
 Author-email: NovaSolve <dev@novasolve.ai>
 License: MIT

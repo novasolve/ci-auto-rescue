@@ -393,26 +393,25 @@ class EnhancedLLMAgent:
             )
             
             # Log critic prompt for debugging
-            print(f"[Nova Debug - Critic] Prompt length: {len(user_prompt)} chars")
-            print(f"[Nova Debug - Critic] Failing tests to review: {len(failing_tests)}")
+            # Debug logs removed for demo
             if self.verbose:
-                print(f"[Nova Debug - Critic] Full prompt preview (first 500 chars):\n{user_prompt[:500]}...")
+                # Debug log removed for demo
             
             # Increased max_tokens for better responses
-            print(f"[Nova Debug - Critic] Calling LLM with temperature=0.1, max_tokens=500")
+            # Debug log removed for demo
             response = self.llm.complete(
                 system=system_prompt,
                 user=user_prompt,
-                temperature=0.1,
-                max_tokens=500  # Increased from 200 to allow fuller responses
+                temperature=1.0,
+                max_tokens=2000  # Increased to prevent truncation
             )
             
             # Log response details
-            print(f"[Nova Debug - Critic] LLM response length: {len(response) if response else 0} chars")
+            # Debug log removed for demo
             if response:
-                print(f"[Nova Debug - Critic] Response preview (first 200 chars): {response[:200]}...")
+                # Debug log removed for demo
             else:
-                print(f"[Nova Debug - Critic] WARNING: Empty response from LLM!")
+                # Debug log removed for demo
             
             # Parse JSON response
             if response and '{' in response and '}' in response:
@@ -423,16 +422,15 @@ class EnhancedLLMAgent:
                     review_json = json.loads(json_str)
                     approved = review_json.get('approved', False)
                     reason = review_json.get('reason', 'No reason provided')
-                    print(f"[Nova Debug - Critic] JSON parsed successfully: approved={approved}")
+                    # Debug log removed for demo
                     return approved, reason
                 except json.JSONDecodeError as e:
-                    print(f"[Nova Debug - Critic] JSON parsing failed: {e}")
-                    print(f"[Nova Debug - Critic] Attempted to parse: {json_str[:100]}...")
+                    # Debug logs removed for demo
             
             # Parsing failed – use raw response as feedback
             critic_feedback = (response or "").strip()
             if not critic_feedback:
-                print(f"[Nova Debug - Critic] Empty critic response, checking auto-approval criteria...")
+                # Debug log removed for demo
                 # Fallback: approve small/safe patches when critic is silent
                 patch_lines = patch.split('\n')
                 files_touched = sum(1 for l in patch_lines if l.startswith('+++ b/'))
@@ -441,18 +439,18 @@ class EnhancedLLMAgent:
                 protected = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
                 safe = not any(p in l for l in patch_lines for p in protected)
                 
-                print(f"[Nova Debug - Critic] Auto-approval check: patch_lines={len(patch_lines)}, files_touched={files_touched}, safe={safe}")
+                # Debug log removed for demo
                 
                 if safe and len(patch_lines) < 1000 and files_touched <= 3:
                     return True, "Auto-approved: empty critic feedback and patch is small & safe"
                 # otherwise still reject, but explain why
                 return False, "No feedback provided (patch too large or touches protected files)"
             # Decide to reject but show feedback (truncate if very long)
-            print(f"[Nova Debug - Critic] Using raw response as feedback")
+            # Debug log removed for demo
             return False, critic_feedback[:500]
             
         except Exception as e:
-            print(f"[Nova Debug - Critic] ERROR in patch review: {type(e).__name__}: {e}")
+            # Debug log removed for demo
             import traceback
             traceback.print_exc()
             # Fallback: approve small/safe patches if critic errors out

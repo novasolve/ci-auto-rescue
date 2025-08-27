@@ -174,6 +174,10 @@ def fix(
     console.print(f"Repository: {repo_path}")
     console.print(f"Max iterations: {max_iters}")
     console.print(f"Timeout: {timeout}s")
+    if verbose:
+        # Let underlying components know to print debug logs
+        import os as _os
+        _os.environ["NOVA_VERBOSE"] = "true"
     if whole_file:
         console.print(f"Mode: [yellow]Whole file replacement[/yellow]")
     else:

@@ -162,7 +162,7 @@ class EnhancedLLMAgent:
                 max_tokens=8000  # Increased to prevent truncation
             )
             
-            # Parse the response to extract file contents
+            # Parse the response to extract file contents (do not truncate prompt content)
             files_to_fix = {}
             current_file = None
             current_content = []

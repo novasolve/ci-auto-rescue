@@ -37,7 +37,7 @@ app = typer.Typer(
 console = Console(theme=nova_theme)
 
 
-def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None) -> None:
+def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None, llm_agent=None) -> None:
     """
     Print a comprehensive summary when exiting the agent loop.
     
@@ -118,6 +118,41 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         except Exception as e:
             if state.verbose:
                 console.print(f"[dim]Could not list patches: {e}[/dim]")
+    
+    # Display token usage in verbose mode
+    if verbose and llm_agent and hasattr(llm_agent, 'llm_client') and hasattr(llm_agent.llm_client, 'token_usage'):
+        usage = llm_agent.llm_client.token_usage
+        if usage['total_tokens'] > 0:
+            console.print("\n[bold]🧾 Token Usage Receipt:[/bold]")
+            console.print(f"  • Prompt tokens: {usage['prompt_tokens']:,}")
+            console.print(f"  • Completion tokens: {usage['completion_tokens']:,}")
+            console.print(f"  • Total tokens: {usage['total_tokens']:,}")
+            console.print(f"  • API calls: {len(usage['calls'])}")
+            
+            # Estimate costs based on model
+            model = llm_agent.llm_client.model if hasattr(llm_agent.llm_client, 'model') else 'unknown'
+            provider = llm_agent.llm_client.provider if hasattr(llm_agent.llm_client, 'provider') else 'unknown'
+            
+            cost_estimate = 0.0
+            if provider == 'openai':
+                # OpenAI pricing (approximate)
+                if 'gpt-4' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.03 + usage['completion_tokens'] * 0.06) / 1000
+                elif 'gpt-3.5' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.0005 + usage['completion_tokens'] * 0.0015) / 1000
+                elif 'gpt-5' in model:
+                    # GPT-5 pricing (estimated)
+                    cost_estimate = (usage['prompt_tokens'] * 0.045 + usage['completion_tokens'] * 0.09) / 1000
+            elif provider == 'anthropic':
+                # Anthropic pricing (approximate)
+                if 'claude-3-opus' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.015 + usage['completion_tokens'] * 0.075) / 1000
+                elif 'claude-3-sonnet' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.003 + usage['completion_tokens'] * 0.015) / 1000
+            
+            if cost_estimate > 0:
+                console.print(f"  • Estimated cost: ${cost_estimate:.4f}")
+                console.print(f"  [dim](Model: {model}, Provider: {provider})[/dim]")
     
     console.print("=" * 60)
     console.print()

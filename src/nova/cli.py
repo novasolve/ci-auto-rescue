@@ -161,6 +161,12 @@ def fix(
         "-w",
         help="Replace entire files instead of using patches (simpler, more reliable)",
     ),
+    test: Optional[str] = typer.Option(
+        None,
+        "--test",
+        "-k",
+        help="Specific test name or pattern to fix (e.g., 'test_calculator', 'test_add')",
+    ),
     pytest_args: Optional[str] = typer.Option(
         None,
         "--pytest-args",
@@ -246,7 +252,18 @@ def fix(
             state.start_time = now_utc()  # Track start time for PR generation
             
             # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
-            runner = TestRunner(repo_path, verbose=verbose, pytest_args=pytest_args)
+            # Combine test filter with pytest args if provided
+            combined_pytest_args = pytest_args or ""
+            if test:
+                # Add -k filter for the specific test
+                test_filter = f"-k '{test}'"
+                if combined_pytest_args:
+                    combined_pytest_args = f"{test_filter} {combined_pytest_args}"
+                else:
+                    combined_pytest_args = test_filter
+                console.print(f"[dim]Filtering tests: {test}[/dim]")
+            
+            runner = TestRunner(repo_path, verbose=verbose, pytest_args=combined_pytest_args)
             failing_tests, initial_junit_xml = runner.run_tests()
             
             # Save initial test report

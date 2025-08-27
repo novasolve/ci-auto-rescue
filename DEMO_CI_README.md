@@ -20,6 +20,7 @@ The demo is configured to run automatically in GitHub Actions:
 ### Required Secrets
 
 Add these secrets to your GitHub repository:
+
 - `OPENAI_API_KEY` - For GPT models
 - `ANTHROPIC_API_KEY` - For Claude models (optional)
 

@@ -98,9 +98,7 @@ class LLMAgent:
         prompt += "\n\nTEST FILE CONTENTS:\n"
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
-            prompt += content[:2000]  # Limit content size
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
+            prompt += content
         
         prompt += "\n\nGenerate a unified diff patch that fixes these test failures. "
         prompt += "The patch should be in standard unified diff format (like 'git diff' output). "

@@ -62,7 +62,7 @@ Do NOT include raw diff or implementation details that are obvious from the code
 
 DIFF:
 ```diff
-{final_diff[:3000]}{'...(truncated)' if len(final_diff) > 3000 else ''}
+{final_diff}
 ```
 
 TEST & REASONING CONTEXT:

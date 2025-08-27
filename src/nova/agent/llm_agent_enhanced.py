@@ -236,9 +236,7 @@ class EnhancedLLMAgent:
             prompt += "\n\nSOURCE CODE TO FIX:\n"
             for file_path, content in source_contents.items():
                 prompt += f"\n=== {file_path} ===\n"
-                prompt += content[:3000]  # Limit size
-                if len(content) > 3000:
-                    prompt += "\n... (truncated)"
+                prompt += content
         
         # Add test code for reference
         prompt += "\n\nTEST CODE (DO NOT MODIFY - these define correct behavior):\n"
@@ -246,7 +244,7 @@ class EnhancedLLMAgent:
             prompt += f"\n=== {file_path} ===\n"
             # Only include the failing test functions
             relevant_content = self._extract_relevant_test_functions(content, failing_tests)
-            prompt += relevant_content[:2000]
+            prompt += relevant_content
         
         prompt += "\n\nGenerate a unified diff patch that fixes the SOURCE CODE (not the tests). "
         prompt += "The tests define the correct expected behavior. "

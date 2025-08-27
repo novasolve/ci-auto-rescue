@@ -63,7 +63,7 @@ class PlannerNode:
         if self.verbose:
             console.print(f"[cyan]🧠 Planning fix for {len(state.failing_tests)} failing test(s)...[/cyan]")
             if critic_feedback:
-                console.print(f"[dim]Previous critic feedback: {critic_feedback[:100]}...[/dim]")
+                console.print(f"[dim]Previous critic feedback: {critic_feedback}[/dim]")
         
         try:
             # Generate plan using LLM

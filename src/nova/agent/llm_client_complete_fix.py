@@ -194,7 +194,7 @@ ORIGINAL SITUATION:
 
 PATCH TO REVIEW:
 ```diff
-{patch[:2000]}{'...(truncated)' if len(patch) > 2000 else ''}
+{patch}
 ```
 
 REQUIREMENTS FOR APPROVAL:

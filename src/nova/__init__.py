@@ -19,4 +19,4 @@ except importlib.metadata.PackageNotFoundError:
             __version__ = pyproject['project']['version']
     except:
         # If all else fails, use a default
-        __version__ = '0.4.0.dev0'
+        __version__ = '0.4.1'

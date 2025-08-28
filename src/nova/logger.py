@@ -28,7 +28,11 @@ class NovaLogger:
         self.console = console or Console()
         # Ensure level is a LogLevel instance
         if isinstance(level, str):
-            self.level = LogLevel[level.upper()]
+            try:
+                self.level = LogLevel[level.upper()]
+            except KeyError:
+                valid_levels = [lvl.name for lvl in LogLevel]
+                raise ValueError(f"Invalid log level string '{level}'. Valid levels are: {', '.join(valid_levels)}")
         elif isinstance(level, int):
             self.level = LogLevel(level)
         else:

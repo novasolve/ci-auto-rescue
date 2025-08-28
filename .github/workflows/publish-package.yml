@@ -1,0 +1,50 @@
+name: Publish to GitHub Packages
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Build package
+      run: python -m build
+
+    - name: Publish to GitHub Packages
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -m twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
+    
+    - name: Publish to GitHub Packages
+      run: |
+        # Configure pip to use GitHub Packages
+        echo "[distutils]" > ~/.pypirc
+        echo "index-servers = github" >> ~/.pypirc
+        echo "" >> ~/.pypirc
+        echo "[github]" >> ~/.pypirc
+        echo "repository: https://maven.pkg.github.com/${{ github.repository_owner }}/${{ github.repository_name }}" >> ~/.pypirc
+        echo "username: __token__" >> ~/.pypirc
+        echo "password: ${{ secrets.GITHUB_TOKEN }}" >> ~/.pypirc
+        
+        # Upload to GitHub Packages
+        python -m twine upload --repository github dist/*

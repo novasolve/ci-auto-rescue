@@ -65,8 +65,8 @@ jobs:
         run: |
           echo "🤖 Nova CI-Rescue: Attempting to fix failing tests..."
 
-          # Install Nova (assuming it's available as a package)
-          pip install nova-ci-rescue || pip install -e ../src
+          # Install Nova from GitHub repository
+          pip install "git+https://github.com/novasolve/nova-ci-rescue.git@demo/latest" || pip install -e ../src
 
           # Run Nova fix
           nova fix . --max-iters 3 --timeout 300 || python -m nova.cli fix . --max-iters 3

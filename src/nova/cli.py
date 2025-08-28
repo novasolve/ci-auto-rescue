@@ -5,6 +5,7 @@ Nova CI-Rescue CLI interface.
 
 import typer
 import time
+import subprocess
 from pathlib import Path
 from typing import Optional
 from nova.tools.datetime_utils import now_utc, seconds_between
@@ -1019,12 +1020,6 @@ def fix(
                         )
                         pr_created = False
                         raise typer.Exit(0)
-                    logger = get_logger()
-                    with logger.section(
-                        "Pull Request Generation", "🤖", show_in_normal=True
-                    ):
-                        logger.info("Using GPT-5 to generate pull request...")
-
                     # Calculate execution time
                     if hasattr(state, "start_time"):
                         if isinstance(state.start_time, float):
@@ -1060,47 +1055,15 @@ def fix(
                                 changed_files = [
                                     f for f in result.stdout.strip().split("\n") if f
                                 ]
-                        except Exception as e:
-                            logger.warning(f"Could not list changed files: {e}")
+                        except Exception:
+                            pass  # Silently ignore errors
 
                     # Gather reasoning logs from telemetry
                     reasoning_logs = []
                     if telemetry and hasattr(telemetry, "events"):
                         reasoning_logs = telemetry.events
-                    elif telemetry:
-                        # Try to read from telemetry files
-                        try:
-                            telemetry_dir = Path(repo_path) / ".nova"
-                            if telemetry_dir.exists():
-                                # Get the most recent run directory
-                                run_dirs = sorted(
-                                    [d for d in telemetry_dir.iterdir() if d.is_dir()],
-                                    key=lambda x: x.stat().st_mtime,
-                                    reverse=True,
-                                )
-                                if run_dirs:
-                                    trace_file = run_dirs[0] / "trace.jsonl"
-                                    if trace_file.exists():
-                                        import json
 
-                                        with open(trace_file) as f:
-                                            for line in f:
-                                                try:
-                                                    reasoning_logs.append(
-                                                        json.loads(line)
-                                                    )
-                                                except json.JSONDecodeError:
-                                                    # Skip malformed JSON lines
-                                                    pass
-                        except Exception as e:
-                            logger.warning(f"Could not read reasoning logs: {e}")
-
-                    # Generate PR content using GPT-5
-                    with logger.subsection("Generating PR content"):
-                        logger.verbose(
-                            "Calling GPT-5 to generate title and description...",
-                            component="PR",
-                        )
+                    # Generate PR content
                     title, description = pr_gen.generate_pr_content(
                         fixed_tests=fixed_tests,
                         patches_applied=state.patches_applied,
@@ -1109,38 +1072,18 @@ def fix(
                         reasoning_logs=reasoning_logs,
                     )
 
-                    logger.info(f"\nPR Title: {title}")
-                    logger.info("\nPR Description:")
-                    # Show full description in verbose mode, truncated in normal
-                    if logger.level.value >= 1:  # verbose or higher
-                        logger.info(description)
-                    else:
-                        logger.info(
-                            description[:500] + "..."
-                            if len(description) > 500
-                            else description
-                        )
-
-                    # Push the branch first
-                    with logger.subsection("Pushing to remote"):
-                        logger.info("Pushing branch to remote...")
-                    push_result = subprocess.run(
-                        ["git", "push", "origin", branch_name],
+                    # Squash commits before pushing
+                    git_manager.squash_commits()
+                    
+                    # Push the branch
+                    subprocess.run(
+                        ["git", "push", "origin", branch_name, "--force-with-lease"],
                         capture_output=True,
                         text=True,
                         cwd=repo_path,
                     )
 
-                    if push_result.returncode != 0:
-                        logger.warning(f"Failed to push branch: {push_result.stderr}")
-                        logger.verbose(
-                            "Attempting to create PR anyway...", component="Git"
-                        )
-
                     # Create the PR
-                    with logger.subsection("Creating pull request"):
-                        logger.info("Submitting PR to GitHub...")
-                    # Detect the default branch
                     base_branch = git_manager.get_default_branch()
                     success_pr, pr_url_or_error = pr_gen.create_pr(
                         branch_name=branch_name,
@@ -1151,12 +1094,7 @@ def fix(
                     )
 
                     if success_pr:
-                        console.print(
-                            "\n[bold green]🎉 Pull Request created successfully![/bold green]"
-                        )
-                        console.print(
-                            f"[link={pr_url_or_error}]{pr_url_or_error}[/link]"
-                        )
+                        console.print(f"\n[bold green]🔗 {pr_url_or_error}[/bold green]")
                         pr_created = True
                     else:
                         console.print(

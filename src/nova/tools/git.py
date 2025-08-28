@@ -41,6 +41,7 @@ class GitBranchManager:
         self.branch_name: Optional[str] = None
         self._original_sigint_handler = None
         self._handling_interrupt = False
+        self._cleaned_up = False
 
     # ---------------------------
     # Low-level command helpers
@@ -491,6 +492,11 @@ class GitBranchManager:
         """Clean up the repository state."""
         if not self.original_head:
             return
+            
+        # Check if we've already cleaned up
+        if hasattr(self, '_cleaned_up') and self._cleaned_up:
+            return
+        self._cleaned_up = True
 
         if success:
             console.print(f"\n[green]✅ Success! Changes saved to branch: {self.branch_name}[/green]")

@@ -224,6 +224,11 @@ def fix(
         "--ci",
         help="CI mode: apply fixes to current branch instead of creating new branch",
     ),
+    no_pr: bool = typer.Option(
+        False,
+        "--no-pr",
+        help="Skip pull request generation after successful fixes",
+    ),
 ):
     """
     Fix failing tests in a repository.
@@ -805,7 +810,7 @@ def fix(
     finally:
         # If successful, offer to create a PR (skip in CI mode)
         pr_created = False
-        if success and state and branch_name and git_manager and getattr(state, "initial_failures", 0) > 0 and not ci_mode:
+        if success and state and branch_name and git_manager and getattr(state, "initial_failures", 0) > 0 and not ci_mode and not no_pr:
             try:
                 console.print("\n[bold green]✅ Success! Changes saved to branch:[/bold green] " + branch_name)
                 

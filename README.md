@@ -1,85 +1,114 @@
-# Nova CI‑Rescue
+# 🧑‍🔧 Nova CI-Rescue
 
-[![Install Nova CI‑Rescue](https://img.shields.io/badge/Install-GitHub%20App-blue?logo=github)](https://github.com/apps/nova-ci-rescue/installations/new)
-[![Add to Slack (beta)](https://img.shields.io/badge/Add%20to%20Slack-beta-4A154B?logo=slack&logoColor=white)](#slack-integration-beta)
+**Self-healing CI for Python — open source**
 
-Nova keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova analyzes the failures, proposes focused edits, and opens a reviewable PR with patches and artifacts.
+[![PyPI](https://img.shields.io/pypi/v/nova-ci-rescue)](https://pypi.org/project/nova-ci-rescue/)
+[![CI](https://github.com/novasolve/ci-auto-rescue/actions/workflows/tests.yml/badge.svg)](https://github.com/novasolve/ci-auto-rescue/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Python](https://img.shields.io/pypi/pyversions/nova-ci-rescue)
+[![Coverage Status](https://codecov.io/gh/novasolve/ci-auto-rescue/branch/main/graph/badge.svg)](https://codecov.io/gh/novasolve/ci-auto-rescue)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/nova-ci-rescue)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-### Why Nova CI‑Rescue
+Nova CI-Rescue automatically fixes failing Python tests with an AI-powered agent loop.
+Instead of red CI builds, Nova analyzes failures, proposes patches, and opens a PR with passing tests — all audit-ready.
 
-- Patch- or whole-file apply modes with a Planner → Actor → Critic loop
-- Runs your test suite, focuses on failures, and iterates up to a limit
-- Saves artifacts (patches, test reports) for auditability when enabled
-- Guardrails for timeouts, iteration caps, rate limiting, and domain allow-list
-- One command to try it locally on a demo repo
+👉 [Demo video](#) · [Docs](docs/) · [Contributing](CONTRIBUTING.md)
 
-Quick links: [Quickstart](docs/QUICKSTART.md) · [Troubleshooting & FAQ](docs/TROUBLESHOOTING.md) · [Privacy](docs/PRIVACY.md)
+## ✨ Why Nova?
 
-### Quickstart (one command)
+🔄 **Self-healing CI** — automatically repair failing pull requests
+
+🧠 **LLM agent loop** — Planner → Generate → Patch → Critic
+
+⚡ **Runs anywhere** — local CLI or GitHub Actions
+
+📜 **Audit-friendly** — artifacts, reports, and patch history
+
+🔧 **Flexible** — OpenAI GPT-4, Anthropic Claude, or bring your own model
+
+## 🚀 Quickstart (60 seconds)
 
 ```bash
-pip install -e . && export OPENAI_API_KEY=sk-... && nova fix examples/demos/demo_broken_project
+pip install -e .
+export OPENAI_API_KEY=sk-...
+nova fix examples/demos/demo_broken_project
 ```
 
-Notes:
+✅ **Nova will:**
 
-- Requires Python 3.10+ and an OpenAI API key in your environment. Anthropic works too: set `ANTHROPIC_API_KEY` and `NOVA_DEFAULT_LLM_MODEL=claude-3-5-sonnet`.
-- The demo repo `examples/demos/demo_broken_project` has failing tests; Nova will create a fix branch and attempt to make them pass.
+- Create a new branch
+- Attempt targeted fixes
+- Push a reviewable PR with test results
 
-### Installation
+Requires Python 3.10+.
+Supports OpenAI and Anthropic models (`NOVA_DEFAULT_LLM_MODEL=claude-3-5-sonnet`).
 
-See the dedicated guide: [docs/INSTALLATION.md](docs/INSTALLATION.md)
-
-### Usage
+## ⚡ Usage
 
 ```bash
-# Fix a repository (creates a temporary branch and proposes patches)
+# Fix a repository
 nova fix /path/to/repo \
   --max-iters 5 \
   --timeout 300 \
-  --whole-file    # optional: swap to whole-file replacement mode
+  --whole-file    # optional: replace entire files
 ```
 
-Other commands:
+**Other commands:**
 
-- `nova version` — print the installed version
-- `nova eval` — reserved for multi-repo benchmarking (currently a stub)
+- `nova version` — print installed version
+- `nova eval` — benchmarking (stub)
 
-### Configuration
+## 🔧 Configuration
 
-Environment variables control runtime behavior (timeouts, LLM model, telemetry, etc). See the full reference and `.env` example: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+Environment variables control runtime behavior.
 
-Minimal `.env` example:
+**Minimal .env:**
 
 ```bash
 OPENAI_API_KEY=sk-...
-# Or use Anthropic
+# or:
 # ANTHROPIC_API_KEY=...
 # NOVA_DEFAULT_LLM_MODEL=claude-3-5-sonnet
 
-# Optional telemetry (disabled by default). Set to true to save patches/reports.
+# Optional telemetry
 NOVA_ENABLE_TELEMETRY=true
 ```
 
-### Safety limits (defaults)
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full reference.
 
-- Global timeout: 300s per run
-- Max iterations: 5
-- Test execution timeout: 120s
-- Per-repo run frequency cap: 600s between runs
-- LLM call timeout: 60s; daily usage warnings enabled
+## 🛡 Safety Limits
 
-### Contributing and Community
+- **Global timeout:** 300s per run
+- **Max iterations:** 5
+- **Test execution timeout:** 120s
+- **Run frequency cap:** 600s per repo
+- **LLM call timeout:** 60s
 
-- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+## 🤝 Contributing
 
-### License
+- [Contribution guidelines](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+
+We welcome issues, PRs, and feedback!
+
+## 📜 License
 
 MIT — see [LICENSE](LICENSE).
 
+## 💬 Slack Integration (Beta)
+
+Get CI fix notifications in Slack (private beta).
+Open an issue to join the waitlist.
+
+## 📚 Resources
+
+- [Demo video](#)
+- [Quickstart guide](docs/QUICKSTART.md)
+- [Troubleshooting & FAQ](docs/TROUBLESHOOTING.md)
+- [Privacy](docs/PRIVACY.md)
+
 ---
 
-### Slack integration (beta)
-
-Slack notifications are currently in private beta. If you’re interested, open an issue or contact us and we’ll add you to the waitlist. The button above is a placeholder until the public app is available.
+✨ **Nova is your AI teammate that keeps CI green — so you can ship faster.**

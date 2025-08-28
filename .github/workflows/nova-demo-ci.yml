@@ -1,11 +1,15 @@
-name: Nova Demo CI Tests
+name: Nova Demo CI Tests (DISABLED)
 
-on:
-  push:
-    branches: [main, demo]
-  pull_request:
-    branches: [main, demo]
-  workflow_dispatch:
+# DISABLED: Uncomment the 'on' section below to re-enable
+# on:
+#   push:
+#     branches: [main, demo]
+#   pull_request:
+#     branches: [main, demo]
+#   workflow_dispatch:
+
+# Workflow disabled - no triggers active
+on: []
 
 jobs:
   nova-basic-test:
@@ -88,17 +92,17 @@ jobs:
         run: |
           echo "## Nova Demo Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### Test Status:" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Nova Basic Test: Completed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Nova Verbose Test: Completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### What was tested:" >> $GITHUB_STEP_SUMMARY
           echo "1. **Basic Test**: Nova automatically fixed a bug in calculator.py (subtraction method)" >> $GITHUB_STEP_SUMMARY
           echo "2. **Verbose Test**: Nova fixed a validation bug in string_utils.py (truncate_string method)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "Both tests demonstrate Nova's ability to:" >> $GITHUB_STEP_SUMMARY
           echo "- Identify failing tests" >> $GITHUB_STEP_SUMMARY
           echo "- Analyze the code and understand the bug" >> $GITHUB_STEP_SUMMARY

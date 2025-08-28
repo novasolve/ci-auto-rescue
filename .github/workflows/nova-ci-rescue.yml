@@ -1,22 +1,26 @@
-name: Nova CI-Rescue
+name: Nova CI-Rescue (DISABLED)
 
-on:
-  push:
-    branches:
-      - main
-      - "feature/**"
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: "PR to run Nova on (optional)"
-        required: false
+# DISABLED: Uncomment the 'on' section below to re-enable
+# on:
+#   push:
+#     branches:
+#       - main
+#       - "feature/**"
+#   pull_request:
+#     types: [opened, synchronize, reopened, labeled]
+#   workflow_dispatch:
+#     inputs:
+#       pr_number:
+#         description: "PR to run Nova on (optional)"
+#         required: false
+
+# Workflow disabled - no triggers active
+on: []
 
 permissions:
-  contents: write      # Needed for pushing fixes
+  contents: write # Needed for pushing fixes
   pull-requests: write # For commenting or opening PRs
-  issues: write        # For commenting on issues
+  issues: write # For commenting on issues
 
 jobs:
   test-and-auto-fix:

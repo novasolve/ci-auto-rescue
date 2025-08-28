@@ -1,0 +1,41 @@
+name: Demo CI
+
+on:
+  push:
+    branches:
+      - "demo/*"
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  demo-test:
+    # Only run on demo branches or PRs with 'demo' label
+    if: |
+      startsWith(github.ref, 'refs/heads/demo/') ||
+      contains(github.event.pull_request.labels.*.name, 'demo')
+
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Never block merges
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run demo tests
+        run: |
+          echo "🧪 Running demo-specific tests..."
+          pytest tests/ -v --tb=short || true
+
+      - name: Run Nova on demo examples
+        run: |
+          echo "🤖 Testing Nova on demo examples..."
+          nova fix examples/demos/demo_broken_project --max-iters 1 || true

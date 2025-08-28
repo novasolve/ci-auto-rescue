@@ -165,6 +165,18 @@ perf: optimize test collection algorithm
 - Release tags trigger production deployment
 - Bot branches run lightweight validation
 
+## Migration Checklist
+
+- [x] Merge `development` branch to `main`
+- [x] Convert demo branches to tags
+- [x] Update branch protection rules
+- [x] Update CONTRIBUTING.md with new conventions
+- [x] Create branch strategy documentation
+- [ ] Clean up old merged feature branches
+- [ ] Configure auto-cleanup for bot branches
+- [ ] Update CI workflows if needed
+- [ ] Train team on new workflow
+
 ## FAQ
 
 **Q: What happened to the `development` branch?**

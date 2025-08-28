@@ -66,12 +66,12 @@ nova-ci-rescue/
 
 ## 🔍 Important Files
 
-| File | Description |
-|------|-------------|
-| `src/nova/cli.py` | Main entry point for the `nova` command |
+| File                 | Description                                     |
+| -------------------- | ----------------------------------------------- |
+| `src/nova/cli.py`    | Main entry point for the `nova` command         |
 | `src/nova/config.py` | Environment variable and configuration handling |
-| `pyproject.toml` | Project metadata and dependencies |
-| `.env.example` | Example environment configuration |
+| `pyproject.toml`     | Project metadata and dependencies               |
+| `.env.example`       | Example environment configuration               |
 
 ## 🚦 Getting Started
 

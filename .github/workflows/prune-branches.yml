@@ -1,0 +1,105 @@
+name: Prune Old Branches
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  prune-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for accurate branch info
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Prune old bot and demo branches
+        run: |
+          echo "Fetching all branches..."
+          git fetch --all --prune
+
+          echo "Finding branches to prune..."
+
+          # Define patterns for branches to prune
+          PATTERNS=("nova-fix-" "nova-autofix-" "nova/" "demo/" "test/" "bot/")
+
+          # Get all remote branches
+          ALL_BRANCHES=$(git branch -r | grep -v HEAD | sed 's/origin\///')
+
+          # Function to check if branch matches any pattern
+          matches_pattern() {
+            local branch=$1
+            for pattern in "${PATTERNS[@]}"; do
+              if [[ "$branch" == "$pattern"* ]]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          # Collect matching branches with their last commit dates
+          echo "Collecting branches that match prune patterns..."
+          BRANCHES_TO_CHECK=()
+          while IFS= read -r branch; do
+            if matches_pattern "$branch"; then
+              BRANCHES_TO_CHECK+=("$branch")
+            fi
+          done <<< "$ALL_BRANCHES"
+
+          # Sort branches by last commit date (newest first)
+          echo "Sorting branches by last commit date..."
+          SORTED_BRANCHES=()
+          for branch in "${BRANCHES_TO_CHECK[@]}"; do
+            LAST_COMMIT=$(git log -1 --format=%ct origin/"$branch" 2>/dev/null || echo 0)
+            SORTED_BRANCHES+=("$LAST_COMMIT:$branch")
+          done
+
+          # Sort and keep only the branch names
+          IFS=$'\n' SORTED_BRANCHES=($(sort -rn <<< "${SORTED_BRANCHES[*]}"))
+
+          # Keep the 5 most recent branches, delete the rest
+          KEEP_COUNT=5
+          DELETED_COUNT=0
+
+          echo "Found ${#SORTED_BRANCHES[@]} branches matching patterns"
+          echo "Keeping the $KEEP_COUNT most recent branches..."
+
+          for i in "${!SORTED_BRANCHES[@]}"; do
+            if [ $i -ge $KEEP_COUNT ]; then
+              BRANCH_INFO="${SORTED_BRANCHES[$i]}"
+              BRANCH="${BRANCH_INFO#*:}"
+
+              # Skip protected branches
+              if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]] || [[ "$BRANCH" == "development" ]] || [[ "$BRANCH" == "demo/latest" ]]; then
+                echo "Skipping protected branch: $BRANCH"
+                continue
+              fi
+
+              echo "Deleting old branch: $BRANCH"
+              git push origin --delete "$BRANCH" || echo "Failed to delete $BRANCH"
+              ((DELETED_COUNT++))
+            else
+              BRANCH_INFO="${SORTED_BRANCHES[$i]}"
+              BRANCH="${BRANCH_INFO#*:}"
+              echo "Keeping recent branch: $BRANCH"
+            fi
+          done
+
+          echo "Pruning complete. Deleted $DELETED_COUNT branches."
+
+      - name: Summary
+        run: |
+          echo "## Branch Pruning Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Pruned old bot/demo branches" >> $GITHUB_STEP_SUMMARY
+          echo "- Kept the 5 most recent branches for each pattern" >> $GITHUB_STEP_SUMMARY
+          echo "- Protected branches: main, master, development, demo/latest" >> $GITHUB_STEP_SUMMARY

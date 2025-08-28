@@ -1,7 +1,7 @@
 # Nova CI‑Rescue
 
 [![PyPI](https://img.shields.io/pypi/v/nova-ci-rescue)](https://pypi.org/project/nova-ci-rescue/)
-[![CI](https://github.com/novasolve/ci-auto-rescue/actions/workflows/tests.yml/badge.svg)](https://github.com/novasolve/ci-auto-rescue/actions)
+[![CI](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml/badge.svg)](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python](https://img.shields.io/pypi/pyversions/nova-ci-rescue)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)

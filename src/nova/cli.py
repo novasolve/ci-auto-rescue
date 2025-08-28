@@ -12,22 +12,32 @@ from datetime import datetime
 from nova.tools.datetime_utils import now_utc, delta_between, seconds_between
 from rich.console import Console
 from rich.table import Table
+from rich.theme import Theme
 
 from nova.runner import TestRunner
 from nova.agent import AgentState
 from nova.telemetry.logger import JSONLLogger
 from nova.config import get_settings
 from nova.tools.git import GitBranchManager
+from nova.logger import create_logger, set_logger, get_logger
+
+# Define custom theme with softer colors
+nova_theme = Theme({
+    "error": "#CD5C5C",  # Indian Red - softer than pure red
+    "warning": "#DAA520",  # Goldenrod - softer yellow
+    "success": "#228B22",  # Forest Green - softer green
+    "info": "#4682B4",  # Steel Blue
+})
 
 app = typer.Typer(
     name="nova",
     help="Nova CI-Rescue: Automated test fixing agent",
     add_completion=False,
 )
-console = Console()
+console = Console(theme=nova_theme)
 
 
-def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None) -> None:
+def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None, llm_agent=None) -> None:
     """
     Print a comprehensive summary when exiting the agent loop.
     
@@ -109,6 +119,41 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
             if state.verbose:
                 console.print(f"[dim]Could not list patches: {e}[/dim]")
     
+    # Display token usage in verbose mode
+    if state.verbose and llm_agent and hasattr(llm_agent, 'llm_client') and hasattr(llm_agent.llm_client, 'token_usage'):
+        usage = llm_agent.llm_client.token_usage
+        if usage['total_tokens'] > 0:
+            console.print("\n[bold]🧾 Token Usage Receipt:[/bold]")
+            console.print(f"  • Prompt tokens: {usage['prompt_tokens']:,}")
+            console.print(f"  • Completion tokens: {usage['completion_tokens']:,}")
+            console.print(f"  • Total tokens: {usage['total_tokens']:,}")
+            console.print(f"  • API calls: {len(usage['calls'])}")
+            
+            # Estimate costs based on model
+            model = llm_agent.llm_client.model if hasattr(llm_agent.llm_client, 'model') else 'unknown'
+            provider = llm_agent.llm_client.provider if hasattr(llm_agent.llm_client, 'provider') else 'unknown'
+            
+            cost_estimate = 0.0
+            if provider == 'openai':
+                # OpenAI pricing (approximate)
+                if 'gpt-4' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.03 + usage['completion_tokens'] * 0.06) / 1000
+                elif 'gpt-3.5' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.0005 + usage['completion_tokens'] * 0.0015) / 1000
+                elif 'gpt-5' in model:
+                    # GPT-5 pricing (estimated)
+                    cost_estimate = (usage['prompt_tokens'] * 0.045 + usage['completion_tokens'] * 0.09) / 1000
+            elif provider == 'anthropic':
+                # Anthropic pricing (approximate)
+                if 'claude-3-opus' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.015 + usage['completion_tokens'] * 0.075) / 1000
+                elif 'claude-3-sonnet' in model:
+                    cost_estimate = (usage['prompt_tokens'] * 0.003 + usage['completion_tokens'] * 0.015) / 1000
+            
+            if cost_estimate > 0:
+                console.print(f"  • Estimated cost: ${cost_estimate:.4f}")
+                console.print(f"  [dim](Model: {model}, Provider: {provider})[/dim]")
+    
     console.print("=" * 60)
     console.print()
 
@@ -156,31 +201,52 @@ def fix(
         help="Disable telemetry collection for this run",
     ),
     whole_file: bool = typer.Option(
+        None,  # Will use config default if not specified
+        "--whole-file/--patch-mode",
+        "-w/-p",
+        help="Replace entire files instead of using patches (default: from config or env NOVA_WHOLE_FILE_MODE)",
+    ),
+    test: Optional[str] = typer.Option(
+        None,
+        "--test",
+        "-k",
+        help="Specific test name or pattern to fix (e.g., 'test_calculator', 'test_add')",
+    ),
+    pytest_args: Optional[str] = typer.Option(
+        None,
+        "--pytest-args",
+        help="Additional arguments to pass to pytest (e.g., -k 'pattern' -m 'slow')",
+    ),
+    ci_mode: bool = typer.Option(
         False,
-        "--whole-file",
-        "-w",
-        help="Replace entire files instead of using patches (simpler, more reliable)",
+        "--ci",
+        help="CI mode: apply fixes to current branch instead of creating new branch",
     ),
 ):
     """
     Fix failing tests in a repository.
     """
+    # Set up the logger based on verbosity
+    logger = create_logger(verbose=verbose)
+    set_logger(logger)
+    
     console.print(f"[green]Nova CI-Rescue[/green] 🚀")
     console.print(f"Repository: {repo_path}")
     console.print(f"Max iterations: {max_iters}")
     console.print(f"Timeout: {timeout}s")
-    if whole_file:
-        console.print(f"Mode: [yellow]Whole file replacement[/yellow]")
-    else:
-        console.print(f"Mode: [cyan]Patch-based fixes[/cyan]")
-    console.print()
+    if verbose:
+        # Let underlying components know to print debug logs
+        import os as _os
+        _os.environ["NOVA_VERBOSE"] = "true"
+    # Mode display removed for cleaner output
     
-    # Initialize branch manager for nova-fix branch
+    # Initialize branch manager
     git_manager = GitBranchManager(repo_path, verbose=verbose)
     branch_name: Optional[str] = None
     success = False
     telemetry = None
     state = None
+    original_branch = None
     
     # Check for concurrent runs
     from nova.tools.lock import nova_lock
@@ -200,8 +266,8 @@ def fix(
                         last_ts = int(last_run_file.read_text().strip() or "0")
                         if now_ts - last_ts < settings.min_repo_run_interval_sec:
                             remaining = settings.min_repo_run_interval_sec - (now_ts - last_ts)
-                            console.print(f"[yellow]⚠️ Run frequency cap: please wait {remaining}s before running Nova again on this repo.[/yellow]")
-                            raise typer.Exit(1)
+                            # Frequency cap removed for demo
+                            pass
                     except Exception:
                         pass
                 # Record start of run
@@ -213,15 +279,25 @@ def fix(
                 pass
             # Check for clean working tree before starting
             if not git_manager._check_clean_working_tree():
-                console.print("[yellow]⚠️ Warning: You have uncommitted changes in your working tree.[/yellow]")
-                from rich.prompt import Confirm
-                if not Confirm.ask("Proceed and potentially lose these changes?"):
-                    console.print("[dim]Aborting nova fix due to uncommitted changes.[/dim]")
-                    raise typer.Exit(1)
+                # Uncommitted changes warning removed for demo
+                pass
             
-            # Create the nova-fix branch
-            branch_name = git_manager.create_fix_branch()
-            console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+            if ci_mode:
+                # In CI mode, work on the current branch
+                import subprocess
+                result = subprocess.run(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    cwd=repo_path
+                )
+                branch_name = result.stdout.strip() if result.returncode == 0 else "HEAD"
+                original_branch = branch_name
+                console.print(f"[dim]CI mode: Working on current branch: {branch_name}[/dim]")
+            else:
+                # Create the nova-fix branch
+                branch_name = git_manager.create_fix_branch()
+                console.print(f"[dim]Working on branch: {branch_name}[/dim]")
             
             # Set up signal handler for Ctrl+C
             git_manager.setup_signal_handler()
@@ -235,6 +311,10 @@ def fix(
                 telemetry.start_run(repo_path)
         
             # Initialize agent state
+            # Use config default if whole_file not specified on command line
+            if whole_file is None:
+                whole_file = settings.whole_file_mode
+            
             state = AgentState(
                 repo_path=repo_path,
                 max_iterations=max_iters,
@@ -244,8 +324,29 @@ def fix(
             state.start_time = now_utc()  # Track start time for PR generation
             
             # Step 1: Run tests to identify failures (A1 - seed failing tests into planner)
-            runner = TestRunner(repo_path, verbose=verbose)
+            # Combine test filter with pytest args if provided
+            combined_pytest_args = pytest_args or ""
+            if test:
+                # Add -k filter for the specific test
+                test_filter = f"-k '{test}'"
+                if combined_pytest_args:
+                    combined_pytest_args = f"{test_filter} {combined_pytest_args}"
+                else:
+                    combined_pytest_args = test_filter
+                console.print(f"[dim]Filtering tests: {test}[/dim]")
+            
+            runner = TestRunner(repo_path, verbose=verbose, pytest_args=combined_pytest_args)
+            
+            # Time the initial test discovery
+            console.print(f"[cyan]🧪 Running initial tests to identify failures...[/cyan]")
+            test_discovery_start = time.time()
+            
             failing_tests, initial_junit_xml = runner.run_tests()
+            
+            # Calculate and display test discovery duration
+            test_discovery_duration = time.time() - test_discovery_start
+            if verbose:
+                console.print(f"[dim]✓ Initial test run completed in {test_discovery_duration:.1f}s[/dim]")
             
             # Save initial test report
             if initial_junit_xml:
@@ -270,8 +371,7 @@ def fix(
                 success = True
                 return
             
-            # Display failing tests in a table
-            console.print(f"\n[bold red]Found {len(failing_tests)} failing test(s):[/bold red]")
+            # Display failing tests in a table (duplicate message removed)
             
             table = Table(title="Failing Tests", show_header=True, header_style="bold magenta")
             table.add_column("Test Name", style="cyan", no_wrap=False)
@@ -324,8 +424,14 @@ def fix(
                 
                 # Determine which model we're using
                 model_name = settings.default_llm_model
+                reasoning_effort = settings.reasoning_effort
+                
+                # Display model and reasoning effort
                 if "gpt" in model_name.lower():
-                    console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing[/dim]")
+                    if "gpt-5" in model_name.lower():
+                        console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing (reasoning effort: {reasoning_effort})[/dim]")
+                    else:
+                        console.print(f"[dim]Using OpenAI {model_name} for autonomous test fixing[/dim]")
                 elif "claude" in model_name.lower():
                     console.print(f"[dim]Using Anthropic {model_name} for autonomous test fixing[/dim]")
                 else:
@@ -353,10 +459,14 @@ def fix(
             
             while state.increment_iteration():
                 iteration = state.current_iteration
+                iteration_start = time.time()  # Track iteration start time
                 console.print(f"\n[blue]━━━ Iteration {iteration}/{state.max_iterations} ━━━[/blue]")
                 
                 # 1. PLANNER: Generate a plan based on failing tests
                 console.print(f"[cyan]🧠 Planning fix for {state.total_failures} failing test(s)...[/cyan]")
+                
+                # Start timing for planner
+                planner_start = time.time()
                 
                 # Log planner start
                 telemetry.log_event("planner_start", {
@@ -370,6 +480,11 @@ def fix(
                 
                 # Store plan in state for reference
                 state.plan = plan
+                
+                # Calculate and display planner duration
+                planner_duration = time.time() - planner_start
+                if verbose:
+                    console.print(f"[dim]✓ Planning completed in {planner_duration:.1f}s[/dim]")
                 
                 # Display plan summary
                 if verbose:
@@ -399,11 +514,19 @@ def fix(
                 # 2. ACTOR: Generate a patch diff based on the plan
                 console.print(f"[cyan]🎭 Generating patch based on plan...[/cyan]")
                 
+                # Start timing for actor
+                actor_start = time.time()
+                
                 # Log actor start
                 telemetry.log_event("actor_start", {"iteration": iteration})
                 
                 # Generate patch with plan context and critic feedback if available
                 patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=state.plan, critic_feedback=critic_feedback, state=state)
+                
+                # Calculate and display actor duration
+                actor_duration = time.time() - actor_start
+                if verbose:
+                    console.print(f"[dim]✓ Patch generation completed in {actor_duration:.1f}s[/dim]")
                 
                 if not patch_diff:
                     console.print("[red]❌ Could not generate a patch[/red]")
@@ -453,17 +576,28 @@ def fix(
                 # 3. CRITIC: Review and approve/reject the patch
                 console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
                 
+                # Start timing for critic
+                critic_start = time.time()
+                
                 # Log critic start
                 telemetry.log_event("critic_start", {"iteration": iteration})
                 
-                # Use LLM to review patch
-                patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
+                # Use LLM to review patch with actual test results
+                patch_approved, review_reason = llm_agent.review_patch(
+                    patch_diff, 
+                    state.failing_tests,
+                    test_runner=runner,
+                    repo_path=repo_path
+                )
                 
+                # Calculate and display critic duration
+                critic_duration = time.time() - critic_start
                 if verbose:
+                    console.print(f"[dim]✓ Critic review completed in {critic_duration:.1f}s[/dim]")
                     console.print(f"[dim]Critic review: {review_reason}[/dim]")
                 
                 if not patch_approved:
-                    console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
+                    console.print(f"[error]❌ Patch rejected: {review_reason}[/error]")
                     # Store critic feedback for next iteration
                     state.critic_feedback = review_reason
                     telemetry.log_event("critic_rejected", {
@@ -494,8 +628,16 @@ def fix(
                 # 4. APPLY PATCH: Apply the approved patch and commit
                 console.print(f"[cyan]📝 Applying patch...[/cyan]")
                 
+                # Start timing for patch application
+                patch_start = time.time()
+                
                 # Use our ApplyPatchNode to apply and commit the patch
                 result = apply_patch(state, patch_diff, git_manager, verbose=verbose)
+                
+                # Calculate and display patch application duration
+                patch_duration = time.time() - patch_start
+                if verbose:
+                    console.print(f"[dim]✓ Patch application completed in {patch_duration:.1f}s[/dim]")
                 
                 if not result["success"]:
                     console.print(f"[red]❌ Failed to apply patch: {result.get('error', 'unknown error')}[/red]")
@@ -527,7 +669,16 @@ def fix(
                 
                 # 5. RUN TESTS: Check if the patch fixed the failures
                 console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
+                
+                # Start timing for test run
+                test_start = time.time()
+                
                 new_failures, junit_xml = runner.run_tests()
+                
+                # Calculate and display test run duration
+                test_duration = time.time() - test_start
+                if verbose:
+                    console.print(f"[dim]✓ Test run completed in {test_duration:.1f}s[/dim]")
                 
                 # Save test report artifact
                 if junit_xml:
@@ -606,10 +757,22 @@ def fix(
                     "decision": "continue",
                     "reason": "more_failures_to_fix"
                 })
+                
+                # Display iteration summary with timing in verbose mode
+                if verbose:
+                    iteration_duration = time.time() - iteration_start
+                    console.print(f"\n[dim]━━━ Iteration {iteration} Summary ━━━[/dim]")
+                    console.print(f"[dim]  • Total iteration time: {iteration_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Planner: {planner_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Actor: {actor_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Critic: {critic_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Apply patch: {patch_duration:.1f}s[/dim]")
+                    console.print(f"[dim]  • Run tests: {test_duration:.1f}s[/dim]")
+                    console.print(f"[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
             
             # Print exit summary
             if state and state.final_status:
-                print_exit_summary(state, state.final_status)
+                print_exit_summary(state, state.final_status, llm_agent=llm_agent)
             
             # Log final completion status
             telemetry.log_event("completion", {
@@ -623,7 +786,7 @@ def fix(
     except KeyboardInterrupt:
         if state:
             state.final_status = "interrupted"
-            print_exit_summary(state, "interrupted")
+            print_exit_summary(state, "interrupted", llm_agent=llm_agent)
         else:
             console.print("\n[yellow]Interrupted by user[/yellow]")
         if telemetry:
@@ -633,14 +796,14 @@ def fix(
         console.print(f"\n[red]Error: {e}[/red]")
         if state:
             state.final_status = "error"
-            print_exit_summary(state, "error")
+            print_exit_summary(state, "error", llm_agent=llm_agent)
         if telemetry:
             telemetry.log_event("error", {"error": str(e)})
         success = False
     finally:
-        # If successful, offer to create a PR
+        # If successful, offer to create a PR (skip in CI mode)
         pr_created = False
-        if success and state and branch_name and git_manager:
+        if success and state and branch_name and git_manager and getattr(state, "initial_failures", 0) > 0 and not ci_mode:
             try:
                 console.print("\n[bold green]✅ Success! Changes saved to branch:[/bold green] " + branch_name)
                 
@@ -652,8 +815,15 @@ def fix(
                 if pr_gen.check_pr_exists(branch_name):
                     console.print("[yellow]A PR already exists for this branch[/yellow]")
                 else:
-                    console.print("\n[cyan]🤖 Using GPT-5 to generate a pull request...[/cyan]")
-                    
+                    # Skip PR creation when there were no failing tests fixed or no patches applied
+                    if not state.initial_failing_tests or len(state.patches_applied) == 0:
+                        console.print("[dim]Skipping PR creation: no failing tests fixed or no changes applied.[/dim]")
+                        pr_created = False
+                        raise typer.Exit(0)
+                    logger = get_logger()
+                    with logger.section("Pull Request Generation", "🤖", show_in_normal=True):
+                        logger.info("Using GPT-5 to generate pull request...")
+                        
                     # Calculate execution time
                     if hasattr(state, 'start_time'):
                         if isinstance(state.start_time, float):
@@ -684,8 +854,7 @@ def fix(
                             if result.returncode == 0:
                                 changed_files = [f for f in result.stdout.strip().split('\n') if f]
                         except Exception as e:
-                            if verbose:
-                                console.print(f"[yellow]Could not list changed files: {e}[/yellow]")
+                            logger.warning(f"Could not list changed files: {e}")
                     
                     # Gather reasoning logs from telemetry
                     reasoning_logs = []
@@ -711,10 +880,11 @@ def fix(
                                                     # Skip malformed JSON lines
                                                     pass
                         except Exception as e:
-                            print(f"[yellow]Could not read reasoning logs: {e}[/yellow]")
+                            logger.warning(f"Could not read reasoning logs: {e}")
                     
                     # Generate PR content using GPT-5
-                    console.print("[dim]Generating PR title and description...[/dim]")
+                    with logger.subsection("Generating PR content"):
+                        logger.verbose("Calling GPT-5 to generate title and description...", component="PR")
                     title, description = pr_gen.generate_pr_content(
                         fixed_tests=fixed_tests,
                         patches_applied=state.patches_applied,
@@ -723,12 +893,17 @@ def fix(
                         reasoning_logs=reasoning_logs
                     )
                     
-                    console.print(f"\n[bold]PR Title:[/bold] {title}")
-                    console.print(f"\n[bold]PR Description:[/bold]")
-                    console.print(description[:500] + "..." if len(description) > 500 else description)
+                    logger.info(f"\nPR Title: {title}")
+                    logger.info("\nPR Description:")
+                    # Show full description in verbose mode, truncated in normal
+                    if logger.level.value >= 1:  # verbose or higher
+                        logger.info(description)
+                    else:
+                        logger.info(description[:500] + "..." if len(description) > 500 else description)
                     
                     # Push the branch first
-                    console.print("\n[cyan]Pushing branch to remote...[/cyan]")
+                    with logger.subsection("Pushing to remote"):
+                        logger.info("Pushing branch to remote...")
                     push_result = subprocess.run(
                         ["git", "push", "origin", branch_name],
                         capture_output=True,
@@ -737,11 +912,12 @@ def fix(
                     )
                     
                     if push_result.returncode != 0:
-                        console.print(f"[yellow]Warning: Failed to push branch: {push_result.stderr}[/yellow]")
-                        console.print("[dim]Attempting to create PR anyway...[/dim]")
+                        logger.warning(f"Failed to push branch: {push_result.stderr}")
+                        logger.verbose("Attempting to create PR anyway...", component="Git")
                     
                     # Create the PR
-                    console.print("\n[cyan]Creating pull request...[/cyan]")
+                    with logger.subsection("Creating pull request"):
+                        logger.info("Submitting PR to GitHub...")
                     # Detect the default branch
                     base_branch = git_manager.get_default_branch()
                     success_pr, pr_url_or_error = pr_gen.create_pr(
@@ -763,16 +939,24 @@ def fix(
             except Exception as e:
                 console.print(f"\n[yellow]Error creating PR: {e}[/yellow]")
                 console.print(f"[dim]You can manually create a PR from branch: {branch_name}[/dim]")
+        elif success and ci_mode and state and getattr(state, "initial_failures", 0) > 0:
+            # In CI mode, just show success message
+            console.print(f"\n[bold green]✅ Success! Changes applied directly to branch: {branch_name}[/bold green]")
+            console.print(f"[dim]Fixed {state.initial_failures} failing test(s)[/dim]")
         
-        # Clean up branch and restore original state (unless PR was created)
+        # Clean up branch and restore original state
         if git_manager and branch_name:
-            if pr_created:
+            if ci_mode:
+                # In CI mode, don't clean up or switch branches
+                console.print(f"\n[dim]CI mode: Changes applied to branch '{branch_name}'[/dim]")
+                git_manager.restore_signal_handler()
+            elif pr_created:
                 # Don't delete the branch if we created a PR
                 git_manager.cleanup(success=True)  # Preserve branch if PR was created
                 console.print(f"\n[dim]Branch '{branch_name}' preserved for PR[/dim]")
             else:
                 git_manager.cleanup(success=success)
-            git_manager.restore_signal_handler()
+                git_manager.restore_signal_handler()
         # Ensure telemetry run is ended if not already done
         if telemetry and not success and (state is None or state.final_status is None):
             telemetry.end_run(success=False)

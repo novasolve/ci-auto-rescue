@@ -22,9 +22,7 @@ src/nova/nodes/reflect.py
 src/nova/nodes/run_tests.py
 src/nova/runner/__init__.py
 src/nova/runner/test_runner.py
-src/nova/telemetry/__init__.py
 src/nova/telemetry/logger.py
-src/nova/telemetry/viewer.py
 src/nova/tools/datetime_utils.py
 src/nova/tools/fs.py
 src/nova/tools/git.py

@@ -15,7 +15,7 @@ class MockLLMAgent:
     def __init__(self, repo_path: Path):
         self.repo_path = repo_path
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None, state: Any = None) -> Optional[str]:
         """
         Generate a patch to fix failing tests.
         

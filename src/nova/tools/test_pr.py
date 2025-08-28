@@ -49,10 +49,10 @@ def main():
     test_branch = "ci-test-gh-pr-script"
     test_file = repo_root / "ci_test_dummy.txt"
 
-    # Check for GitHub token
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    # Check for GitHub token (prioritize GH_TOKEN for CI/local compatibility)
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if not token:
-        print("Warning: GITHUB_TOKEN or GH_TOKEN not set. You may be prompted to authenticate with `gh`.")
+        print("Warning: GH_TOKEN or GITHUB_TOKEN not set. You may be prompted to authenticate with `gh`.")
 
     # Clean up any previous test branch
     run(["git", "checkout", orig_branch], cwd=repo_root, check=False)

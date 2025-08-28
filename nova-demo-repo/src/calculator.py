@@ -45,7 +45,7 @@ class Calculator:
 
     def percentage(self, total: Number, percent: Number) -> float:
         """Return 'percent' percent of 'total'."""
-        return (total * percent) / 100.0
+        return (total * percent) / 100
 
     def average(self, numbers: Iterable[Number]) -> float:
         """Return the average (mean) of a sequence of numbers.
@@ -53,8 +53,7 @@ class Calculator:
         Raises:
             ValueError: If the list is empty.
         """
-        # Convert to list to allow multiple passes and len()
         nums: List[Number] = list(numbers)
-        if len(nums) == 0:
+        if not nums:
             raise ValueError("Cannot calculate average of empty list")
         return sum(nums) / len(nums)

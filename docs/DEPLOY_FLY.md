@@ -28,9 +28,32 @@ flyctl secrets set PRIVATE_KEY="$(cat /absolute/path/to/your-private-key.pem)"
 
 #### 4) Deploy
 
+**Option A: Manual Deploy**
+
 ```bash
 flyctl deploy
 ```
+
+**Option B: Automated Deploy (Recommended)**
+
+Set up GitHub Actions for one-click deploy on every push to main:
+
+1. Generate a Fly API token:
+
+   ```bash
+   flyctl auth token
+   ```
+
+2. Add the token as a GitHub secret:
+
+   - Go to your repo: Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `FLY_API_TOKEN`
+   - Value: (paste the token from step 1)
+
+3. The workflow is already configured in `.github/workflows/deploy.yml`
+
+Now every push to `main` will automatically redeploy your app! 🚀
 
 #### 5) Configure GitHub App webhook URL
 
@@ -42,8 +65,24 @@ flyctl deploy
 - Share the App's Install link (from your GitHub App settings)
 - Users click Install → pick repositories → done
 
+#### 7) Health Check
+
+Your app includes a health check endpoint at `/health` that returns:
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "service": "nova-ci-rescue-github-app",
+  "version": "1.0.0"
+}
+```
+
+Test it: `curl https://<your-app-name>.fly.dev/health`
+
 #### Notes
 
 - The server listens on port 8080 internally (see `github-app/index.js` and `fly.toml`).
 - Required env vars: `APP_ID`, `PRIVATE_KEY`, `WEBHOOK_SECRET`.
-- To update: modify code, then `fly deploy` again.
+- Manual updates: modify code, then `fly deploy` again.
+- Automated updates: push to `main` branch (if GitHub Actions is configured).

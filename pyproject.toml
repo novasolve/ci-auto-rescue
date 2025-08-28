@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 name = "nova-ci-rescue"
 version = "0.4.2"
 description = "Nova CI-Rescue: automated test fixing agent (MVP)"
-readme = {file = "README.md", content-type = "text/markdown"}
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "NovaSolve", email = "dev@novasolve.ai" }]
@@ -49,18 +49,12 @@ Issues = "https://github.com/novasolve/ci-auto-rescue/issues"
 nova = "nova.cli:app"
 
 [tool.setuptools]
-# If you ship non-Python files referenced at runtime (e.g., templates),
-# set this true and/or use MANIFEST.in if needed.
 include-package-data = true
 package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# If you want to exclude tests from the wheel:
-# exclude = ["tests*", "test*"]
 
-# Optional: pytest config lives here so `pytest` works consistently.
-# Delete if you keep a separate pytest.ini/pyproject section elsewhere.
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

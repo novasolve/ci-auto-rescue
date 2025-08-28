@@ -77,7 +77,7 @@ class EnhancedLLMAgent:
                 try:
                     if pf.exists() and self.repo_path in pf.parents:
                         rel = pf.relative_to(self.repo_path)
-                        print(f"[Nova Debug] Found source candidate for '{module_name}': {rel}")
+                        # Debug logs removed for demo
                         source_files.add(str(rel))
                 except Exception:
                     continue
@@ -112,7 +112,7 @@ class EnhancedLLMAgent:
         source_contents = {}
         source_files = set()
         
-        print(f"\n[Nova Debug] Looking for source files from {len(failing_tests)} failing test(s)...")
+        # Debug log removed for demo
         
         for test in failing_tests[:5]:  # Limit to first 5 tests for context
             test_file = test.get("file", "")
@@ -128,12 +128,12 @@ class EnhancedLLMAgent:
                             test_file = parts[-1].lstrip("/")
                     test_path = self.repo_path / test_file
                 
-                print(f"[Nova Debug] Checking test file: {test_path}")
+                # Debug log removed for demo
                 if test_path.exists():
                     test_contents[test_file] = self._read_file_with_cache(test_path, state)
                     # Find source files imported by this test
                     found_files = self.find_source_files_from_test(test_path)
-                    print(f"[Nova Debug] Found source files: {found_files}")
+                    # Debug log removed for demo
                     source_files.update(found_files)
         
         # Read source files
@@ -152,6 +152,7 @@ class EnhancedLLMAgent:
                 "You are a coding assistant who MUST fix ALL test failures in ONE complete solution. "
                 "Generate the COMPLETE corrected file contents that fix ALL {0} failing tests. "
                 "Partial solutions are FAILURES. Fix EVERYTHING in one go. "
+                "DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.). "
                 "Follow the exact format requested."
             ).format(len(failing_tests))
             
@@ -159,10 +160,10 @@ class EnhancedLLMAgent:
             response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
-                max_tokens=8000  # Increased to prevent truncation
+                max_tokens=40000  # Set to 40k as requested
             )
             
-            # Parse the response to extract file contents
+            # Parse the response to extract file contents (do not truncate prompt content)
             files_to_fix = {}
             current_file = None
             current_content = []
@@ -229,16 +230,14 @@ class EnhancedLLMAgent:
         for i, test in enumerate(failing_tests[:3], 1):
             prompt += f"\n{i}. Test: {test.get('name', 'unknown')}\n"
             prompt += f"   File: {test.get('file', 'unknown')}\n"
-            prompt += f"   Error: {test.get('short_traceback', 'No traceback')[:200]}\n"
+            prompt += f"   Error: {test.get('short_traceback', 'No traceback')}\n"
         
         # Add source code (this is what needs to be fixed!)
         if source_contents:
             prompt += "\n\nSOURCE CODE TO FIX:\n"
             for file_path, content in source_contents.items():
                 prompt += f"\n=== {file_path} ===\n"
-                prompt += content[:3000]  # Limit size
-                if len(content) > 3000:
-                    prompt += "\n... (truncated)"
+                prompt += content
         
         # Add test code for reference
         prompt += "\n\nTEST CODE (DO NOT MODIFY - these define correct behavior):\n"
@@ -246,12 +245,14 @@ class EnhancedLLMAgent:
             prompt += f"\n=== {file_path} ===\n"
             # Only include the failing test functions
             relevant_content = self._extract_relevant_test_functions(content, failing_tests)
-            prompt += relevant_content[:2000]
+            prompt += relevant_content
         
         prompt += "\n\nGenerate a unified diff patch that fixes the SOURCE CODE (not the tests). "
         prompt += "The tests define the correct expected behavior. "
         prompt += "Include proper @@ hunk headers with line numbers. "
         prompt += "Use --- a/filename and +++ b/filename format.\n"
+        prompt += "REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.) from the code.\n"
+        prompt += "DO NOT add any new comments about bugs or fixes.\n"
         prompt += "Return ONLY the diff, no explanations.\n"
         
         return prompt
@@ -331,13 +332,16 @@ class EnhancedLLMAgent:
         
         return '\n'.join(fixed_lines)
     
-    def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]]) -> Tuple[bool, str]:
+    def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]], 
+                     test_runner=None, repo_path=None) -> Tuple[bool, str]:
         """
-        Review a patch using LLM (Critic node).
+        Review a patch using LLM (Critic node) with actual test results.
         
         Args:
             patch: The patch diff to review
             failing_tests: List of failing tests this patch should fix
+            test_runner: Optional TestRunner to actually run tests (if provided)
+            repo_path: Optional repo path for applying patch temporarily
             
         Returns:
             Tuple of (approved: bool, reason: str)
@@ -378,6 +382,92 @@ class EnhancedLLMAgent:
                 if any(pattern in line for pattern in dangerous_patterns):
                     return False, "Patch modifies protected/configuration files"
         
+        # If we have a test runner, actually run tests with the patch applied
+        actual_test_results = None
+        if test_runner and repo_path:
+            try:
+                import subprocess
+                import tempfile
+                from pathlib import Path
+                # Import here to avoid circular dependency
+                from nova.tools.fs import apply_and_commit_patch
+                
+                # Save current state
+                stash_result = subprocess.run(["git", "stash", "push", "-m", "nova-critic-backup"], 
+                              cwd=repo_path, capture_output=True, text=True)
+                
+                if self.verbose and stash_result.stderr:
+                    console.print(f"[dim]Stash stderr: {stash_result.stderr}[/dim]")
+                
+                try:
+                    # Apply patch temporarily using nova's apply function that handles FILE_REPLACE
+                    from rich.console import Console
+                    console = Console()
+                    console.print("[cyan]🧪 Critic running tests with patch applied...[/cyan]")
+                    
+                    # Debug: Show patch format
+                    if self.verbose:
+                        console.print(f"[dim]Patch format: {'FILE_REPLACE' if 'FILE_REPLACE:' in patch else 'unified diff'}[/dim]")
+                        if 'FILE_REPLACE:' in patch:
+                            # Show more info about the FILE_REPLACE patch
+                            lines = patch.split('\n')
+                            file_count = sum(1 for line in lines if line.startswith('FILE_REPLACE:'))
+                            console.print(f"[dim]FILE_REPLACE patch with {file_count} file(s)[/dim]")
+                            for line in lines[:10]:
+                                if line.startswith('FILE_REPLACE:'):
+                                    console.print(f"[dim]  - {line}[/dim]")
+                    
+                    # Use Nova's patch application that handles FILE_REPLACE format
+                    success, changed_files = apply_and_commit_patch(
+                        repo_root=repo_path,
+                        diff_text=patch,
+                        step_number=999,  # Temporary step number
+                        git_manager=None,  # Don't commit
+                        verbose=True  # Enable verbose to debug
+                    )
+                    
+                    if success:
+                        # Run tests
+                        new_failures, _ = test_runner.run_tests()
+                        
+                        # Calculate results
+                        original_count = len(failing_tests)
+                        remaining_count = len(new_failures)
+                        fixed_count = original_count - remaining_count
+                        
+                        actual_test_results = {
+                            "patch_applied": True,
+                            "original_failures": original_count,
+                            "remaining_failures": remaining_count,
+                            "fixed_count": fixed_count,
+                            "all_fixed": remaining_count == 0,
+                            "remaining_test_names": [f.get('name', 'unknown') for f in new_failures[:5]]
+                        }
+                        
+                        if self.verbose:
+                            console.print(f"[dim]Test results: {fixed_count}/{original_count} tests fixed[/dim]")
+                    else:
+                        # Don't set actual_test_results if patch didn't apply
+                        # This will make the critic analyze the patch itself rather than saying it wasn't applied
+                        if self.verbose:
+                            console.print("[dim]Patch could not be applied for testing, will review based on code analysis[/dim]")
+                    
+                finally:
+                    # Always restore original state
+                    pop_result = subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True, text=True)
+                    if self.verbose and pop_result.stderr:
+                        console.print(f"[dim]Stash pop stderr: {pop_result.stderr}[/dim]")
+                    
+            except Exception as e:
+                # If anything goes wrong, make sure we restore state
+                try:
+                    subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True)
+                except:
+                    pass
+                actual_test_results = {
+                    "error": f"Failed to test patch: {str(e)}"
+                }
+        
         # Use LLM for semantic review
         try:
             system_prompt = (
@@ -389,30 +479,24 @@ class EnhancedLLMAgent:
             user_prompt = build_strict_critic_prompt(
                 patch, 
                 failing_tests, 
-                len(failing_tests)
+                len(failing_tests),
+                actual_test_results
             )
             
             # Log critic prompt for debugging
-            print(f"[Nova Debug - Critic] Prompt length: {len(user_prompt)} chars")
-            print(f"[Nova Debug - Critic] Failing tests to review: {len(failing_tests)}")
-            if self.verbose:
-                print(f"[Nova Debug - Critic] Full prompt preview (first 500 chars):\n{user_prompt[:500]}...")
+            # Debug logs removed for demo
             
             # Increased max_tokens for better responses
-            print(f"[Nova Debug - Critic] Calling LLM with temperature=0.1, max_tokens=500")
+            # Debug log removed for demo
             response = self.llm.complete(
                 system=system_prompt,
                 user=user_prompt,
-                temperature=0.1,
-                max_tokens=500  # Increased from 200 to allow fuller responses
+                temperature=1.0,
+                max_tokens=40000  # Set to 40k as requested
             )
             
             # Log response details
-            print(f"[Nova Debug - Critic] LLM response length: {len(response) if response else 0} chars")
-            if response:
-                print(f"[Nova Debug - Critic] Response preview (first 200 chars): {response[:200]}...")
-            else:
-                print(f"[Nova Debug - Critic] WARNING: Empty response from LLM!")
+            # Debug log removed for demo
             
             # Parse JSON response
             if response and '{' in response and '}' in response:
@@ -423,16 +507,16 @@ class EnhancedLLMAgent:
                     review_json = json.loads(json_str)
                     approved = review_json.get('approved', False)
                     reason = review_json.get('reason', 'No reason provided')
-                    print(f"[Nova Debug - Critic] JSON parsed successfully: approved={approved}")
+                    # Debug log removed for demo
                     return approved, reason
                 except json.JSONDecodeError as e:
-                    print(f"[Nova Debug - Critic] JSON parsing failed: {e}")
-                    print(f"[Nova Debug - Critic] Attempted to parse: {json_str[:100]}...")
+                    # Debug logs removed for demo
+                    pass
             
             # Parsing failed – use raw response as feedback
             critic_feedback = (response or "").strip()
             if not critic_feedback:
-                print(f"[Nova Debug - Critic] Empty critic response, checking auto-approval criteria...")
+                # Debug log removed for demo
                 # Fallback: approve small/safe patches when critic is silent
                 patch_lines = patch.split('\n')
                 files_touched = sum(1 for l in patch_lines if l.startswith('+++ b/'))
@@ -441,18 +525,18 @@ class EnhancedLLMAgent:
                 protected = ['.github/', 'setup.py', 'pyproject.toml', '.env', 'requirements.txt']
                 safe = not any(p in l for l in patch_lines for p in protected)
                 
-                print(f"[Nova Debug - Critic] Auto-approval check: patch_lines={len(patch_lines)}, files_touched={files_touched}, safe={safe}")
+                # Debug log removed for demo
                 
                 if safe and len(patch_lines) < 1000 and files_touched <= 3:
                     return True, "Auto-approved: empty critic feedback and patch is small & safe"
                 # otherwise still reject, but explain why
                 return False, "No feedback provided (patch too large or touches protected files)"
             # Decide to reject but show feedback (truncate if very long)
-            print(f"[Nova Debug - Critic] Using raw response as feedback")
+            # Debug log removed for demo
             return False, critic_feedback[:500]
             
         except Exception as e:
-            print(f"[Nova Debug - Critic] ERROR in patch review: {type(e).__name__}: {e}")
+            # Debug log removed for demo
             import traceback
             traceback.print_exc()
             # Fallback: approve small/safe patches if critic errors out
@@ -492,11 +576,11 @@ class EnhancedLLMAgent:
             response = self.llm.complete(
                 system=system_prompt,
                 user=prompt,
-                temperature=0.3,
-                max_tokens=500
+                temperature=1.0,
+                max_tokens=40000  # Set to 40k as requested
             )
             
-            print(f"[Nova Debug] Plan response from LLM: {response[:200]}...")
+            # Debug log removed for demo
             
             # Parse the comprehensive plan
             plan = parse_comprehensive_plan(response)
@@ -526,8 +610,7 @@ class EnhancedLLMAgent:
             plan['source_files'] = list(source_files)
             plan['target_tests'] = failing_tests[:3] if len(failing_tests) > 3 else failing_tests
             
-            print(f"[Nova Debug] Plan created with source files: {plan.get('source_files', [])}")
-            print(f"[Nova Debug] Plan approach: {plan.get('approach', 'NO APPROACH')}")
+            # Debug logs removed for demo
             
             return plan
             

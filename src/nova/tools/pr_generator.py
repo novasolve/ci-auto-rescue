@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import shutil
 from nova.agent.llm_client import LLMClient
+from nova.config import get_settings
 
 
 class PRGenerator:
@@ -17,7 +18,14 @@ class PRGenerator:
     
     def __init__(self, repo_path: Path):
         self.repo_path = Path(repo_path)
+        # Create LLM client with PR-specific model
+        settings = get_settings()
+        # Temporarily override the default model for PR generation
+        original_model = settings.default_llm_model
+        settings.default_llm_model = settings.pr_llm_model
         self.llm = LLMClient()
+        # Restore original model
+        settings.default_llm_model = original_model
     
     def generate_pr_content(self, 
                           fixed_tests: List[Dict],
@@ -62,7 +70,7 @@ Do NOT include raw diff or implementation details that are obvious from the code
 
 DIFF:
 ```diff
-{final_diff[:3000]}{'...(truncated)' if len(final_diff) > 3000 else ''}
+{final_diff}
 ```
 
 TEST & REASONING CONTEXT:
@@ -94,7 +102,7 @@ Additionally, emphasize these changes if present:
             response = self.llm.complete(
                 system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
                 user=prompt,
-                max_tokens=20000  # Will be handled by LLMClient with reasoning_effort=high
+                max_tokens=40000  # Will be handled by LLMClient with reasoning_effort=high
             )
             
             # Debug: log the response
@@ -240,10 +248,11 @@ The following files were modified:
                         # Fall through to REST API with token
                         pass
             
-            # REST API with token (GITHUB_TOKEN/GH_TOKEN)
-            token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+            # REST API with token (GH_TOKEN/GITHUB_TOKEN)
+            # Prioritize GH_TOKEN for better CI/local compatibility
+            token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
             if not token:
-                return False, "GITHUB CLI failed and no GITHUB_TOKEN/GH_TOKEN available"
+                return False, "GITHUB CLI failed and no GH_TOKEN/GITHUB_TOKEN available"
             # Normalize to GITHUB_TOKEN for any downstream use
             os.environ['GITHUB_TOKEN'] = token
 
@@ -278,7 +287,8 @@ The following files were modified:
     def check_pr_exists(self, branch_name: str) -> bool:
         """Check if a PR already exists for this branch using GitHub API."""
         try:
-            token = os.environ.get('GITHUB_TOKEN')
+            # Prioritize GH_TOKEN for better CI/local compatibility
+            token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
             if not token:
                 return False
             
@@ -399,7 +409,7 @@ The following files were modified:
         for test in tests[:10]:  # Limit to 10 for space
             name = test.get('name', 'Unknown')
             file = test.get('file', 'unknown')
-            error = test.get('short_traceback', test.get('error', 'No error details'))[:100]
+            error = test.get('short_traceback', test.get('error', 'No error details'))
             formatted.append(f"- `{name}` in {file}: {error}")
         
         if len(tests) > 10:

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nova-ci-rescue
-Version: 0.1.0
+Version: 0.2.6
 Summary: Nova CI-Rescue: automated test fixing agent (MVP)
 Author-email: NovaSolve <dev@novasolve.ai>
 License: MIT
@@ -33,7 +33,10 @@ Dynamic: license-file
 
 # Nova CI‑Rescue
 
-Automated agent that makes your CI green by fixing failing tests, generating reviewable patches, and opening a PR — safely and repeatably.
+[![Install Nova CI‑Rescue](https://img.shields.io/badge/Install-GitHub%20App-blue?logo=github)](https://github.com/apps/nova-ci-rescue/installations/new)
+[![Add to Slack (beta)](https://img.shields.io/badge/Add%20to%20Slack-beta-4A154B?logo=slack&logoColor=white)](#slack-integration-beta)
+
+Nova keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova analyzes the failures, proposes focused edits, and opens a reviewable PR with patches and artifacts.
 
 ### Why Nova CI‑Rescue
 
@@ -42,6 +45,8 @@ Automated agent that makes your CI green by fixing failing tests, generating rev
 - Saves artifacts (patches, test reports) for auditability when enabled
 - Guardrails for timeouts, iteration caps, rate limiting, and domain allow-list
 - One command to try it locally on a demo repo
+
+Quick links: [Quickstart](docs/QUICKSTART.md) · [Troubleshooting & FAQ](docs/TROUBLESHOOTING.md) · [Privacy](docs/PRIVACY.md)
 
 ### Quickstart (one command)
 
@@ -105,3 +110,9 @@ NOVA_ENABLE_TELEMETRY=true
 ### License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+### Slack integration (beta)
+
+Slack notifications are currently in private beta. If you’re interested, open an issue or contact us and we’ll add you to the waitlist. The button above is a placeholder until the public app is available.

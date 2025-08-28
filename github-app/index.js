@@ -1,6 +1,20 @@
-export default (app) => {
+export default (app, { getRouter }) => {
   app.log.info('Nova CI-Rescue GitHub App loaded');
 
+  // Health check route
+  const router = getRouter('/');
+  router.get('/health', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      service: 'nova-ci-rescue-github-app',
+      version: process.env.npm_package_version || '1.0.0'
+    });
+  });
+
+  // Nova CI-Rescue auto-trigger functionality disabled
+  // Uncomment the block below to re-enable automatic CI rescue
+  /*
   app.on(['pull_request.opened', 'workflow_run.completed', 'check_suite.requested'], async (context) => {
     const { owner, repo } = context.repo();
 
@@ -78,6 +92,10 @@ export default (app) => {
       },
     });
   });
+  */
+
+  // Basic ping handler for testing
+  app.on('ping', async (context) => {
+    context.log.info('Received webhook ping - Nova CI auto-trigger is disabled');
+  });
 };
-
-

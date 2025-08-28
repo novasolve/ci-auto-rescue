@@ -339,8 +339,6 @@ def fix(
 
             if ci_mode:
                 # In CI mode, work on the current branch
-                import subprocess
-
                 result = subprocess.run(
                     ["git", "rev-parse", "--abbrev-ref", "HEAD"],
                     capture_output=True,

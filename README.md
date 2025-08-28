@@ -9,7 +9,7 @@
 
 [![Install Nova CI‑Rescue](https://img.shields.io/badge/Install-GitHub%20App-blue?logo=github)](https://github.com/apps/nova-ci-rescue/installations/new)
 
-Nova CI-Rescue keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova uses an LLM (e.g. GPT-4 or Claude) to analyze the failures, propose focused code edits, and open a safe, reviewable PR with the patches and logs. It's designed for Python projects (Pytest-based CI) and emphasizes reliability, transparency, and maintainers' control.
+Nova keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova analyzes the failures, proposes focused edits, and opens a reviewable PR with patches and artifacts.
 
 ## Why Nova CI-Rescue?
 

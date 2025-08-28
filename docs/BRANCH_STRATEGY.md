@@ -3,6 +3,7 @@
 ## Overview
 
 This repository follows a **trunk-based development** model designed to:
+
 - Simplify the mental model for contributors
 - Enable faster integration cycles
 - Reduce merge conflicts
@@ -14,12 +15,14 @@ This repository follows a **trunk-based development** model designed to:
 ### Core Branches
 
 #### `main`
+
 - **Purpose**: Releasable trunk containing production-ready code
 - **Protection**: PR-only (no direct pushes), requires reviews and status checks
 - **Deployment**: Automatically deployed to staging/production environments
 - **Lifetime**: Permanent
 
 #### `release/*` (Optional)
+
 - **Purpose**: Frozen patch lines for hotfixes to specific versions
 - **Pattern**: `release/v1.2`, `release/v2.0`
 - **Usage**: Only when you need to patch an older version while main has moved forward
@@ -30,6 +33,7 @@ This repository follows a **trunk-based development** model designed to:
 All development work happens on short-lived branches that merge back to `main` via Pull Requests.
 
 #### Feature Branches
+
 - **`feat/<slug>`** - New features and enhancements
 - **`fix/<slug>`** - Bug fixes and corrections
 - **`docs/<slug>`** - Documentation updates
@@ -38,6 +42,7 @@ All development work happens on short-lived branches that merge back to `main` v
 - **`perf/<slug>`** - Performance optimizations
 
 #### Automation Branches
+
 - **`bot/<tool>/<date>-<slug>`** - Ephemeral branches created by automation tools
 - **Auto-cleanup**: These branches are automatically deleted after merge/close
 - **Examples**:
@@ -47,11 +52,13 @@ All development work happens on short-lived branches that merge back to `main` v
 ## Migration from Previous Model
 
 ### What Changed
+
 - **Retired**: `development` branch (merged final changes to `main`)
 - **Converted**: Demo branches → Tags (`demo-2025-08-28`, `demo-v0.1`)
 - **Standardized**: All feature branches follow new naming convention
 
 ### Benefits
+
 1. **Simplified workflow**: One main branch to target
 2. **Faster feedback**: Changes integrate quickly
 3. **Reduced conflicts**: Shorter-lived branches = fewer merge conflicts
@@ -61,6 +68,7 @@ All development work happens on short-lived branches that merge back to `main` v
 ## Workflow Examples
 
 ### Creating a Feature Branch
+
 ```bash
 # Start from latest main
 git checkout main
@@ -78,6 +86,7 @@ git push origin feat/add-retry-logic
 ```
 
 ### Hotfix Workflow
+
 ```bash
 # For urgent fixes to current version
 git checkout main
@@ -89,6 +98,7 @@ git checkout -b fix/v1.2-security-patch
 ```
 
 ### Demo/Example Workflow
+
 ```bash
 # Instead of demo branches, use tags
 git tag demo-new-feature
@@ -102,6 +112,7 @@ git checkout -b demo/feature-showcase-2025-08-28
 ## Branch Lifecycle
 
 ### Short-lived Branches (feat/fix/docs/chore/ci/perf)
+
 1. **Created** from latest `main`
 2. **Developed** with focused commits
 3. **PR Created** targeting `main`
@@ -110,12 +121,14 @@ git checkout -b demo/feature-showcase-2025-08-28
 6. **Deleted** automatically after merge
 
 ### Bot Branches
+
 1. **Auto-created** by automation tools
 2. **Auto-updated** with fixes/changes
 3. **Auto-merged** when tests pass (if configured)
 4. **Auto-deleted** after merge or timeout
 
 ### Release Branches
+
 1. **Created** when hotfix needed for older version
 2. **Patched** with minimal, targeted fixes
 3. **Tagged** when patch is ready
@@ -124,12 +137,15 @@ git checkout -b demo/feature-showcase-2025-08-28
 ## Best Practices
 
 ### Branch Naming
+
 - Use descriptive slugs: `feat/llm-integration` not `feat/new-feature`
 - Keep slugs short but clear: `fix/timeout-error` not `fix/fix-the-timeout-error-in-the-test-runner`
 - Use kebab-case: `feat/add-retry-logic` not `feat/add_retry_logic`
 
 ### Commit Messages
+
 Follow conventional commits:
+
 ```
 feat: add exponential backoff to API calls
 fix: handle timeout errors in test runner
@@ -140,6 +156,7 @@ perf: optimize test collection algorithm
 ```
 
 ### Pull Requests
+
 - Keep PRs small and focused
 - Target `main` branch (unless hotfixing)
 - Include clear description and testing notes
@@ -149,17 +166,20 @@ perf: optimize test collection algorithm
 ## Automation Support
 
 ### Branch Protection Rules
+
 - `main` requires PR reviews
 - Status checks must pass
 - No direct pushes allowed
 - Merge commits allowed for feature integration
 
 ### Auto-cleanup
+
 - Bot branches auto-delete after 7 days of inactivity
 - Merged feature branches can be auto-deleted
 - Stale branches get notifications before cleanup
 
 ### CI/CD Integration
+
 - All branches run full test suite
 - `main` deploys to staging automatically
 - Release tags trigger production deployment

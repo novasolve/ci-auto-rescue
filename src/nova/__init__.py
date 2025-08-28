@@ -18,7 +18,7 @@ except importlib.metadata.PackageNotFoundError:
 
         with open(root / "pyproject.toml", "rb") as f:
             pyproject = tomllib.load(f)
-        __version__ = pyproject.get("project", {}).get("version", "0.4.2")
+        __version__ = pyproject.get("project", {}).get("version", "0.4.0")
     except Exception:
         # Last resort default (keep in sync with your latest tag)
-        __version__ = "0.4.2"
+        __version__ = "0.4.0"

@@ -1,0 +1,27 @@
+# This file defines code ownership for automatic review assignment.
+# Each line is a file pattern followed by one or more owners.
+
+# Global owners (fallback)
+* @novasolve/maintainers
+
+# Core library code
+/src/** @novasolve/core-team @novasolve/maintainers
+
+# GitHub App integration
+/github-app/** @novasolve/platform-team @novasolve/maintainers
+
+# CI/CD workflows
+/.github/workflows/ @novasolve/devops @novasolve/maintainers
+
+# Documentation
+/docs/ @novasolve/docs-team
+*.md @novasolve/docs-team
+
+# Security-sensitive files
+/SECURITY.md @novasolve/security-team @novasolve/maintainers
+/.github/CODEOWNERS @novasolve/maintainers
+
+# Package configuration
+/pyproject.toml @novasolve/maintainers
+/setup.py @novasolve/maintainers
+/requirements*.txt @novasolve/maintainers

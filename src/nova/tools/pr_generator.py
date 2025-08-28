@@ -66,6 +66,8 @@ GUIDELINES for the PR description:
 - Use a professional, clear tone. (Imagine a developer writing the PR.)
 - Include sections: ## Summary, ## What was fixed, ## Changes made, ## Test results, ## Technical details (if relevant)
 
+IMPORTANT: Focus the title on the actual functionality being fixed (e.g., "Fix calculator operations" or "Correct mathematical computations"), NOT on comment removal or code cleanup. The title should describe what the code now does correctly.
+
 Do NOT include raw diff or implementation details that are obvious from the code – focus on intent and impact.
 
 DIFF:
@@ -100,7 +102,7 @@ Additionally, emphasize these changes if present:
         try:
             # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
             response = self.llm.complete(
-                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
+                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description. When writing PR titles, focus on the functional changes (what now works correctly) rather than code cleanup or comment removal. For example, prefer 'Fix calculator arithmetic operations' over 'Remove BUG comments'.",
                 user=prompt,
                 max_tokens=40000  # Will be handled by LLMClient with reasoning_effort=high
             )

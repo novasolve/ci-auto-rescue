@@ -1,24 +1,11 @@
 # Nova CI-Rescue
 
-<!-- Build & Test Status -->
 [![CI](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/novasolve/ci-auto-rescue/branch/main/graph/badge.svg?token=CODECOV_TOKEN)](https://codecov.io/gh/novasolve/ci-auto-rescue)
-
-<!-- Package & Compatibility -->
-[![PyPI](https://img.shields.io/pypi/v/nova-ci-rescue?label=PyPI)](https://pypi.org/project/nova-ci-rescue/)
-![Python Versions](https://img.shields.io/pypi/pyversions/nova-ci-rescue?color=blue)
-
-<!-- Quality & Best Practices -->
+[![PyPI](https://img.shields.io/pypi/v/nova-ci-rescue)](https://pypi.org/project/nova-ci-rescue/)
+![Python](https://img.shields.io/pypi/pyversions/nova-ci-rescue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
-<!-- License & Compliance -->
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/PROJECT_ID/badge)](https://bestpractices.coreinfrastructure.org/projects/PROJECT_ID)
-
-<!-- Installation -->
-[![Install Nova CI‑Rescue](https://img.shields.io/badge/Install-GitHub%20App-blue?logo=github)](https://github.com/apps/nova-ci-rescue/installations/new)
-[![Add to Slack (beta)](https://img.shields.io/badge/Add%20to%20Slack-beta-4A154B?logo=slack&logoColor=white)](#slack-integration-beta)
 
 Nova CI-Rescue keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova uses an LLM (e.g. GPT-4 or Claude) to analyze the failures, propose focused code edits, and open a safe, reviewable PR with the patches and logs. It's designed for Python projects (Pytest-based CI) and emphasizes reliability, transparency, and maintainers' control.
 
@@ -133,7 +120,3 @@ Contributions, feedback, and test reports are welcome! If you encounter issues o
 This project is licensed under the MIT License – see [LICENSE](LICENSE) for details.
 
 ---
-
-### Slack integration (beta)
-
-Slack notifications are currently in private beta. If you're interested, open an issue or contact us and we'll add you to the waitlist. The button above is a placeholder until the public app is available.

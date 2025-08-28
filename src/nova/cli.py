@@ -824,7 +824,9 @@ def fix(
                         raise typer.Exit(0)
                     logger = get_logger()
                     with logger.section("Pull Request Generation", "🤖", show_in_normal=True):
-                        logger.info("Using GPT-5 to generate pull request...")
+                        # Get the actual PR model being used
+                        pr_model = get_settings().pr_llm_model
+                        logger.info(f"Using {pr_model} to generate pull request...")
                         
                     # Calculate execution time
                     if hasattr(state, 'start_time'):
@@ -884,9 +886,9 @@ def fix(
                         except Exception as e:
                             logger.warning(f"Could not read reasoning logs: {e}")
                     
-                    # Generate PR content using GPT-5
+                    # Generate PR content using configured model
                     with logger.subsection("Generating PR content"):
-                        logger.verbose("Calling GPT-5 to generate title and description...", component="PR")
+                        logger.verbose(f"Calling {pr_model} to generate title and description...", component="PR")
                         title, description = pr_gen.generate_pr_content(
                             fixed_tests=fixed_tests,
                             patches_applied=state.patches_applied,
@@ -895,17 +897,14 @@ def fix(
                             reasoning_logs=reasoning_logs
                         )
                     
-                    logger.info(f"\nPR Title: {title}")
-                    logger.info("\nPR Description:")
-                    # Show full description in verbose mode, truncated in normal
-                    if logger.level.value >= 1:  # verbose or higher
-                        logger.info(description)
-                    else:
-                        logger.info(description[:500] + "..." if len(description) > 500 else description)
+                    logger.verbose(f"\nPR Title: {title}", component="PR")
+                    logger.verbose("\nPR Description:", component="PR")
+                    # Show full description only in verbose mode
+                    logger.verbose(description[:500] + "..." if len(description) > 500 else description, component="PR")
                     
                     # Push the branch first
                     with logger.subsection("Pushing to remote"):
-                        logger.info("Pushing branch to remote...")
+                        logger.verbose("Pushing branch to remote...", component="Git")
                         push_result = subprocess.run(
                             ["git", "push", "origin", branch_name],
                             capture_output=True,
@@ -919,7 +918,7 @@ def fix(
                     
                     # Create the PR
                     with logger.subsection("Creating pull request"):
-                        logger.info("Submitting PR to GitHub...")
+                        logger.verbose("Submitting PR to GitHub...", component="PR")
                         # Detect the default branch
                         base_branch = git_manager.get_default_branch()
                         success_pr, pr_url_or_error = pr_gen.create_pr(
@@ -935,7 +934,9 @@ def fix(
                         console.print(f"[link={pr_url_or_error}]{pr_url_or_error}[/link]")
                         pr_created = True
                     else:
-                        console.print(f"\n[yellow]Could not create PR: {pr_url_or_error}[/yellow]")
+                        console.print(f"\n[yellow]{pr_url_or_error}[/yellow]")
+                        if "GH_TOKEN" in pr_url_or_error:
+                            console.print(f"[yellow]To create PRs automatically, run:[/yellow] [cyan]export GH_TOKEN='your_github_token'[/cyan]")
                         console.print(f"[dim]You can manually create a PR from branch: {branch_name}[/dim]")
                         
             except Exception as e:

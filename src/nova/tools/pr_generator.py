@@ -1,5 +1,5 @@
 """
-PR Generator - Uses GPT-5 to create pull request descriptions and submit them via GitHub CLI.
+PR Generator - Uses AI (configurable model) to create pull request descriptions and submit them via GitHub CLI.
 """
 
 import subprocess
@@ -34,7 +34,7 @@ class PRGenerator:
                           execution_time: str,
                           reasoning_logs: Optional[List[Dict]] = None) -> Tuple[str, str]:
         """
-        Use GPT-5 to generate PR title and description based on what was fixed.
+        Use AI to generate PR title and description based on what was fixed.
         
         Returns:
             Tuple of (title, description)
@@ -252,7 +252,7 @@ The following files were modified:
             # Prioritize GH_TOKEN for better CI/local compatibility
             token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
             if not token:
-                return False, "GITHUB CLI failed and no GH_TOKEN/GITHUB_TOKEN available"
+                return False, "❌ GH_TOKEN environment variable not set. Please export GH_TOKEN='your_github_token' to create PRs."
             # Normalize to GITHUB_TOKEN for any downstream use
             os.environ['GITHUB_TOKEN'] = token
 
@@ -279,6 +279,8 @@ The following files were modified:
                 return True, pr_url
             else:
                 error_msg = response.json().get('message', response.text)
+                if "Bad credentials" in error_msg:
+                    return False, f"❌ Invalid GitHub token. Please check your GH_TOKEN is valid. Error: {error_msg}"
                 return False, f"Failed to create PR: {error_msg}"
                 
         except Exception as e:

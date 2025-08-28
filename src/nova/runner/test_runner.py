@@ -74,7 +74,7 @@ class TestRunner:
             Tuple of (List of FailingTest objects, JUnit XML report content)
         """
         logger = get_logger()
-        logger.info("Running pytest to identify failing tests...", "🔍")
+        # Removed duplicate log message - already shown in CLI
 
         # Create temp files for reports
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:

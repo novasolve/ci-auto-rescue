@@ -1,0 +1,56 @@
+name: Nova CI-Rescue Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_directory:
+        description: "Directory to run Nova fix on"
+        required: false
+        default: "demo_workspace"
+      max_iterations:
+        description: "Maximum fix iterations"
+        required: false
+        default: "3"
+      llm_model:
+        description: "LLM model to use (gpt-5, gpt-4o, claude-3.5-sonnet)"
+        required: false
+        default: "gpt-5"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  nova-manual-fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Nova and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./src
+          pip install pytest pytest-json-report
+
+      - name: Run Nova Fix
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOVA_LLM_MODEL: ${{ github.event.inputs.llm_model }}
+        run: |
+          cd ${{ github.event.inputs.target_directory }}
+          python -m nova.cli fix . --max-iters ${{ github.event.inputs.max_iterations }}
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-manual-run-${{ github.run_number }}
+          path: ${{ github.event.inputs.target_directory }}/.nova/

@@ -118,6 +118,17 @@ class GitBranchManager:
 
     def get_default_branch(self) -> str:
         """Get the default branch name (main, master, etc.)."""
+        # Check for environment variable override first
+        env_base_branch = os.environ.get("NOVA_BASE_BRANCH")
+        if env_base_branch:
+            # Verify the branch exists
+            success, _ = self._run_git_command("rev-parse", "--verify", f"origin/{env_base_branch}")
+            if success:
+                return env_base_branch
+            else:
+                console.print(f"[yellow]Warning: NOVA_BASE_BRANCH '{env_base_branch}' not found on remote, falling back to auto-detection[/yellow]")
+        
+        # Original auto-detection logic
         success, output = self._run_git_command("symbolic-ref", "refs/remotes/origin/HEAD")
         if success and output:
             branch = output.replace("refs/remotes/origin/", "").strip()
@@ -226,7 +237,16 @@ class GitBranchManager:
     ) -> bool:
         """Commit current changes with a step message."""
         if message is None:
-            message = f"nova: step {step_number}"
+            # Generate a more descriptive commit message
+            if changed_files:
+                # Create a summary of what was fixed
+                file_names = [f.name for f in changed_files[:3]]  # Show first 3 files
+                if len(changed_files) > 3:
+                    file_names.append(f"and {len(changed_files) - 3} more")
+                files_str = ", ".join(file_names)
+                message = f"🤖 Fix failing tests in {files_str}"
+            else:
+                message = f"🤖 Apply automated fixes to resolve test failures"
 
         if changed_files is not None:
             BATCH_SIZE = 100
@@ -272,6 +292,63 @@ class GitBranchManager:
     # ---------------------------
     # PR creation
     # ---------------------------
+    def squash_commits(self, commit_message: Optional[str] = None) -> bool:
+        """Squash all commits on the current branch into a single commit.
+        
+        Args:
+            commit_message: Custom commit message for the squashed commit.
+                          If not provided, will use a default message.
+                          
+        Returns:
+            True if successful, False otherwise.
+        """
+        if not self.branch_name or not self.original_head:
+            return False
+            
+        # Get the number of commits since the original HEAD
+        success, commit_count = self._run_git_command(
+            "rev-list", "--count", f"{self.original_head}..HEAD"
+        )
+        if not success or not commit_count.isdigit() or int(commit_count) <= 1:
+            # No commits to squash or only one commit
+            return True
+            
+        # If no custom message provided, create a summary
+        if not commit_message:
+            # Get list of changed files
+            success, changed_files = self._run_git_command(
+                "diff", "--name-only", f"{self.original_head}..HEAD"
+            )
+            if success and changed_files:
+                file_list = changed_files.strip().split('\n')
+                file_names = [Path(f).name for f in file_list[:5]]
+                if len(file_list) > 5:
+                    file_names.append(f"and {len(file_list) - 5} more files")
+                files_str = ", ".join(file_names)
+                commit_message = f"🤖 Fix failing tests in {files_str}"
+            else:
+                commit_message = "🤖 Apply automated fixes to resolve test failures"
+        
+        # Perform the squash using soft reset and recommit
+        success, _ = self._run_git_command("reset", "--soft", self.original_head)
+        if not success:
+            return False
+            
+        # Stage all changes
+        success, _ = self._run_git_command("add", "-A")
+        if not success:
+            return False
+            
+        # Create the squashed commit
+        success, _ = self._run_git_command("commit", "-m", commit_message)
+        if not success:
+            return False
+            
+        if self.verbose:
+            console.print(f"[green]✓ Squashed {commit_count} commits into one[/green]")
+            
+        return True
+
     def create_or_update_pr(
         self,
         title: str,
@@ -282,9 +359,13 @@ class GitBranchManager:
         reviewers: Optional[List[str]] = None,
         assignees: Optional[List[str]] = None,
         prefer_gh_cli: bool = True,
+        squash_commits: bool = True,
     ) -> Tuple[bool, str]:
         """
         Create (or reuse) a PR for the current fix branch.
+
+        Args:
+            squash_commits: If True, squash all commits into a single commit before creating PR
 
         Returns:
             (True, url) on success; (False, error_message) on failure.
@@ -293,6 +374,11 @@ class GitBranchManager:
             return False, "No branch_name set on manager"
 
         base = base or self.get_default_branch()
+        
+        # Squash commits if requested
+        if squash_commits:
+            if not self.squash_commits():
+                console.print("[yellow]Warning: Failed to squash commits[/yellow]")
 
         # 1) Ensure branch is pushed
         ok, out = self.push_branch()
@@ -464,11 +550,8 @@ def managed_fix_branch(repo_path: Path, verbose: bool = False):
 
     try:
         if not manager._check_clean_working_tree():
-            console.print("[yellow]⚠️  Warning: Working tree is not clean. Uncommitted changes may be lost.[/yellow]")
-            response = input("Continue anyway? (y/N): ")
-            if response.lower() != "y":
-                console.print("[dim]Aborted.[/dim]")
-                sys.exit(1)
+            # Non-interactive behavior: warn and proceed. We allow commits even with a dirty tree.
+            console.print("[yellow]⚠️  Warning: Working tree is not clean. Proceeding anyway.[/yellow]")
 
         manager.setup_signal_handler()
         branch_name = manager.create_fix_branch()

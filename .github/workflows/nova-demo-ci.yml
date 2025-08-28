@@ -1,15 +1,11 @@
-name: Nova Demo CI Tests (DISABLED)
+name: Nova Demo CI Tests
 
-# DISABLED: Uncomment the 'on' section below to re-enable
-# on:
-#   push:
-#     branches: [main, demo]
-#   pull_request:
-#     branches: [main, demo]
-#   workflow_dispatch:
-
-# Workflow disabled - no triggers active
-on: []
+on:
+  push:
+    branches: [main, demo]
+  pull_request:
+    branches: [main, demo]
+  workflow_dispatch:
 
 jobs:
   nova-basic-test:

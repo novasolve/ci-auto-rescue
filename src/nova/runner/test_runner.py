@@ -30,18 +30,24 @@ from nova.logger import get_logger
 
 try:
     from rich.console import Console
+
     _console = Console()
+
     def _print(msg: str) -> None:
         _console.print(msg)
+
 except Exception:
     # Strip simple [tag]...[/tag] markup when rich is unavailable
     _TAG_RE = re.compile(r"\[(\/?[a-zA-Z][^\]]*)\]")
+
     def _print(msg: str) -> None:
         print(_TAG_RE.sub("", msg))
+
 
 @dataclass
 class FailingTest:
     """Represents a failing test with its details."""
+
     name: str
     file: str
     line: int
@@ -56,10 +62,13 @@ class FailingTest:
             "short_traceback": self.short_traceback,
         }
 
+
 class TestRunner:
     """Runs pytest and captures failing tests."""
 
-    def __init__(self, repo_path: Path, verbose: bool = False, pytest_args: Optional[str] = None):
+    def __init__(
+        self, repo_path: Path, verbose: bool = False, pytest_args: Optional[str] = None
+    ):
         self.repo_path = repo_path
         self.verbose = verbose
         self.pytest_args = pytest_args
@@ -77,9 +86,9 @@ class TestRunner:
         logger.info("Running pytest to identify failing tests...", "🔍")
 
         # Create temp files for reports
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             json_report_path = tmp.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as tmp:
             junit_report_path = tmp.name
 
         junit_xml_content = None
@@ -106,17 +115,23 @@ class TestRunner:
                 cwd=str(self.repo_path),
                 timeout=300,
             )
-            combined_output = (result.stderr or '') + '\n' + (result.stdout or '')
+            combined_output = (result.stderr or "") + "\n" + (result.stdout or "")
 
             # If JSON plugin is missing, pytest will complain about --json-report
-            if ("unrecognized arguments" in combined_output and
-                ("--json-report" in combined_output or "--json-report-file" in combined_output)):
+            if "unrecognized arguments" in combined_output and (
+                "--json-report" in combined_output
+                or "--json-report-file" in combined_output
+            ):
                 cmd_no_json = [
-                    a for a in cmd
+                    a
+                    for a in cmd
                     if not (a == "--json-report" or a.startswith("--json-report-file="))
                 ]
                 logger = get_logger()
-                logger.verbose(f"Re-running without json-report: {' '.join(cmd_no_json)}", component="Test Runner")
+                logger.verbose(
+                    f"Re-running without json-report: {' '.join(cmd_no_json)}",
+                    component="Test Runner",
+                )
                 result = subprocess.run(
                     cmd_no_json,
                     capture_output=True,
@@ -124,7 +139,7 @@ class TestRunner:
                     cwd=str(self.repo_path),
                     timeout=300,
                 )
-                combined_output = (result.stderr or '') + '\n' + (result.stdout or '')
+                combined_output = (result.stderr or "") + "\n" + (result.stdout or "")
 
             # Parse JSON report first (best fidelity)
             failing_tests = self._parse_json_report(json_report_path)
@@ -133,7 +148,9 @@ class TestRunner:
             junit_path = Path(junit_report_path)
             if junit_path.exists():
                 try:
-                    junit_xml_content = junit_path.read_text(encoding="utf-8", errors="replace")
+                    junit_xml_content = junit_path.read_text(
+                        encoding="utf-8", errors="replace"
+                    )
                 except Exception:
                     junit_xml_content = None
 
@@ -149,7 +166,10 @@ class TestRunner:
             if not failing_tests:
                 # Special-case pytest exit code 5: no tests collected
                 if result.returncode == 5:
-                    summarized = self._summarize_first_line(combined_output) or "No tests were collected."
+                    summarized = (
+                        self._summarize_first_line(combined_output)
+                        or "No tests were collected."
+                    )
                     dummy = FailingTest(
                         name="<no tests collected>",
                         file="<session>",
@@ -162,8 +182,13 @@ class TestRunner:
                     return [dummy], junit_xml_content
                 if result.returncode != 0:
                     logger = get_logger()
-                    logger.error(f"Pytest exited with code {result.returncode} but no test failures were parsed. Likely a collection/config error.")
-                    summarized = self._summarize_first_line(combined_output) or f"Pytest failed with exit code {result.returncode}"
+                    logger.error(
+                        f"Pytest exited with code {result.returncode} but no test failures were parsed. Likely a collection/config error."
+                    )
+                    summarized = (
+                        self._summarize_first_line(combined_output)
+                        or f"Pytest failed with exit code {result.returncode}"
+                    )
                     dummy = FailingTest(
                         name="<pytest collection error>",
                         file="<session>",
@@ -182,7 +207,9 @@ class TestRunner:
 
         except FileNotFoundError:
             logger = get_logger()
-            logger.error("pytest not found in the current interpreter. Activate your venv and install pytest.")
+            logger.error(
+                "pytest not found in the current interpreter. Activate your venv and install pytest."
+            )
             return [], None
         except subprocess.TimeoutExpired:
             logger = get_logger()
@@ -205,7 +232,9 @@ class TestRunner:
 
     # ---- Command construction ------------------------------------------
 
-    def _build_pytest_cmd(self, json_report_path: str, junit_report_path: str) -> List[str]:
+    def _build_pytest_cmd(
+        self, json_report_path: str, junit_report_path: str
+    ) -> List[str]:
         """
         Prefer a repo-local venv Python (./.venv/bin/python or ./venv/bin/python).
         If not found, prefer a pytest executable on PATH.
@@ -248,8 +277,12 @@ class TestRunner:
         table += "|-----------|-----------|-------|\n"
 
         for test in failures:
-            location = f"{test.file}:{test.line}" if (test.file and test.line > 0) else (test.file or "<unknown>")
-            st = (test.short_traceback or "")
+            location = (
+                f"{test.file}:{test.line}"
+                if (test.file and test.line > 0)
+                else (test.file or "<unknown>")
+            )
+            st = test.short_traceback or ""
             error = None
             # Prefer pytest-style error/assert lines
             for line in st.splitlines():
@@ -301,13 +334,15 @@ class TestRunner:
 
             line_no = self._extract_line_number(file_part, traceback_lines)
 
-            failures.append(FailingTest(
-                name=test_name,
-                file=file_part,
-                line=line_no,
-                short_traceback=short_traceback,
-                full_traceback=longrepr or None,
-            ))
+            failures.append(
+                FailingTest(
+                    name=test_name,
+                    file=file_part,
+                    line=line_no,
+                    short_traceback=short_traceback,
+                    full_traceback=longrepr or None,
+                )
+            )
 
         # Include collection/collector errors if present
         for col in report.get("collectors", []) or []:
@@ -321,16 +356,22 @@ class TestRunner:
                 except Exception:
                     longrepr = str(longrepr)
 
-            file_part, test_name = self._split_nodeid(nodeid) if nodeid else ("<collection>", "<collection error>")
+            file_part, test_name = (
+                self._split_nodeid(nodeid)
+                if nodeid
+                else ("<collection>", "<collection error>")
+            )
             lines = (longrepr or "").splitlines()
             short_traceback = self._shorten_traceback(lines)
-            failures.append(FailingTest(
-                name=test_name,
-                file=file_part,
-                line=0,
-                short_traceback=short_traceback,
-                full_traceback=longrepr or None,
-            ))
+            failures.append(
+                FailingTest(
+                    name=test_name,
+                    file=file_part,
+                    line=0,
+                    short_traceback=short_traceback,
+                    full_traceback=longrepr or None,
+                )
+            )
 
         return failures
 
@@ -375,7 +416,9 @@ class TestRunner:
 
             name = tc.get("name") or "<unknown>"
             classname = tc.get("classname") or ""
-            display_name = f"{classname}::{name}" if (classname and "::" not in name) else name
+            display_name = (
+                f"{classname}::{name}" if (classname and "::" not in name) else name
+            )
 
             # File/line are often absent in JUnit; try several fallbacks
             file_part = tc.get("file") or ""
@@ -389,13 +432,15 @@ class TestRunner:
             text = (problem_el.text or "").strip()
             short = message or text or "Test failed"
 
-            failures.append(FailingTest(
-                name=display_name,
-                file=file_part or "<unknown>",
-                line=line_no,
-                short_traceback=short,
-                full_traceback=text or None,
-            ))
+            failures.append(
+                FailingTest(
+                    name=display_name,
+                    file=file_part or "<unknown>",
+                    line=line_no,
+                    short_traceback=short,
+                    full_traceback=text or None,
+                )
+            )
 
         return failures
 
@@ -432,7 +477,9 @@ class TestRunner:
     def _extract_line_number(self, file_part: str, traceback_lines: List[str]) -> int:
         # Prefer pattern "path/to/file.py:123"
         if file_part:
-            m = re.search(rf"({re.escape(file_part)})[:](\d+)", "\n".join(traceback_lines))
+            m = re.search(
+                rf"({re.escape(file_part)})[:](\d+)", "\n".join(traceback_lines)
+            )
             if m:
                 return self._safe_int(m.group(2))
         # Heuristic: look for ".../file.py:<line>"

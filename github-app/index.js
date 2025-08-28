@@ -12,6 +12,9 @@ export default (app, { getRouter }) => {
     });
   });
 
+  // Nova CI-Rescue auto-trigger functionality disabled
+  // Uncomment the block below to re-enable automatic CI rescue
+  /*
   app.on(['pull_request.opened', 'workflow_run.completed', 'check_suite.requested'], async (context) => {
     const { owner, repo } = context.repo();
 
@@ -88,5 +91,11 @@ export default (app, { getRouter }) => {
         summary: checkSummary,
       },
     });
+  });
+  */
+
+  // Basic ping handler for testing
+  app.on('ping', async (context) => {
+    context.log.info('Received webhook ping - Nova CI auto-trigger is disabled');
   });
 };

@@ -1,18 +1,22 @@
-name: Nova Auto-Fix
+name: Nova Auto-Fix (DISABLED)
 
-on:
-  workflow_dispatch:
-    inputs:
-      max_iterations:
-        description: "Maximum iterations for Nova"
-        required: false
-        default: "5"
-      timeout:
-        description: "Timeout in seconds"
-        required: false
-        default: "300"
-  pull_request:
-    types: [labeled]
+# DISABLED: Uncomment the 'on' section below to re-enable
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       max_iterations:
+#         description: "Maximum iterations for Nova"
+#         required: false
+#         default: "5"
+#       timeout:
+#         description: "Timeout in seconds"
+#         required: false
+#         default: "300"
+#   pull_request:
+#     types: [labeled]
+
+# Workflow disabled - no triggers active
+on: []
 
 jobs:
   auto-fix:

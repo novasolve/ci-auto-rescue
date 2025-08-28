@@ -406,9 +406,7 @@ class GitBranchManager:
         if not self.original_head:
             return
 
-        if success:
-            console.print(f"\n[green]✅ Success! Changes saved to branch: {self.branch_name}[/green]")
-        else:
+        if not success:
             console.print("\n[yellow]⚠️  Cleaning up... resetting to original state[/yellow]")
             current_branch = self._get_current_branch()
             if current_branch and current_branch.startswith("nova-auto-fix/"):

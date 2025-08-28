@@ -336,8 +336,6 @@ def apply_and_commit_patch(
                         # Write the new content
                         full_path.write_text('\n'.join(content_lines))
                         changed_files.append(Path(file_path))
-                        if verbose:
-                            print(f"Replaced file: {file_path}")
                     except Exception as e:
                         if verbose:
                             print(f"Error writing file {file_path}: {e}")

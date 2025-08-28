@@ -3,21 +3,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nova-ci-rescue"
-version = "0.1.0"
+version = "0.4.2"
 description = "Nova CI-Rescue: automated test fixing agent (MVP)"
-readme = "README.md"
+readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "NovaSolve", email = "dev@novasolve.ai" }]
 keywords = ["LLM", "LangGraph", "CI", "pytest", "agent", "automation"]
 classifiers = [
+  "Development Status :: 4 - Beta",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Testing",
+  "Topic :: Software Development :: Quality Assurance",
 ]
 
 dependencies = [
@@ -32,6 +35,8 @@ dependencies = [
   "PyYAML>=6.0.0",
   "pytest>=7.0.0",
   "pytest-json-report>=1.5.0",
+  "tomli>=2.0.0;python_version<'3.11'",
+  "openai>=1.0.0",
 ]
 
 [project.urls]

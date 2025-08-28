@@ -1,7 +1,11 @@
 # Nova CI‑Rescue
 
-[![Install Nova CI‑Rescue](https://img.shields.io/badge/Install-GitHub%20App-blue?logo=github)](https://github.com/apps/nova-ci-rescue/installations/new)
-[![Add to Slack (beta)](https://img.shields.io/badge/Add%20to%20Slack-beta-4A154B?logo=slack&logoColor=white)](#slack-integration-beta)
+[![PyPI](https://img.shields.io/pypi/v/nova-ci-rescue)](https://pypi.org/project/nova-ci-rescue/)
+[![CI](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml/badge.svg)](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Python](https://img.shields.io/pypi/pyversions/nova-ci-rescue)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 Nova keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova analyzes the failures, proposes focused edits, and opens a reviewable PR with patches and artifacts.
 

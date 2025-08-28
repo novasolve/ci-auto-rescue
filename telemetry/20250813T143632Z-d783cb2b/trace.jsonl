@@ -1,3 +1,0 @@
-{"ts": "2025-08-13T14:36:32.107366+00:00", "event": "start", "repo_path": "/Users/seb/GPT5/working/ci-auto-rescue", "run_id": "20250813T143632Z-d783cb2b", "telemetry_dir": "telemetry/20250813T143632Z-d783cb2b", "pid": 28773}
-{"ts": "2025-08-13T14:36:32.107911+00:00", "event": "test_event", "data": {"message": "Test event", "value": 42}}
-{"ts": "2025-08-13T14:36:32.108922+00:00", "event": "artifact", "name": "test.txt", "path": "telemetry/20250813T143632Z-d783cb2b/test.txt", "size": 21}

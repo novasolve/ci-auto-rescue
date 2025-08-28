@@ -129,7 +129,7 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
         prompt += f"\n🔍 Pattern: {pattern} ({len(tests)} tests)\n"
         prompt += "-" * 40 + "\n"
         for test in tests:
-            prompt += f"• {test.get('name')}: {test.get('short_traceback', '')[:100]}...\n"
+            prompt += f"• {test.get('name')}: {test.get('short_traceback', '')}\n"
     
     prompt += "\n" + "=" * 80 + "\n\n"
     
@@ -165,10 +165,12 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
     prompt += "   - Wrong arithmetic operators (+ vs -, * vs /)\n"
     prompt += "   - Missing error checks (division by zero, negative square roots, empty lists)\n"
     prompt += "   - Incorrect return values\n"
-    prompt += "4. Your fix MUST address all {0} failing tests\n".format(len(failing_tests))
-    prompt += "5. Generate the COMPLETE file with ALL fixes applied\n"
-    prompt += "6. PRESERVE all docstrings and comments from the original file\n"
-    prompt += "7. Keep the original code style and formatting when possible\n"
+    prompt += "4. REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.)\n"
+    prompt += "5. Your fix MUST address all {0} failing tests\n".format(len(failing_tests))
+    prompt += "6. Generate the COMPLETE file with ALL fixes applied\n"
+    prompt += "7. PRESERVE all docstrings and comments from the original file (except BUG comments)\n"
+    prompt += "8. Keep the original code style and formatting when possible\n"
+    prompt += "9. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
     prompt += "\n"
     prompt += "FORMAT YOUR RESPONSE AS:\n"
     prompt += "FILE: <filename>\n"
@@ -182,10 +184,13 @@ def build_complete_fix_prompt(plan: Dict[str, Any],
 
 
 def build_strict_critic_prompt(patch: str, failing_tests: List[Dict[str, Any]], 
-                             num_original_failures: int) -> str:
+                             num_original_failures: int, actual_test_results: Optional[Dict[str, Any]] = None) -> str:
     """
     Build a strict critic prompt that rejects partial solutions.
     """
+    # Check if this is FILE_REPLACE format or unified diff
+    is_file_replace = "FILE_REPLACE:" in patch
+    
     prompt = f"""You are a STRICT code reviewer. Your job is to ensure the fix addresses ALL test failures.
 
 ORIGINAL SITUATION:
@@ -193,21 +198,68 @@ ORIGINAL SITUATION:
 - Tests that MUST be fixed: {len(failing_tests)}
 
 PATCH TO REVIEW:
-```diff
-{patch[:2000]}{'...(truncated)' if len(patch) > 2000 else ''}
+"""
+    
+    if is_file_replace:
+        prompt += f"""
+(This is a FILE REPLACEMENT format - entire files will be replaced)
 ```
-
+{patch}
+```
+"""
+    else:
+        prompt += f"""
+```diff
+{patch}
+```
+"""
+    
+    prompt += "\n"
+    
+    # Add actual test results if available
+    if actual_test_results:
+        if actual_test_results.get("patch_applied"):
+            prompt += f"""
+ACTUAL TEST RESULTS (from running tests with this patch):
+- Original failing tests: {actual_test_results['original_failures']}
+- Tests still failing: {actual_test_results['remaining_failures']}
+- Tests fixed: {actual_test_results['fixed_count']}
+- All tests fixed: {'YES' if actual_test_results['all_fixed'] else 'NO'}
+"""
+            if not actual_test_results['all_fixed']:
+                prompt += f"""
+- Remaining failures: {', '.join(actual_test_results['remaining_test_names'])}
+"""
+        else:
+            prompt += f"""
+PATCH COULD NOT BE APPLIED:
+- Error: {actual_test_results.get('error', 'Unknown error')}
+"""
+    
+    prompt += f"""
 REQUIREMENTS FOR APPROVAL:
 1. The patch MUST fix ALL {num_original_failures} failing tests
 2. Partial fixes are UNACCEPTABLE
 3. The fix must be comprehensive and complete
 4. No test should remain failing after this patch
 
+"""
+    
+    if actual_test_results and actual_test_results.get("patch_applied", False):
+        prompt += f"""
+VERDICT BASED ON ACTUAL TEST RESULTS:
+- The patch {'DOES' if actual_test_results['all_fixed'] else 'DOES NOT'} fix all tests
+- {'APPROVE' if actual_test_results['all_fixed'] else 'REJECT'} this patch
+"""
+    else:
+        prompt += """
 ANALYZE:
 1. Does this patch address ALL the failing tests listed?
 2. Are there any tests that might still fail after this patch?
 3. Is this a complete solution or just a partial fix?
-
+"""
+    
+    prompt += f"""
 BE EXTREMELY STRICT: If this patch doesn't fix ALL tests in one go, REJECT IT.
 
 Respond with JSON:

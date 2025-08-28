@@ -52,7 +52,7 @@ def build_full_file_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, A
         prompt += f"   Line: {test.get('line', 0)}\n"
         
         # Extract actual vs expected from error message if present
-        error_msg = test.get('short_traceback', 'No traceback')[:400]
+        error_msg = test.get('short_traceback', 'No traceback')
         prompt += f"   Error:\n{error_msg}\n"
     
     # Include test file contents if provided
@@ -60,9 +60,7 @@ def build_full_file_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, A
         prompt += "\n\nTEST FILE CONTENTS (for reference only):\n"
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
-            prompt += content[:2000]
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
+            prompt += content
     
     # Include source file contents if provided - THIS IS WHAT WE NEED TO FIX
     if source_contents:
@@ -70,15 +68,15 @@ def build_full_file_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, A
         for file_path, content in source_contents.items():
             prompt += f"\n=== {file_path} ===\n"
             prompt += content
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
     
     prompt += "\n\n"
     prompt += "INSTRUCTIONS:\n"
     prompt += "1. Analyze the failing tests and current source code\n"
     prompt += "2. Identify what's wrong in the source code\n"
     prompt += "3. Generate the COMPLETE CORRECTED FILE CONTENTS that will make the tests pass\n"
-    prompt += "4. The response format should be:\n\n"
+    prompt += "4. REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.)\n"
+    prompt += "5. DO NOT add any new comments about bugs or fixes\n"
+    prompt += "6. The response format should be:\n\n"
     prompt += "FILE: <filename>\n"
     prompt += "```python\n"
     prompt += "<complete corrected file contents>\n"

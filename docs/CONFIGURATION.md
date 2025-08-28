@@ -7,6 +7,7 @@ Nova is configured via environment variables (e.g., `.env`).
 - OPENAI_API_KEY: API key for OpenAI (optional if using Anthropic)
 - ANTHROPIC_API_KEY: API key for Anthropic (optional if using OpenAI)
 - NOVA_DEFAULT_LLM_MODEL: e.g., `gpt-4o`, `gpt-5`, `claude-3-5-sonnet`
+- NOVA_REASONING_EFFORT: reasoning effort for GPT models (`low`, `medium`, `high` - default `high`)
 
 ## Timeouts and limits (defaults)
 
@@ -33,6 +34,7 @@ Nova is configured via environment variables (e.g., `.env`).
 OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=...
 # NOVA_DEFAULT_LLM_MODEL=claude-3-5-sonnet
+# NOVA_REASONING_EFFORT=medium  # Use 'low' or 'medium' for faster runs
 NOVA_MAX_ITERS=5
 NOVA_RUN_TIMEOUT_SEC=300
 NOVA_TEST_TIMEOUT_SEC=120

@@ -120,7 +120,7 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
                 console.print(f"[dim]Could not list patches: {e}[/dim]")
     
     # Display token usage in verbose mode
-    if verbose and llm_agent and hasattr(llm_agent, 'llm_client') and hasattr(llm_agent.llm_client, 'token_usage'):
+    if state.verbose and llm_agent and hasattr(llm_agent, 'llm_client') and hasattr(llm_agent.llm_client, 'token_usage'):
         usage = llm_agent.llm_client.token_usage
         if usage['total_tokens'] > 0:
             console.print("\n[bold]🧾 Token Usage Receipt:[/bold]")

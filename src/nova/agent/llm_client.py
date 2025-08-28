@@ -218,7 +218,7 @@ class LLMClient:
                 # Limit max_tokens for GPT-4o and other models
                 if "gpt-4o" in self.model.lower():
                     kwargs["max_tokens"] = min(max_tokens, 16384)  # GPT-4o limit
-                elif "gpt-4" in self.model.lower():
+                elif self.model.lower() == "gpt-4" or (self.model.lower().startswith("gpt-4-") and not self.model.lower().startswith("gpt-4o")):
                     kwargs["max_tokens"] = min(max_tokens, 8192)   # GPT-4 limit
                 else:
                     kwargs["max_tokens"] = max_tokens

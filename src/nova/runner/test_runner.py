@@ -220,8 +220,12 @@ class TestRunner:
         ]
 
         # 1) Repo-local venv python
-        venv_candidates = [self.repo_path / ".venv" / "bin" / "python",
-                           self.repo_path / "venv" / "bin" / "python"]
+        venv_candidates = [
+            self.repo_path / ".venv" / "bin" / "python",
+            self.repo_path / "venv" / "bin" / "python",
+            self.repo_path / ".venv" / "Scripts" / "python.exe",
+            self.repo_path / "venv" / "Scripts" / "python.exe",
+        ]
         for py in venv_candidates:
             if py.exists():
                 return [str(py), "-m", "pytest"] + args

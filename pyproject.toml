@@ -3,12 +3,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nova-ci-rescue"
-version = "0.4.2"
+version = "0.4.3"
 description = "Nova CI-Rescue: automated test fixing agent (MVP)"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{ name = "NovaSolve", email = "dev@novasolve.ai" }]
+authors = [{ name = "NovaSolve", email = "sebastian@joinnova.com" }]
 keywords = ["LLM", "LangGraph", "CI", "pytest", "agent", "automation"]
 classifiers = [
   "Development Status :: 4 - Beta",

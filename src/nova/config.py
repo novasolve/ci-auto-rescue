@@ -44,7 +44,10 @@ class NovaSettings(BaseModel):
     telemetry_dir: str = "telemetry"
     enable_telemetry: bool = True  # Enable telemetry by default to save patches
     # Keep default consistent with from_env fallback:
-    default_llm_model: str = "gpt-5-chat-latest"
+    default_llm_model: str = "gpt-5"
+    pr_llm_model: str = "gpt-4o"  # Faster model for PR generation
+    reasoning_effort: str = "high"  # Reasoning effort for GPT models (low/medium/high)
+    whole_file_mode: bool = True  # Use whole file replacement instead of patches
 
     @classmethod
     def from_env(cls) -> "NovaSettings":
@@ -88,7 +91,10 @@ class NovaSettings(BaseModel):
             warn_daily_llm_calls_pct=float(os.environ.get("NOVA_WARN_DAILY_LLM_CALLS_PCT", 0.8)),
             telemetry_dir=os.environ.get("NOVA_TELEMETRY_DIR", "telemetry"),
             enable_telemetry=os.environ.get("NOVA_ENABLE_TELEMETRY", "false").lower() == "true",
-            default_llm_model=os.environ.get("NOVA_DEFAULT_LLM_MODEL", "gpt-5-chat-latest"),
+            default_llm_model=os.environ.get("NOVA_DEFAULT_LLM_MODEL", "gpt-5"),
+            pr_llm_model=os.environ.get("NOVA_PR_LLM_MODEL", "gpt-4o"),
+            reasoning_effort=os.environ.get("NOVA_REASONING_EFFORT", "high"),
+            whole_file_mode=os.environ.get("NOVA_WHOLE_FILE_MODE", "true").lower() == "true",
         )
 
 

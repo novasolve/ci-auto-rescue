@@ -24,13 +24,16 @@ class LLMAgent:
         self.client = OpenAI(api_key=self.settings.openai_api_key)
         self.model = self.settings.default_llm_model
     
-    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None) -> Optional[str]:
+    def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None, state=None) -> Optional[str]:
         """
         Generate a patch to fix failing tests using LLM.
         
         Args:
             failing_tests: List of failing test details
             iteration: Current iteration number
+            plan: Optional plan from the planner
+            critic_feedback: Optional feedback from previous critic rejection
+            state: Optional agent state (unused in this implementation)
             
         Returns:
             Unified diff string or None if no patch can be generated
@@ -58,8 +61,8 @@ class LLMAgent:
                     {"role": "system", "content": "You are an expert software engineer tasked with fixing failing tests. Generate a unified diff patch that fixes the test failures."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
-                max_tokens=2000
+                temperature=1.0,
+                max_tokens=40000  # Set to 40k as requested
             )
             
             patch_diff = response.choices[0].message.content.strip()
@@ -98,9 +101,7 @@ class LLMAgent:
         prompt += "\n\nTEST FILE CONTENTS:\n"
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
-            prompt += content[:2000]  # Limit content size
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
+            prompt += content
         
         prompt += "\n\nGenerate a unified diff patch that fixes these test failures. "
         prompt += "The patch should be in standard unified diff format (like 'git diff' output). "
@@ -131,7 +132,7 @@ PATCH:
 ```
 
 FAILING TESTS IT SHOULD FIX:
-{json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:3]], indent=2)}
+{json.dumps([{'name': t.get('name'), 'error': t.get('short_traceback', '')} for t in failing_tests[:3]], indent=2)}
 
 Evaluate if this patch:
 1. Actually fixes the failing tests
@@ -150,8 +151,8 @@ Respond with JSON:
                     {"role": "system", "content": "You are a code reviewer. Review patches critically but approve if they fix the issues."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_tokens=200
+                temperature=1.0,
+                max_tokens=40000  # Set to 40k as requested
             )
             
             review = response.choices[0].message.content.strip()
@@ -187,7 +188,7 @@ Respond with JSON:
         
         prompt = f"""Create a plan to fix these failing tests (iteration {iteration}):
 
-{json.dumps([{'name': t.get('name'), 'file': t.get('file'), 'error': t.get('short_traceback', '')[:100]} for t in failing_tests[:5]], indent=2)}
+{json.dumps([{'name': t.get('name'), 'file': t.get('file'), 'error': t.get('short_traceback', '')} for t in failing_tests[:5]], indent=2)}
 
 Respond with a JSON plan:
 {{"approach": "brief strategy", "priority_tests": ["test1", "test2"], "fix_strategy": "how to fix"}}
@@ -200,8 +201,8 @@ Respond with a JSON plan:
                     {"role": "system", "content": "You are a test fixing strategist. Create concise plans."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
-                max_tokens=200
+                temperature=1.0,
+                max_tokens=40000  # Set to 40k as requested
             )
             
             plan_text = response.choices[0].message.content.strip()

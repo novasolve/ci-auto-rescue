@@ -4,11 +4,20 @@ Critic node for Nova CI-Rescue agent workflow.
 
 from typing import Tuple, Optional, Any
 from rich.console import Console
+from rich.theme import Theme
 
 from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
 
-console = Console()
+# Define custom theme with softer colors
+nova_theme = Theme({
+    "error": "#CD5C5C",  # Indian Red - softer than pure red
+    "warning": "#DAA520",  # Goldenrod - softer yellow
+    "success": "#228B22",  # Forest Green - softer green
+    "info": "#4682B4",  # Steel Blue
+})
+
+console = Console(theme=nova_theme)
 
 
 class CriticNode:
@@ -55,7 +64,7 @@ class CriticNode:
             console.print(f"[dim]Review result: {review_reason}[/dim]")
         
         if not patch_approved:
-            console.print(f"[red]❌ Patch rejected: {review_reason}[/red]")
+            console.print(f"[error]❌ Patch rejected: {review_reason}[/error]")
             # Store critic feedback for next iteration
             state.critic_feedback = review_reason
             if telemetry:

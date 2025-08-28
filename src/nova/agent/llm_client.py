@@ -20,6 +20,7 @@ except ImportError:
 
 from nova.config import get_settings
 from nova.tools.http import AllowedHTTPClient
+from nova.logger import get_logger
 import time
 
 
@@ -30,6 +31,16 @@ class LLMClient:
         self.settings = get_settings()
         self.client = None
         self.provider = None
+        # Verbose controlled via env NOVA_VERBOSE=true set by CLI --verbose
+        self._verbose = os.environ.get("NOVA_VERBOSE", "").lower() in {"1", "true", "yes", "on"}
+        
+        # Token usage tracking
+        self.token_usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "calls": []  # List of individual call details
+        }
         
         # Determine which provider to use based on model name and available API keys
         model_name = self.settings.default_llm_model.lower()
@@ -91,7 +102,7 @@ class LLMClient:
             # Default to Claude 3.5 Sonnet
             return "claude-3-5-sonnet-20241022"
     
-    def complete(self, system: str, user: str, temperature: float = 0.3, max_tokens: int = 2000) -> str:
+    def complete(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 40000) -> str:
         """
         Get a completion from the LLM.
         
@@ -104,26 +115,47 @@ class LLMClient:
         Returns:
             The LLM's response text
         """
+        # Get logger
+        logger = get_logger()
+        
         # Log the request details
-        print(f"[Nova Debug - LLM] Provider: {self.provider}, Model: {self.model}")
-        print(f"[Nova Debug - LLM] Request params: temperature={temperature}, max_tokens={max_tokens}")
-        print(f"[Nova Debug - LLM] System prompt length: {len(system)} chars")
-        print(f"[Nova Debug - LLM] User prompt length: {len(user)} chars")
+        logger.debug("LLM Request Configuration", {
+            "provider": self.provider,
+            "model": self.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }, component="LLM")
+        
+        logger.debug("Prompt Statistics", {
+            "system_length": f"{len(system)} chars",
+            "user_length": f"{len(user)} chars",
+            "total_length": f"{len(system) + len(user)} chars"
+        }, component="LLM")
+        
+        logger.trace("System Prompt", system[:200] + "..." if len(system) > 200 else system, component="LLM")
+        logger.trace("User Prompt", user[:200] + "..." if len(user) > 200 else user, component="LLM")
         
         # Daily usage tracking and alerts
         self._increment_daily_usage()
         start = time.time()
         try:
             if self.provider == "openai":
-                return self._complete_openai(system, user, temperature, max_tokens)
+                # Force OpenAI params, respecting env MAX_TOKENS
+                try:
+                    max_tok = int(os.environ.get("MAX_TOKENS", "40000"))
+                except Exception:
+                    max_tok = 40000
+                return self._complete_openai(system, user, temperature=1.0, max_tokens=max_tok)
             elif self.provider == "anthropic":
-                return self._complete_anthropic(system, user, temperature, max_tokens)
+                return self._complete_anthropic(system, user, temperature=1.0, max_tokens=max_tokens)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
         finally:
             elapsed = time.time() - start
-            if elapsed > self.settings.llm_call_timeout_sec:
-                print(f"[Nova Warn] LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
+            logger = get_logger()
+            # if elapsed > self.settings.llm_call_timeout_sec:
+            #     # logger.warning(f"LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
+            #     pass
 
     def _usage_path(self) -> Path:
         root = Path(os.path.expanduser("~")) / ".nova"
@@ -155,15 +187,14 @@ class LLMClient:
             warn_pct = float(getattr(self.settings, "warn_daily_llm_calls_pct", 0.8) or 0.8)
             if max_calls > 0:
                 warn_threshold = int(max_calls * warn_pct)
+                logger = get_logger()
                 if counts["calls"] == warn_threshold:
-                    print(f"[Nova Warn] Daily LLM calls reached {counts['calls']}/{max_calls} ({int(warn_pct*100)}%).")
+                    logger.warning(f"Daily LLM calls reached {counts['calls']}/{max_calls} ({int(warn_pct*100)}%).")
                 if counts["calls"] > max_calls:
-                    print(f"[Nova Warn] Daily LLM calls exceeded limit: {counts['calls']}/{max_calls}. Consider pausing or lowering usage.")
+                    logger.warning(f"Daily LLM calls exceeded limit: {counts['calls']}/{max_calls}. Consider pausing or lowering usage.")
         except Exception:
             # Never block on usage tracking
             pass
-        else:
-            raise ValueError(f"Unknown provider: {self.provider}")
     
     def _complete_openai(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
         """Complete using OpenAI API."""
@@ -180,32 +211,58 @@ class LLMClient:
             
             # Handle model-specific parameters
             if "gpt-5" in self.model.lower():
-                # GPT-5 uses max_completion_tokens instead of max_tokens
                 kwargs["max_completion_tokens"] = max_tokens
-                # GPT-5 only supports temperature=1.0
-                kwargs["temperature"] = 1.0
-                # Set reasoning effort to high for maximum reasoning quality
-                kwargs["reasoning_effort"] = "high"
+                kwargs["temperature"] = temperature
+                kwargs["reasoning_effort"] = self.settings.reasoning_effort
             else:
-                kwargs["max_tokens"] = max_tokens
+                # Limit max_tokens for GPT-4o and other models
+                if "gpt-4o" in self.model.lower():
+                    kwargs["max_tokens"] = min(max_tokens, 16384)  # GPT-4o limit
+                elif self.model.lower() == "gpt-4" or (self.model.lower().startswith("gpt-4-") and not self.model.lower().startswith("gpt-4o")):
+                    kwargs["max_tokens"] = min(max_tokens, 8192)   # GPT-4 limit
+                else:
+                    kwargs["max_tokens"] = max_tokens
                 kwargs["temperature"] = temperature
             
             response = self.client.chat.completions.create(**kwargs)
             content = response.choices[0].message.content
+            
+            # Track token usage
+            if hasattr(response, 'usage'):
+                prompt_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                completion_tokens = getattr(response.usage, 'completion_tokens', 0)
+                total_tokens = getattr(response.usage, 'total_tokens', 0)
+                
+                self.token_usage['prompt_tokens'] += prompt_tokens
+                self.token_usage['completion_tokens'] += completion_tokens
+                self.token_usage['total_tokens'] += total_tokens
+                self.token_usage['calls'].append({
+                    'model': self.model,
+                    'prompt_tokens': prompt_tokens,
+                    'completion_tokens': completion_tokens,
+                    'total_tokens': total_tokens,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+            
+            logger = get_logger()
             if content:
                 content = content.strip()
-                print(f"[Nova Debug - LLM] OpenAI response length: {len(content)} chars")
-                print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+                logger.verbose(f"Response length: {len(content)} chars", component="LLM")
+                if hasattr(response, 'usage'):
+                    logger.verbose(f"Tokens used: {prompt_tokens} prompt + {completion_tokens} completion = {total_tokens} total", component="LLM")
+                logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
+                logger.trace("Full Response", content, component="LLM")
             else:
-                print(f"[Nova Debug - LLM] WARNING: OpenAI returned None/empty content!")
+                logger.warning("OpenAI returned None/empty content!")
                 content = ""
             return content
                 
         except Exception as e:
-            print(f"[Nova Debug - LLM] OpenAI API error: {type(e).__name__}: {e}")
+            logger = get_logger()
+            logger.error(f"OpenAI API error: {type(e).__name__}: {e}")
             raise
     
-    def _complete_anthropic(self, system: str, user: str, temperature: float, max_tokens: int) -> str:
+    def _complete_anthropic(self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 40000) -> str:
         """Complete using Anthropic API."""
         try:
             response = self.client.messages.create(
@@ -217,21 +274,45 @@ class LLMClient:
                 temperature=temperature,
                 max_tokens=max_tokens
             )
+            
+            # Track token usage (Anthropic provides usage info)
+            if hasattr(response, 'usage'):
+                prompt_tokens = getattr(response.usage, 'input_tokens', 0)
+                completion_tokens = getattr(response.usage, 'output_tokens', 0)
+                total_tokens = prompt_tokens + completion_tokens
+                
+                self.token_usage['prompt_tokens'] += prompt_tokens
+                self.token_usage['completion_tokens'] += completion_tokens
+                self.token_usage['total_tokens'] += total_tokens
+                self.token_usage['calls'].append({
+                    'model': self.model,
+                    'prompt_tokens': prompt_tokens,
+                    'completion_tokens': completion_tokens,
+                    'total_tokens': total_tokens,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+            
             if response.content and len(response.content) > 0:
                 content = response.content[0].text
+                logger = get_logger()
                 if content:
                     content = content.strip()
-                    print(f"[Nova Debug - LLM] Anthropic response length: {len(content)} chars")
-                    print(f"[Nova Debug - LLM] Response preview (first 100 chars): {content[:100]}...")
+                    logger.verbose(f"Response length: {len(content)} chars", component="LLM")
+                    if hasattr(response, 'usage'):
+                        logger.verbose(f"Tokens used: {prompt_tokens} prompt + {completion_tokens} completion = {total_tokens} total", component="LLM")
+                    logger.debug("Response preview", {"first_100_chars": content[:100] + "..."}, component="LLM")
+                    logger.trace("Full Response", content, component="LLM")
                 else:
-                    print(f"[Nova Debug - LLM] WARNING: Anthropic returned None/empty text!")
+                    logger.warning("Anthropic returned None/empty text!")
                     content = ""
             else:
-                print(f"[Nova Debug - LLM] WARNING: Anthropic returned empty content array!")
+                logger = get_logger()
+                logger.warning("Anthropic returned empty content array!")
                 content = ""
             return content
         except Exception as e:
-            print(f"[Nova Debug - LLM] Anthropic API error: {type(e).__name__}: {e}")
+            logger = get_logger()
+            logger.error(f"Anthropic API error: {type(e).__name__}: {e}")
             raise
 
 
@@ -318,7 +399,7 @@ def build_planner_prompt(failing_tests: List[Dict[str, Any]], critic_feedback: O
         error = test.get('short_traceback', '')
         if error:
             # Get first line of error
-            error = error.split('\n')[0][:50]
+            error = error.split('\n')[0]
         else:
             error = 'No error details'
         
@@ -384,7 +465,7 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
         prompt += f"   Line: {test.get('line', 0)}\n"
         
         # Extract actual vs expected from error message if present
-        error_msg = test.get('short_traceback', 'No traceback')[:400]
+        error_msg = test.get('short_traceback', 'No traceback')
         prompt += f"   Error:\n{error_msg}\n"
         
         # Highlight the mismatch if we can identify it
@@ -397,18 +478,14 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
         prompt += "\n\nTEST FILE CONTENTS (modify ONLY if tests have wrong expectations):\n"
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
-            prompt += content[:2000]
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
+            prompt += content
     
     # Include source file contents if provided
     if source_contents:
         prompt += "\n\nSOURCE CODE (FIX THESE FILES):\n"
         for file_path, content in source_contents.items():
             prompt += f"\n=== {file_path} ===\n"
-            prompt += content[:2000]
-            if len(content) > 2000:
-                prompt += "\n... (truncated)"
+            prompt += content
     
     prompt += "\n\n"
     prompt += "Generate a unified diff patch that fixes these test failures.\n"
@@ -422,6 +499,8 @@ def build_patch_prompt(plan: Dict[str, Any], failing_tests: List[Dict[str, Any]]
     prompt += "6. Be minimal and focused\n"
     prompt += "7. DO NOT introduce arbitrary constants or magic numbers just to make tests pass\n"
     prompt += "8. DO NOT add/remove spaces or characters unless they logically belong there\n"
+    prompt += "9. REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.) from the code\n"
+    prompt += "10. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
     prompt += "\n"
     prompt += "WARNING: Avoid quick hacks like hardcoding values. Focus on the root cause.\n"
     prompt += "If the test's expected value is mathematically or logically wrong, fix the test.\n"

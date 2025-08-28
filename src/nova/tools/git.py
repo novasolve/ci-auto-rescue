@@ -155,10 +155,13 @@ class GitBranchManager:
     def ensure_github_token_env(self) -> Optional[str]:
         """
         Ensure a token is available in env (GITHUB_TOKEN).
-        Try existing env, then gh CLI, return token or None.
+        Try existing env (GH_TOKEN first for CI/local compat), then gh CLI, return token or None.
         """
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        # Prioritize GH_TOKEN for better CI/local compatibility
+        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
         if token:
+            # Normalize to GITHUB_TOKEN for downstream use
+            os.environ["GITHUB_TOKEN"] = token
             return token
         token = self._gh_token_from_cli()
         if token:
@@ -204,12 +207,8 @@ class GitBranchManager:
         if self.verbose:
             console.print(f"[dim]Created branch: {self.branch_name}[/dim]")
 
-        nested_repos = self._detect_nested_git_repos()
-        if nested_repos:
-            console.print("[yellow]⚠️  Warning: Detected nested git repositories:[/yellow]")
-            for repo_path in nested_repos:
-                console.print(f"[yellow]   - {repo_path}[/yellow]")
-            console.print("[yellow]These will be ignored as only specific changed files will be staged.[/yellow]")
+        # Nested repos check removed for demo
+        pass
 
         return self.branch_name
 

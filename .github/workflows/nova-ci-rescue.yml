@@ -1,4 +1,4 @@
-name: Nova CI-Rescue Auto-Fix
+name: Nova CI-Rescue
 
 on:
   push:
@@ -6,35 +6,43 @@ on:
       - main
       - "feature/**"
   pull_request:
-    types: [opened, synchronize, reopened]
-  workflow_dispatch: # Allow manual triggering
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR to run Nova on (optional)"
+        required: false
+
+permissions:
+  contents: write      # Needed for pushing fixes
+  pull-requests: write # For commenting or opening PRs
+  issues: write        # For commenting on issues
 
 jobs:
   test-and-auto-fix:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # For pushing fixes
-      pull-requests: write # For creating PRs
-      issues: write # For commenting on issues
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Full history for better diff generation
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Install Nova from this local directory
-          pip install -e ./src
-          # Install test dependencies
-          pip install pytest pytest-cov
+          # Install Nova locally if present, else from PyPI
+          if [ -d "./src" ]; then
+            pip install -e ./src
+          else
+            pip install nova-ci-rescue
+          fi
+          pip install pytest pytest-cov pytest-json-report
 
       - name: Run initial tests
         id: initial-tests
@@ -45,16 +53,15 @@ jobs:
           cat test_results.txt
 
       - name: Run Nova Auto-Fix if tests failed
-        if: steps.initial-tests.outputs.TESTS_FAILED == 'true'
+        if: steps.initial-tests.outputs.TESTS_FAILED == 'true' || github.event_name == 'workflow_dispatch'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Use GPT-5 by default
-          NOVA_LLM_MODEL: gpt-5
+          NOVA_LLM_MODEL: ${{ secrets.NOVA_DEFAULT_LLM_MODEL || 'gpt-5' }}
         run: |
-          echo "Tests failed! Running Nova CI-Rescue to auto-fix..."
-          cd demo_workspace
-          python -m nova.cli fix . --max-iters 3 --timeout 300
+          echo "Running Nova CI-Rescue..."
+          cd demo_workspace || true
+          nova fix . --max-iters 3 --timeout 300
 
       - name: Run tests after fix
         if: steps.initial-tests.outputs.TESTS_FAILED == 'true'
@@ -70,62 +77,3 @@ jobs:
           path: |
             demo_workspace/.nova/
             test_results.txt
-
-
-# Alternative workflow for running Nova on demand
----
-name: Nova CI-Rescue Manual
-
-on:
-  workflow_dispatch:
-    inputs:
-      target_directory:
-        description: "Directory to run Nova fix on"
-        required: false
-        default: "demo_workspace"
-      max_iterations:
-        description: "Maximum fix iterations"
-        required: false
-        default: "3"
-      llm_model:
-        description: "LLM model to use (gpt-5, gpt-4o, claude-3.5-sonnet)"
-        required: false
-        default: "gpt-5"
-
-jobs:
-  nova-manual-fix:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.12"
-
-      - name: Install Nova and dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ./src
-          pip install pytest
-
-      - name: Run Nova Fix
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          NOVA_LLM_MODEL: ${{ github.event.inputs.llm_model }}
-        run: |
-          cd ${{ github.event.inputs.target_directory }}
-          python -m nova.cli fix . --max-iters ${{ github.event.inputs.max_iterations }}
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nova-manual-run-${{ github.run_number }}
-          path: ${{ github.event.inputs.target_directory }}/.nova/

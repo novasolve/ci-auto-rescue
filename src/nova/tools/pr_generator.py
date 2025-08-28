@@ -196,7 +196,7 @@ The following files were modified:
                   base_branch: str = "main",
                   draft: bool = False) -> Tuple[bool, str]:
         """
-        Create a PR using GitHub API directly.
+        Create a PR using GitHub API or gh CLI.
         
         Args:
             branch_name: The branch with fixes
@@ -215,9 +215,53 @@ The following files were modified:
                 return False, "Could not determine repository owner/name"
             owner, repo = repo_info
 
-            # Prefer GitHub CLI if available AND authenticated
+            # Try token-based REST API first if token exists
+            # Prioritize GH_TOKEN for better CI/local compatibility
+            token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
+            
+            if token:
+                # Try REST API with token
+                try:
+                    # Normalize to GITHUB_TOKEN for any downstream use
+                    os.environ['GITHUB_TOKEN'] = token
+
+                    # Create PR using GitHub REST API
+                    url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+                    headers = {
+                        "Authorization": f"token {token}",
+                        "Accept": "application/vnd.github.v3+json"
+                    }
+                    
+                    data = {
+                        "title": title,
+                        "body": description,
+                        "head": branch_name,
+                        "base": base_branch,
+                        "draft": draft
+                    }
+                    
+                    response = requests.post(url, headers=headers, json=data)
+                    
+                    if response.status_code == 201:
+                        pr_data = response.json()
+                        pr_url = pr_data.get('html_url', '')
+                        return True, pr_url
+                    else:
+                        error_msg = response.json().get('message', response.text)
+                        if "Bad credentials" not in error_msg:
+                            # If it's not a credential issue, return the error
+                            return False, f"Failed to create PR: {error_msg}"
+                        # If it's bad credentials, we'll try gh CLI below
+                        token_error = error_msg
+                except Exception as e:
+                    token_error = str(e)
+            else:
+                token_error = None
+
+            # Try GitHub CLI as fallback (or primary if no token)
             gh_path = shutil.which("gh")
             if gh_path:
+                # Check if gh is authenticated
                 st = subprocess.run([gh_path, "auth", "status"], capture_output=True, text=True)
                 if st.returncode == 0:
                     try:
@@ -230,6 +274,9 @@ The following files were modified:
                             "--base", base_branch,
                             "--head", branch_name,
                         ]
+                        if draft:
+                            cmd.append("--draft")
+                            
                         result = subprocess.run(
                             cmd,
                             capture_output=True,
@@ -243,45 +290,27 @@ The following files were modified:
                             return True, (url_line or stdout or "PR created")
                         else:
                             cli_err = (result.stderr or result.stdout or "").strip()
-                            # Fall through to REST API with token
-                    except Exception:
-                        # Fall through to REST API with token
-                        pass
-            
-            # REST API with token (GH_TOKEN/GITHUB_TOKEN)
-            # Prioritize GH_TOKEN for better CI/local compatibility
-            token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
-            if not token:
-                return False, "❌ GH_TOKEN environment variable not set. Please export GH_TOKEN='your_github_token' to create PRs."
-            # Normalize to GITHUB_TOKEN for any downstream use
-            os.environ['GITHUB_TOKEN'] = token
-
-            # Create PR using GitHub REST API
-            url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-            headers = {
-                "Authorization": f"token {token}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-            
-            data = {
-                "title": title,
-                "body": description,
-                "head": branch_name,
-                "base": base_branch,
-                "draft": draft
-            }
-            
-            response = requests.post(url, headers=headers, json=data)
-            
-            if response.status_code == 201:
-                pr_data = response.json()
-                pr_url = pr_data.get('html_url', '')
-                return True, pr_url
+                            # If gh also failed, return combined error message
+                            if token_error:
+                                return False, f"❌ Token authentication failed: {token_error}\n\n❌ GitHub CLI also failed: {cli_err}"
+                            return False, f"❌ GitHub CLI failed: {cli_err}"
+                    except Exception as e:
+                        if token_error:
+                            return False, f"❌ Token authentication failed: {token_error}\n\n❌ GitHub CLI error: {str(e)}"
+                        return False, f"❌ GitHub CLI error: {str(e)}"
+                else:
+                    # gh is not authenticated
+                    if token and token_error:
+                        return False, f"❌ Invalid GitHub token: {token_error}\n\nTip: You can use GitHub CLI instead. Run: gh auth login"
+                    return False, "❌ No authentication available. Either:\n1. Set GH_TOKEN environment variable: export GH_TOKEN='your_github_token'\n2. Or authenticate with GitHub CLI: gh auth login"
             else:
-                error_msg = response.json().get('message', response.text)
-                if "Bad credentials" in error_msg:
-                    return False, f"❌ Invalid GitHub token. Please check your GH_TOKEN is valid. Error: {error_msg}"
-                return False, f"Failed to create PR: {error_msg}"
+                # No gh CLI available
+                if token and token_error:
+                    return False, f"❌ Invalid GitHub token: {token_error}\n\nTip: Install GitHub CLI (gh) as an alternative: brew install gh && gh auth login"
+                elif token_error:
+                    return False, f"❌ GitHub API error: {token_error}"
+                else:
+                    return False, "❌ No authentication method available. Either:\n1. Set GH_TOKEN environment variable: export GH_TOKEN='your_github_token'\n2. Or install GitHub CLI: brew install gh && gh auth login"
                 
         except Exception as e:
             return False, f"Error creating PR: {str(e)}"

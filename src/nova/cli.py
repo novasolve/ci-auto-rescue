@@ -934,10 +934,12 @@ def fix(
                         console.print(f"[link={pr_url_or_error}]{pr_url_or_error}[/link]")
                         pr_created = True
                     else:
-                        console.print(f"\n[yellow]{pr_url_or_error}[/yellow]")
-                        if "GH_TOKEN" in pr_url_or_error:
-                            console.print(f"[yellow]To create PRs automatically, run:[/yellow] [cyan]export GH_TOKEN='your_github_token'[/cyan]")
-                        console.print(f"[dim]You can manually create a PR from branch: {branch_name}[/dim]")
+                        # Handle multi-line error messages
+                        error_lines = pr_url_or_error.split('\n')
+                        for line in error_lines:
+                            if line.strip():
+                                console.print(f"[yellow]{line}[/yellow]")
+                        console.print(f"\n[dim]You can manually create a PR from branch: {branch_name}[/dim]")
                         
             except Exception as e:
                 console.print(f"\n[yellow]Error creating PR: {e}[/yellow]")

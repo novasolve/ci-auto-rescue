@@ -1,13 +1,24 @@
 # Nova CI-Rescue
 
+<!-- Badges: CI | Coverage | PyPI | Python Versions | License | pre-commit | Black | OpenSSF -->
 [![CI](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/novasolve/ci-auto-rescue/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/nova-ci-rescue)](https://pypi.org/project/nova-ci-rescue/)
-![Python](https://img.shields.io/pypi/pyversions/nova-ci-rescue)
+<!-- [![Coverage](https://codecov.io/gh/novasolve/ci-auto-rescue/branch/main/graph/badge.svg)](https://codecov.io/gh/novasolve/nova-ci-rescue) -->
+[![PyPI](https://img.shields.io/pypi/v/nova-ci-rescue?label=PyPI)](https://pypi.org/project/nova-ci-rescue/)
+![Python Versions](https://img.shields.io/pypi/pyversions/nova-ci-rescue?color=blue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+<!-- [![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/8888/badge)](https://bestpractices.coreinfrastructure.org/projects/8888) -->
 
-Nova CI-Rescue keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova uses an LLM (e.g. GPT-4 or Claude) to analyze the failures, propose focused code edits, and open a safe, reviewable PR with the patches and logs. It's designed for Python projects (Pytest-based CI) and emphasizes reliability, transparency, and maintainers' control.
+<!-- Installation -->
+[![Install Nova CI‑Rescue](https://img.shields.io/badge/Install-GitHub%20App-blue?logo=github)](https://github.com/apps/nova-ci-rescue/installations/new)
+[![Add to Slack (beta)](https://img.shields.io/badge/Add%20to%20Slack-beta-4A154B?logo=slack&logoColor=white)](#slack-integration-beta)
+
+<!-- Demo GIF -->
+<!-- ![Nova CI-Rescue Demo](./docs/assets/nova-demo.gif) -->
+<!-- TODO: Add 20-sec GIF showing Nova in action: failing test → PR comment → auto-fix PR with artifacts -->
+
+Nova CI-Rescue keeps your main branch green by automatically fixing failing tests in pull requests. When CI fails, Nova uses an LLM (e.g. GPT-4 or Anthropic Claude) to analyze the failures, propose focused code edits, and open a safe, reviewable PR with the patches and logs. It's designed for Python projects (Pytest-based CI) and emphasizes reliability, transparency, and maintainers' control.
 
 ## Why Nova CI-Rescue?
 

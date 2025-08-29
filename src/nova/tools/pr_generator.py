@@ -5,7 +5,6 @@ PR Generator - Uses GPT-5 to create pull request descriptions and submit them vi
 import subprocess
 import os
 import requests
-import json
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import shutil
@@ -66,6 +65,8 @@ GUIDELINES for the PR description:
 - Use a professional, clear tone. (Imagine a developer writing the PR.)
 - Include sections: ## Summary, ## What was fixed, ## Changes made, ## Test results, ## Technical details (if relevant)
 
+IMPORTANT: Focus the title on the actual functionality being fixed (e.g., "Fix calculator operations" or "Correct mathematical computations"), NOT on comment removal or code cleanup. The title should describe what the code now does correctly.
+
 Do NOT include raw diff or implementation details that are obvious from the code – focus on intent and impact.
 
 DIFF:
@@ -100,7 +101,7 @@ Additionally, emphasize these changes if present:
         try:
             # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
             response = self.llm.complete(
-                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
+                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description. When writing PR titles, focus on the functional changes (what now works correctly) rather than code cleanup or comment removal. For example, prefer 'Fix calculator arithmetic operations' over 'Remove BUG comments'.",
                 user=prompt,
                 max_tokens=40000  # Will be handled by LLMClient with reasoning_effort=high
             )
@@ -239,11 +240,11 @@ The following files were modified:
                         )
                         if result.returncode == 0:
                             stdout = (result.stdout or "").strip()
-                            url_line = next((l for l in stdout.splitlines() if l.startswith("https://github.com/")), "")
+                            url_line = next((line for line in stdout.splitlines() if line.startswith("https://github.com/")), "")
                             return True, (url_line or stdout or "PR created")
                         else:
-                            cli_err = (result.stderr or result.stdout or "").strip()
                             # Fall through to REST API with token
+                            pass
                     except Exception:
                         # Fall through to REST API with token
                         pass
@@ -314,7 +315,7 @@ The following files were modified:
                 prs = response.json()
                 return len(prs) > 0
             return False
-        except requests.RequestException as e:
+        except requests.RequestException:
             return False
     
     def _get_repository_info(self) -> Optional[Tuple[str, str]]:
@@ -350,7 +351,7 @@ The following files were modified:
                     
                     if len(parts) >= 2:
                         return parts[0], parts[1]
-        except Exception as e:
+        except Exception:
             # Failed to get repository info from git remote
             pass
         

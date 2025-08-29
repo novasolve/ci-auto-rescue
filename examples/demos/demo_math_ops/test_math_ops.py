@@ -79,11 +79,11 @@ def test_fibonacci():
 
 def test_is_prime():
     """Test prime number checker."""
-    assert is_prime(2) == True
-    assert is_prime(3) == True
-    assert is_prime(4) == False
-    assert is_prime(17) == True
-    assert is_prime(100) == False
+    assert is_prime(2)
+    assert is_prime(3)
+    assert not is_prime(4)
+    assert is_prime(17)
+    assert not is_prime(100)
 
 
 def test_gcd():

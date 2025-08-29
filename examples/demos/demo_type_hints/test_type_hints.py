@@ -62,7 +62,7 @@ def test_create_user():
     assert isinstance(user["name"], str)
     assert user["age"] == 30
     assert isinstance(user["age"], int)
-    assert user["active"] == True
+    assert user["active"]
     assert isinstance(user["active"], bool)
 
 
@@ -113,8 +113,8 @@ def test_get_value():
 
 def test_validate_email():
     """Test email validation return type."""
-    assert validate_email("user@example.com") is True
-    assert validate_email("invalid") is False
+    assert validate_email("user@example.com")
+    assert not validate_email("invalid")
     # Check return type is always bool
     assert isinstance(validate_email("test"), bool)
 

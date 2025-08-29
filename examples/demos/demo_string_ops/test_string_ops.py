@@ -26,10 +26,10 @@ def test_reverse_string():
 
 def test_is_palindrome():
     """Test palindrome checker."""
-    assert is_palindrome("racecar") == True
-    assert is_palindrome("A man a plan a canal Panama") == True
-    assert is_palindrome("RaceCar") == True
-    assert is_palindrome("hello") == False
+    assert is_palindrome("racecar")
+    assert is_palindrome("A man a plan a canal Panama")
+    assert is_palindrome("RaceCar")
+    assert not is_palindrome("hello")
 
 
 def test_count_vowels():
@@ -74,10 +74,10 @@ def test_count_words():
 
 def test_is_anagram():
     """Test anagram checker."""
-    assert is_anagram("listen", "silent") == True
-    assert is_anagram("Listen", "Silent") == True
-    assert is_anagram("a gentleman", "elegant man") == True
-    assert is_anagram("hello", "world") == False
+    assert is_anagram("listen", "silent")
+    assert is_anagram("Listen", "Silent")
+    assert is_anagram("a gentleman", "elegant man")
+    assert not is_anagram("hello", "world")
 
 
 def test_truncate_string():

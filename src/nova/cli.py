@@ -237,9 +237,9 @@ def fix(
             console.print(f"[dim]Working on branch: {branch_name}[/dim]")
             
         # Set up Ctrl+C signal handler for clean abort
-            git_manager.setup_signal_handler()
+        git_manager.setup_signal_handler()
             
-            # Initialize settings and telemetry
+        # Initialize settings and telemetry
         settings = NovaSettings()
         if config_data and config_data.model:
             settings.default_llm_model = config_data.model

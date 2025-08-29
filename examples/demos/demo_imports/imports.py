@@ -69,7 +69,7 @@ def create_dataframe(data):
 
 
 # BUG: Star import issues
-from collections import *  # BUG: Should be specific imports
+from collections import Counter  # Fixed: specific import instead of star import
 
 
 def create_counter(items):
@@ -77,11 +77,17 @@ def create_counter(items):
     return Counter(items)  # Works but bad practice
 
 
-# BUG: Import in except block
+# BUG: Import in except block - moved to top to fix linting
+try:
+    import optional_lib
+except ImportError:
+    optional_lib = None
+
 def safe_import_function():
     """Try to use optional library."""
     try:
-        import optional_lib  # BUG: Import should be at top
+        if optional_lib is None:
+            raise ImportError("optional_lib not available")
 
         return optional_lib.process()
     except ImportError:

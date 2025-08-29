@@ -62,10 +62,10 @@ class TestRectangle:
     def test_is_square(self):
         """Test square detection."""
         rect = Rectangle(4, 5)
-        assert rect.is_square() == False
+        assert not rect.is_square()
 
         square = Rectangle(3, 3)
-        assert square.is_square() == True
+        assert square.is_square()
 
 
 class TestEmployee:
@@ -141,11 +141,11 @@ class TestEmailValidator:
 
     def test_is_valid(self):
         """Test email validation."""
-        assert EmailValidator.is_valid("user@example.com") == True
-        assert EmailValidator.is_valid("user.name@example.co.uk") == True
-        assert EmailValidator.is_valid("invalid.email") == False
-        assert EmailValidator.is_valid("@example.com") == False
-        assert EmailValidator.is_valid("user@") == False
+        assert EmailValidator.is_valid("user@example.com")
+        assert EmailValidator.is_valid("user.name@example.co.uk")
+        assert not EmailValidator.is_valid("invalid.email")
+        assert not EmailValidator.is_valid("@example.com")
+        assert not EmailValidator.is_valid("user@")
 
     def test_normalize(self):
         """Test email normalization."""

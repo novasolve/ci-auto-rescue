@@ -108,13 +108,6 @@ class SafetyConfig:
             # TODO: Load safety limits from YAML config
             pass
 
-Safety limits for Nova CI-Rescue operations.
-Configures maximum allowed changes to prevent accidental large-scale modifications.
-"""
-
-from typing import Optional
-from pathlib import Path
-
 
 class SafetyLimits:
     """Safety limits for patch application and PR operations."""

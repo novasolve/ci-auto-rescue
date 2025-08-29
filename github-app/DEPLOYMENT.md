@@ -12,6 +12,7 @@ This guide covers deploying the Nova CI-Rescue GitHub App to Fly.io for producti
 ## Quick Deployment
 
 ### 1. Clone and Setup
+
 ```bash
 git clone https://github.com/ci-auto-rescue/ci-auto-rescue.git
 cd ci-auto-rescue/github-app
@@ -19,11 +20,13 @@ npm install
 ```
 
 ### 2. Create Fly.io App
+
 ```bash
 flyctl launch --name nova-ci-rescue
 ```
 
 ### 3. Configure Secrets
+
 ```bash
 # GitHub App credentials
 flyctl secrets set APP_ID=your_app_id
@@ -35,11 +38,13 @@ flyctl secrets set OPENAI_API_KEY=your_openai_api_key
 ```
 
 ### 4. Create Persistent Storage
+
 ```bash
 flyctl volumes create data --size 1
 ```
 
 ### 5. Deploy
+
 ```bash
 flyctl deploy
 ```
@@ -77,14 +82,14 @@ primary_region = "iad"
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `APP_ID` | GitHub App ID | Yes |
-| `PRIVATE_KEY` | GitHub App private key content | Yes |
-| `WEBHOOK_SECRET` | GitHub webhook secret | Yes |
-| `OPENAI_API_KEY` | OpenAI API key for AI features | No |
-| `NODE_ENV` | Environment (production) | No |
-| `PORT` | Port to listen on (8080) | No |
+| Variable         | Description                    | Required |
+| ---------------- | ------------------------------ | -------- |
+| `APP_ID`         | GitHub App ID                  | Yes      |
+| `PRIVATE_KEY`    | GitHub App private key content | Yes      |
+| `WEBHOOK_SECRET` | GitHub webhook secret          | Yes      |
+| `OPENAI_API_KEY` | OpenAI API key for AI features | No       |
+| `NODE_ENV`       | Environment (production)       | No       |
+| `PORT`           | Port to listen on (8080)       | No       |
 
 ## Health Checks
 
@@ -95,6 +100,7 @@ The app provides several health endpoints:
 - `GET /probe` - Detailed diagnostics
 
 ### Health Check Response
+
 ```json
 {
   "status": "healthy",
@@ -114,18 +120,22 @@ The app provides several health endpoints:
 ## Monitoring
 
 ### Logs
+
 ```bash
 flyctl logs
 ```
 
 ### Metrics
+
 Monitor the `/health` endpoint for:
+
 - Response time
 - GitHub API connectivity
 - Installation count
 - Error rates
 
 ### Scaling
+
 ```bash
 # Scale up
 flyctl scale count 2
@@ -139,15 +149,19 @@ flyctl scale count 1
 ### Common Issues
 
 1. **Health check failures**
+
    ```bash
    flyctl logs | grep health
    ```
+
    Check GitHub App credentials and network connectivity.
 
 2. **Webhook delivery failures**
+
    ```bash
    flyctl logs | grep webhook
    ```
+
    Verify webhook secret matches GitHub App configuration.
 
 3. **Storage issues**
@@ -157,6 +171,7 @@ flyctl scale count 1
    Check if data volume is properly mounted.
 
 ### Rollback
+
 ```bash
 flyctl releases
 flyctl releases rollback <version>
@@ -182,19 +197,23 @@ For GitHub Marketplace listing:
 ## Maintenance
 
 ### Updates
+
 ```bash
 git pull origin main
 flyctl deploy
 ```
 
 ### Backups
+
 ```bash
 # Backup installation data
 flyctl ssh sftp get /data/installations.json
 ```
 
 ### Monitoring
+
 Set up monitoring for:
+
 - Application logs
 - Health endpoint status
 - Resource usage

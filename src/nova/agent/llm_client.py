@@ -171,7 +171,6 @@ class LLMClient:
 
         # Daily usage tracking and alerts
         self._increment_daily_usage()
-        start = time.time()
         try:
             if self.provider == "openai":
                 # Force OpenAI params, respecting env MAX_TOKENS
@@ -189,7 +188,6 @@ class LLMClient:
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
         finally:
-            elapsed = time.time() - start
             logger = get_logger()
             # if elapsed > self.settings.llm_call_timeout_sec:
             #     # logger.warning(f"LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")

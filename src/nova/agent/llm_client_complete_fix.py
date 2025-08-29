@@ -4,7 +4,6 @@ This module focuses on pushing the LLM to analyze and fix ALL test failures at o
 """
 
 from typing import Dict, Any, List, Optional
-import json
 
 
 def build_comprehensive_planner_prompt(failing_tests: List[Dict[str, Any]], 
@@ -41,7 +40,7 @@ def build_comprehensive_planner_prompt(failing_tests: List[Dict[str, Any]],
             prompt += f"\n❌ Test: {test.get('name', 'unknown')}\n"
             prompt += f"   Line: {test.get('line', 0)}\n"
             prompt += f"   Error Type: {test.get('error_type', 'Unknown')}\n"
-            prompt += f"   Full Error:\n"
+            prompt += "   Full Error:\n"
             error_msg = test.get('short_traceback', 'No traceback')
             prompt += f"   {error_msg}\n"
             prompt += "\n"

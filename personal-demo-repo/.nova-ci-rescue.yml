@@ -1,0 +1,36 @@
+# Nova CI-Rescue Configuration
+# This file configures Nova's behavior for fixing failing tests
+
+# Maximum number of iterations Nova should attempt
+max_iters: 5
+
+# File paths to include/exclude from fixes
+paths:
+  include:
+    - "calculator.py"
+    - "test_calculator.py"
+  exclude:
+    - ".github/**"
+    - "docs/**"
+
+# When to trigger Nova (optional)
+triggers:
+  # Only act when PR has this label
+  only_on_labels: []
+  # Only act on default branch
+  only_default_branch: false
+
+# Programming language (for better AI context)
+language: python
+
+# Additional safety settings
+safety:
+  # Don't modify these file types
+  protected_files:
+    - "*.yml"
+    - "*.yaml"
+    - "*.md"
+    - "requirements.txt"
+
+# Logging level
+log_level: info

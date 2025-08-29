@@ -16,9 +16,9 @@ on:
 
 # Permissions needed for Nova CI-Rescue
 permissions:
-  contents: write      # Needed for pushing fixes
+  contents: write # Needed for pushing fixes
   pull-requests: write # For commenting or opening PRs
-  issues: write        # For commenting on issues
+  issues: write # For commenting on issues
 
 jobs:
   test-and-auto-fix:
@@ -33,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |

@@ -5,7 +5,6 @@ PR Generator - Uses GPT-5 to create pull request descriptions and submit them vi
 import subprocess
 import os
 import requests
-import json
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import shutil
@@ -241,11 +240,11 @@ The following files were modified:
                         )
                         if result.returncode == 0:
                             stdout = (result.stdout or "").strip()
-                            url_line = next((l for l in stdout.splitlines() if l.startswith("https://github.com/")), "")
+                            url_line = next((line for line in stdout.splitlines() if line.startswith("https://github.com/")), "")
                             return True, (url_line or stdout or "PR created")
                         else:
-                            cli_err = (result.stderr or result.stdout or "").strip()
                             # Fall through to REST API with token
+                            pass
                     except Exception:
                         # Fall through to REST API with token
                         pass
@@ -316,7 +315,7 @@ The following files were modified:
                 prs = response.json()
                 return len(prs) > 0
             return False
-        except requests.RequestException as e:
+        except requests.RequestException:
             return False
     
     def _get_repository_info(self) -> Optional[Tuple[str, str]]:
@@ -352,7 +351,7 @@ The following files were modified:
                     
                     if len(parts) >= 2:
                         return parts[0], parts[1]
-        except Exception as e:
+        except Exception:
             # Failed to get repository info from git remote
             pass
         

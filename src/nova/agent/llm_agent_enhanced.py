@@ -459,14 +459,14 @@ class EnhancedLLMAgent:
                     text=True,
                 )
 
-                if hasattr(self, "verbose") and self.verbose and stash_result.stderr:
-                    console.print(f"[dim]Stash stderr: {stash_result.stderr}[/dim]")
-
                 try:
                     # Apply patch temporarily using nova's apply function that handles FILE_REPLACE
                     from rich.console import Console
 
                     console = Console()
+
+                    if hasattr(self, "verbose") and self.verbose and stash_result.stderr:
+                        console.print(f"[dim]Stash stderr: {stash_result.stderr}[/dim]")
                     console.print(
                         "[cyan]🧪 Critic running tests with patch applied...[/cyan]"
                     )
@@ -549,7 +549,7 @@ class EnhancedLLMAgent:
                     subprocess.run(
                         ["git", "stash", "pop"], cwd=repo_path, capture_output=True
                     )
-                except:
+                except Exception:
                     pass
                 actual_test_results = {"error": f"Failed to test patch: {str(e)}"}
 
@@ -601,10 +601,10 @@ class EnhancedLLMAgent:
                 # Debug log removed for demo
                 # Fallback: approve small/safe patches when critic is silent
                 patch_lines = patch.split("\n")
-                files_touched = sum(1 for l in patch_lines if l.startswith("+++ b/"))
+                files_touched = sum(1 for line in patch_lines if line.startswith("+++ b/"))
                 if files_touched == 0:
                     files_touched = sum(
-                        1 for l in patch_lines if l.startswith("FILE_REPLACE:")
+                        1 for line in patch_lines if line.startswith("FILE_REPLACE:")
                     )
                 protected = [
                     ".github/",
@@ -613,7 +613,7 @@ class EnhancedLLMAgent:
                     ".env",
                     "requirements.txt",
                 ]
-                safe = not any(p in l for l in patch_lines for p in protected)
+                safe = not any(p in line for line in patch_lines for p in protected)
 
                 # Debug log removed for demo
 
@@ -638,10 +638,10 @@ class EnhancedLLMAgent:
             traceback.print_exc()
             # Fallback: approve small/safe patches if critic errors out
             patch_lines = patch.split("\n")
-            files_touched = sum(1 for l in patch_lines if l.startswith("+++ b/"))
+            files_touched = sum(1 for line in patch_lines if line.startswith("+++ b/"))
             if files_touched == 0:
                 files_touched = sum(
-                    1 for l in patch_lines if l.startswith("FILE_REPLACE:")
+                    1 for line in patch_lines if line.startswith("FILE_REPLACE:")
                 )
             if len(patch_lines) < 1000 and files_touched <= 3:
                 return True, "Auto-approved: critic errored but patch is small & safe"

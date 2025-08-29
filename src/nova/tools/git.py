@@ -247,7 +247,7 @@ class GitBranchManager:
                 files_str = ", ".join(file_names)
                 message = f"🤖 Fix failing tests in {files_str}"
             else:
-                message = f"🤖 Apply automated fixes to resolve test failures"
+                message = "🤖 Apply automated fixes to resolve test failures"
 
         if changed_files is not None:
             BATCH_SIZE = 100
@@ -408,8 +408,8 @@ class GitBranchManager:
                 cmd[2:2] = ["-R", repo_slug]
             if draft:
                 cmd.append("--draft")
-            for l in labels or []:
-                cmd += ["--label", l]
+            for label in labels or []:
+                cmd += ["--label", label]
             for r in reviewers or []:
                 cmd += ["--reviewer", r]
             for a in assignees or []:

@@ -13,9 +13,11 @@ A GitHub App that automatically fixes failing CI tests using AI-powered analysis
 ## Installation
 
 ### Option 1: One-Click Install (Recommended)
+
 Visit the [GitHub Marketplace](https://github.com/marketplace/nova-ci-rescue) and click "Install" to add the app to your repositories.
 
 ### Option 2: Manual Setup
+
 1. Go to your repository's Settings → Developer settings → GitHub Apps
 2. Click "New GitHub App"
 3. Configure with the following settings:
@@ -62,12 +64,14 @@ safety:
 ## Development
 
 ### Local Development
+
 ```bash
 npm install
 npm run dev
 ```
 
 ### Docker
+
 ```bash
 docker build -t nova-ci-rescue .
 docker run -p 8080:8080 nova-ci-rescue

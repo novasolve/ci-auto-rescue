@@ -4,7 +4,6 @@ Test script to verify the patch application fix.
 """
 
 import sys
-import tempfile
 from pathlib import Path
 
 # Add the src directory to Python path

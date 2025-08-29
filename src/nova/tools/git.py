@@ -575,28 +575,3 @@ def managed_fix_branch(repo_path: Path, verbose: bool = False):
         raise
     finally:
         manager.restore_signal_handler()
-
-        manager.cleanup(success=False)
-        raise
-    finally:
-        manager.restore_signal_handler()
-
-        manager.cleanup(success=False)
-        raise
-    finally:
-        manager.restore_signal_handler()
-
-        manager.cleanup(success=False)
-        raise
-    finally:
-        manager.restore_signal_handler()
-
-        manager.cleanup(success=False)
-        raise
-    finally:
-        manager.restore_signal_handler()
-
-        manager.cleanup(success=False)
-        raise
-    finally:
-        manager.restore_signal_handler()

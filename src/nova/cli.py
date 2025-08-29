@@ -70,21 +70,21 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
     
     # Exit reason with appropriate styling
     if reason == "success":
-        console.print(f"[bold green]✅ Exit Reason: SUCCESS - All tests passing![/bold green]")
+        console.print("[bold green]✅ Exit Reason: SUCCESS - All tests passing![/bold green]")
     elif reason == "timeout":
         console.print(f"[bold red]⏰ Exit Reason: TIMEOUT - Exceeded {state.timeout_seconds}s limit[/bold red]")
     elif reason == "max_iters":
         console.print(f"[bold red]🔄 Exit Reason: MAX ITERATIONS - Reached {state.max_iterations} iterations[/bold red]")
     elif reason == "no_patch":
-        console.print(f"[bold yellow]⚠️ Exit Reason: NO PATCH - Could not generate fix[/bold yellow]")
+        console.print("[bold yellow]⚠️ Exit Reason: NO PATCH - Could not generate fix[/bold yellow]")
     elif reason == "patch_rejected":
-        console.print(f"[bold yellow]⚠️ Exit Reason: PATCH REJECTED - Critic rejected patch[/bold yellow]")
+        console.print("[bold yellow]⚠️ Exit Reason: PATCH REJECTED - Critic rejected patch[/bold yellow]")
     elif reason == "patch_error":
-        console.print(f"[bold red]❌ Exit Reason: PATCH ERROR - Failed to apply patch[/bold red]")
+        console.print("[bold red]❌ Exit Reason: PATCH ERROR - Failed to apply patch[/bold red]")
     elif reason == "interrupted":
-        console.print(f"[bold yellow]🛑 Exit Reason: INTERRUPTED - User cancelled operation[/bold yellow]")
+        console.print("[bold yellow]🛑 Exit Reason: INTERRUPTED - User cancelled operation[/bold yellow]")
     elif reason == "error":
-        console.print(f"[bold red]❌ Exit Reason: ERROR - Unexpected error occurred[/bold red]")
+        console.print("[bold red]❌ Exit Reason: ERROR - Unexpected error occurred[/bold red]")
     else:
         console.print(f"[bold yellow]Exit Reason: {reason.upper()}[/bold yellow]")
     
@@ -233,12 +233,12 @@ def fix(
     from nova.tools.lock import nova_lock
     
     try:
-            branch_name = git_manager.create_fix_branch()
-            console.print(f"[dim]Working on branch: {branch_name}[/dim]")
-            
+        branch_name = git_manager.create_fix_branch()
+        console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+
         # Set up Ctrl+C signal handler for clean abort
         git_manager.setup_signal_handler()
-            
+
         # Initialize settings and telemetry
         settings = NovaSettings()
         if config_data and config_data.model:
@@ -250,24 +250,18 @@ def fix(
             "max_iterations": final_max_iters,
             "timeout": final_timeout
         })
-        
-            # Initialize agent state
-            state = AgentState(
-                repo_path=repo_path,
-            max_iterations=final_max_iters,
-            timeout_seconds=final_timeout,
+
+        # Initialize agent state and run initial tests
+        state, failing_tests, initial_junit_xml = _initialize_agent_and_run_tests(
+            repo_path, final_max_iters, final_timeout, telemetry, verbose
         )
 
-        # Step 1: Run tests to identify initial failures
-        runner = TestRunner(repo_path, verbose=verbose)
-        failing_tests, initial_junit_xml = runner.run_tests(max_failures=5)
-
-        # Optional fault localization (mark suspected files based on tracebacks)
-        try:
-            from nova.runner.test_runner import FaultLocalizer
-            FaultLocalizer.localize_failures(failing_tests, coverage_data=None)
-        except Exception:
-            pass
+            # Optional fault localization (mark suspected files based on tracebacks)
+            try:
+                from nova.runner.test_runner import FaultLocalizer
+                FaultLocalizer.localize_failures(failing_tests, coverage_data=None)
+            except Exception:
+                pass
             
             # Save initial test report
             if initial_junit_xml:
@@ -307,7 +301,7 @@ def fix(
                                 event_data = json.load(f)
                             if "pull_request" in event_data:
                                 pr_num = str(event_data["pull_request"]["number"])
-                        except:
+                        except Exception:
                             pass
             if token and repo:
                 try:
@@ -529,7 +523,7 @@ def fix(
                             event_data = json.load(f)
                         if "pull_request" in event_data:
                             pr_num = str(event_data["pull_request"]["number"])
-                    except:
+                    except Exception:
                         pass
         if token and repo:
             try:
@@ -661,7 +655,7 @@ def fix(
                                 event_data = json.load(f)
                             if "pull_request" in event_data:
                                 pr_num = str(event_data["pull_request"]["number"])
-                        except:
+                        except Exception:
                             pass
             if token and repo:
                 try:
@@ -883,7 +877,7 @@ def fix(
                             event_data = json.load(f)
                         if "pull_request" in event_data:
                             pr_num = str(event_data["pull_request"]["number"])
-                    except:
+                    except Exception:
                         pass
         if token and repo:
             try:
@@ -1045,7 +1039,7 @@ def config():
                 console.print(f"[cyan]Docker:[/cyan] [green]✅ Available[/green]")
             else:
                 console.print(f"[cyan]Docker:[/cyan] [yellow]⚠️ Not available (sandboxing disabled)[/yellow]")
-        except:
+        except Exception:
             console.print(f"[cyan]Docker:[/cyan] [yellow]⚠️ Not available (sandboxing disabled)[/yellow]")
         
     except Exception as e:

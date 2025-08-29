@@ -36,7 +36,6 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
     i = 0
 
     # Check if patch appears truncated
-    patch_appears_truncated = False
     if lines:
         last_line = lines[-1].strip()
         # Common signs of truncation
@@ -48,7 +47,6 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
             or "truncated" in last_line.lower()
             or last_line.endswith(("...", "…"))
         ):
-            patch_appears_truncated = True
             if verbose:
                 print(f"Warning: Patch appears truncated. Last line: '{last_line}'")
 

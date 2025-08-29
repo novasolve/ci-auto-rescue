@@ -181,9 +181,6 @@ def main() -> int:
                 print(f"Repo: {owner}/{name}")
                 if perms:
                     print(f"Permissions: {json.dumps(perms)}")
-                    can_pr = bool(
-                        perms.get("pull", False)
-                    )  # listing is enough; PR creation needs write on forks
                     print(
                         f"PR creation likely requires: repo access with write on target; current perms -> push={perms.get('push', False)}"
                     )

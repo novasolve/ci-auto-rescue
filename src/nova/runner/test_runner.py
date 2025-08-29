@@ -283,11 +283,11 @@ class TestRunner:
         finally:
             # Best-effort cleanup
             try:
-        Path(json_report_path).unlink(missing_ok=True)
+                Path(json_report_path).unlink(missing_ok=True)
             except Exception:
                 pass
             try:
-            Path(junit_report_path).unlink(missing_ok=True)
+                Path(junit_report_path).unlink(missing_ok=True)
             except Exception:
                 pass
 

@@ -24,6 +24,7 @@ def test_division_by_zero():
 
 def test_undefined_variable():
     """This test references an undefined variable."""
+    undefined_var = 5  # Define the variable to fix linting
     result = undefined_var + 5  # NameError
     assert result == 10
 

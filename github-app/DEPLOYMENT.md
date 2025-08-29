@@ -29,7 +29,7 @@ cd nova-ci-rescue
 flyctl auth login
 
 # Create the Fly app (first time only)
-flyctl apps create ci-auto-rescue --org personal
+flyctl apps create nova-ci-rescue --org personal
 ```
 
 ### 2. Create Persistent Volume (Optional but Recommended)
@@ -71,7 +71,7 @@ flyctl logs
 
 ```bash
 # Check health endpoint
-curl https://ci-auto-rescue.fly.dev/health
+curl https://nova-ci-rescue.fly.dev/health
 
 # Expected response:
 # {
@@ -225,9 +225,9 @@ Once deployed and tested:
 
 1. Update GitHub App settings:
 
-   - Homepage URL: `https://ci-auto-rescue.fly.dev`
-   - Webhook URL: `https://ci-auto-rescue.fly.dev/api/github/webhooks`
-   - Setup URL: `https://ci-auto-rescue.fly.dev/setup`
+   - Homepage URL: `https://nova-ci-rescue.fly.dev`
+   - Webhook URL: `https://nova-ci-rescue.fly.dev/api/github/webhooks`
+   - Setup URL: `https://nova-ci-rescue.fly.dev/setup`
 
 2. Submit to Marketplace:
    - Go to your GitHub App settings
@@ -239,4 +239,4 @@ Once deployed and tested:
 For issues or questions:
 
 - GitHub Issues: https://github.com/novasolve/nova-ci-rescue/issues
-- Documentation: https://ci-auto-rescue.fly.dev/setup
+- Documentation: https://nova-ci-rescue.fly.dev/setup

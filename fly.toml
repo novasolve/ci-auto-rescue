@@ -1,5 +1,5 @@
 # Nova CI-Rescue GitHub App - Fly.io Configuration
-app = "ci-auto-rescue"
+app = "nova-ci-rescue"
 primary_region = "sjc"
 
 [build]

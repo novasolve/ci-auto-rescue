@@ -1,7 +1,7 @@
 # Production-ready Fly.io configuration for Nova CI-Rescue GitHub App
 # This configuration ensures high availability and performance
 
-app = "ci-auto-rescue"
+app = "nova-ci-rescue"
 primary_region = "sjc"  # San Jose - good for West Coast
 secondary_regions = ["iad", "fra"]  # Virginia (East Coast) and Frankfurt (Europe)
 

@@ -77,20 +77,51 @@ export default (app, { getRouter }) => {
     const router = getRouter('/');
 
     // Health endpoint for GitHub Marketplace and Fly.io health checks
-    router.get('/health', (req, res) => {
+    router.get('/health', async (req, res) => {
       const memoryUsage = process.memoryUsage();
-      res.status(200).json({
-        status: 'healthy',
+      
+      // Test GitHub authentication
+      let githubAuth = 'unchecked';
+      let githubError = null;
+      
+      try {
+        // Check if we have the required credentials
+        if (process.env.APP_ID && process.env.PRIVATE_KEY && process.env.WEBHOOK_SECRET) {
+          // Try to authenticate as the app
+          const auth = await app.auth();
+          if (auth) {
+            githubAuth = 'authenticated';
+          }
+        } else {
+          githubAuth = 'missing_credentials';
+          githubError = 'Missing APP_ID, PRIVATE_KEY, or WEBHOOK_SECRET';
+        }
+      } catch (error) {
+        githubAuth = 'failed';
+        githubError = error.message;
+      }
+      
+      const healthStatus = {
+        status: githubAuth === 'authenticated' ? 'healthy' : 'degraded',
         service: 'nova-ci-rescue',
         timestamp: new Date().toISOString(),
         version: process.env.APP_VERSION || '1.0.0',
         installations_count: installations.size,
+        github: {
+          auth_status: githubAuth,
+          error: githubError,
+          app_id: process.env.APP_ID ? 'configured' : 'missing',
+          private_key: process.env.PRIVATE_KEY ? 'configured' : 'missing',
+          webhook_secret: process.env.WEBHOOK_SECRET ? 'configured' : 'missing'
+        },
         memory: {
           used_mb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
           total_mb: Math.round(memoryUsage.heapTotal / 1024 / 1024)
         },
         uptime_seconds: Math.floor(process.uptime())
-      });
+      };
+      
+      res.status(githubAuth === 'authenticated' ? 200 : 503).json(healthStatus);
     });
 
     // Root endpoint for basic checks

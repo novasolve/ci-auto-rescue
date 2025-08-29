@@ -22,7 +22,7 @@ primary_region = "sjc"
   max_machines_running = 3    # Scale up to 3 if needed
 
   # Health check for GitHub Marketplace requirements
-  [http_service.checks]
+  [[http_service.checks]]
     interval = "15s"
     grace_period = "30s"
     method = "GET"
@@ -34,7 +34,7 @@ primary_region = "sjc"
       Accept = "application/json"
 
 # Auto-restart on crashes
-[restart]
+[[restart]]
   policy = "always"
   retries = 3
 

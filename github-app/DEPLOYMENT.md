@@ -5,6 +5,7 @@ This guide covers deploying the Nova CI-Rescue GitHub App to Fly.io for producti
 ## Prerequisites
 
 1. **GitHub App Created**
+
    - Go to GitHub Settings > Developer settings > GitHub Apps
    - Create a new GitHub App with these permissions:
      - **Repository**: Contents (read/write), Issues (write), Pull requests (write), Actions (write), Checks (write)
@@ -90,14 +91,18 @@ curl https://ci-auto-rescue.fly.dev/health
 ## Configuration Options
 
 ### Basic Configuration (Current)
+
 The default `fly.toml` provides:
+
 - 1 machine always running
 - 256MB RAM (sufficient for most cases)
 - Auto-scaling up to 3 machines
 - Health checks every 15 seconds
 
 ### Advanced Configuration
+
 For high-traffic apps, use `fly.toml.production`:
+
 - 512MB RAM per machine
 - Scale up to 5 machines
 - Multi-region deployment
@@ -105,6 +110,7 @@ For high-traffic apps, use `fly.toml.production`:
 - Prometheus metrics endpoint
 
 To use advanced configuration:
+
 ```bash
 cp fly.toml.production fly.toml
 flyctl deploy
@@ -113,6 +119,7 @@ flyctl deploy
 ## Monitoring
 
 ### View Metrics
+
 ```bash
 # Real-time metrics
 flyctl dashboard metrics
@@ -125,6 +132,7 @@ flyctl ssh console
 ```
 
 ### Health Endpoints
+
 - `/` - Human-friendly status page
 - `/health` - JSON health check
 - `/probe` - Detailed diagnostics
@@ -133,6 +141,7 @@ flyctl ssh console
 ## Scaling
 
 ### Manual Scaling
+
 ```bash
 # Scale to specific count
 flyctl scale count 2
@@ -142,7 +151,9 @@ flyctl scale show
 ```
 
 ### Auto-scaling
+
 The app automatically scales based on load:
+
 - Minimum: 1 machine (always ready)
 - Maximum: 3 machines (or 5 with advanced config)
 - Scales at 80% connection capacity
@@ -150,6 +161,7 @@ The app automatically scales based on load:
 ## Troubleshooting
 
 ### Check Logs
+
 ```bash
 flyctl logs --tail
 ```
@@ -157,10 +169,12 @@ flyctl logs --tail
 ### Common Issues
 
 1. **Health checks failing**
+
    - Ensure PORT environment variable is not set
    - Check internal_port matches Dockerfile EXPOSE
 
 2. **Webhooks not received**
+
    - Verify webhook URL in GitHub App settings
    - Check webhook secret matches
 
@@ -169,6 +183,7 @@ flyctl logs --tail
    - Check for memory leaks in logs
 
 ### Restart App
+
 ```bash
 flyctl apps restart
 ```
@@ -176,13 +191,16 @@ flyctl apps restart
 ## Updates
 
 ### Deploy Updates
+
 ```bash
 git pull
 flyctl deploy
 ```
 
 ### Zero-downtime Deployment
+
 The rolling deployment strategy ensures:
+
 - New version deployed to new machines
 - Health checks pass before switching traffic
 - Old machines terminated after success
@@ -190,11 +208,13 @@ The rolling deployment strategy ensures:
 ## Backup
 
 ### Export Installation Data
+
 ```bash
 flyctl ssh console -C "cat /data/installations.json" > installations-backup.json
 ```
 
 ### Restore Installation Data
+
 ```bash
 cat installations-backup.json | flyctl ssh console -C "cat > /data/installations.json"
 ```
@@ -204,6 +224,7 @@ cat installations-backup.json | flyctl ssh console -C "cat > /data/installations
 Once deployed and tested:
 
 1. Update GitHub App settings:
+
    - Homepage URL: `https://ci-auto-rescue.fly.dev`
    - Webhook URL: `https://ci-auto-rescue.fly.dev/api/github/webhooks`
    - Setup URL: `https://ci-auto-rescue.fly.dev/setup`
@@ -216,5 +237,6 @@ Once deployed and tested:
 ## Support
 
 For issues or questions:
+
 - GitHub Issues: https://github.com/novasolve/nova-ci-rescue/issues
 - Documentation: https://ci-auto-rescue.fly.dev/setup

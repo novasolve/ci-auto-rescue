@@ -7,7 +7,7 @@ from data_structures import (
 
 class TestStack:
     """Test Stack implementation."""
-    
+
     def test_push_pop(self):
         """Test push and pop operations."""
         stack = Stack()
@@ -17,7 +17,7 @@ class TestStack:
         assert stack.pop() == 3
         assert stack.pop() == 2
         assert stack.pop() == 1
-    
+
     def test_peek(self):
         """Test peek operation."""
         stack = Stack()
@@ -25,14 +25,14 @@ class TestStack:
         stack.push(2)
         assert stack.peek() == 2
         assert stack.peek() == 2  # Should not remove
-    
+
     def test_is_empty(self):
         """Test empty check."""
         stack = Stack()
         assert stack.is_empty() == True
         stack.push(1)
         assert stack.is_empty() == False
-    
+
     def test_pop_empty(self):
         """Test pop on empty stack."""
         stack = Stack()
@@ -41,7 +41,7 @@ class TestStack:
 
 class TestQueue:
     """Test Queue implementation."""
-    
+
     def test_enqueue_dequeue(self):
         """Test enqueue and dequeue operations."""
         queue = Queue()
@@ -51,7 +51,7 @@ class TestQueue:
         assert queue.dequeue() == 1  # FIFO
         assert queue.dequeue() == 2
         assert queue.dequeue() == 3
-    
+
     def test_size(self):
         """Test size method."""
         queue = Queue()
@@ -63,7 +63,7 @@ class TestQueue:
 
 class TestLinkedList:
     """Test LinkedList implementation."""
-    
+
     def test_append(self):
         """Test append operation."""
         ll = LinkedList()
@@ -73,7 +73,7 @@ class TestLinkedList:
         assert ll.find(1) == True
         assert ll.find(2) == True
         assert ll.find(3) == True
-    
+
     def test_prepend(self):
         """Test prepend operation."""
         ll = LinkedList()
@@ -81,7 +81,7 @@ class TestLinkedList:
         ll.prepend(2)
         assert ll.head.data == 2
         assert ll.head.next.data == 1
-    
+
     def test_find(self):
         """Test find operation."""
         ll = LinkedList()

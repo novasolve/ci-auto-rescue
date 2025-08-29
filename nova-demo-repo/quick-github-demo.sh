@@ -79,7 +79,7 @@ PR_URL=$(gh pr create \
 
 This PR includes several optimizations:
 - ⚡ Faster addition
-- 🎯 Streamlined subtraction  
+- 🎯 Streamlined subtraction
 - 📈 Removed unnecessary checks
 
 These changes should improve performance significantly!" \
@@ -89,7 +89,7 @@ These changes should improve performance significantly!" \
 
 This PR includes several optimizations:
 - ⚡ Faster addition
-- 🎯 Streamlined subtraction  
+- 🎯 Streamlined subtraction
 - 📈 Removed unnecessary checks
 
 These changes should improve performance significantly!" \

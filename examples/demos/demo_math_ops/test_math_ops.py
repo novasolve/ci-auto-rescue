@@ -2,7 +2,7 @@
 
 import pytest
 from math_ops import (
-    add, subtract, multiply, divide, power, 
+    add, subtract, multiply, divide, power,
     factorial, fibonacci, is_prime, gcd, average
 )
 
@@ -32,7 +32,7 @@ def test_division():
     assert divide(10, 2) == 5
     assert divide(7, 2) == 3.5
     assert divide(-6, 3) == -2
-    
+
 def test_division_by_zero():
     """Test division by zero handling."""
     with pytest.raises(ZeroDivisionError):

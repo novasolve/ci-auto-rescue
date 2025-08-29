@@ -3,8 +3,7 @@ Planner node for Nova CI-Rescue agent workflow.
 Generates plans for fixing failing tests using LLM.
 """
 
-from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime
 from rich.console import Console
 

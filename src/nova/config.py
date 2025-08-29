@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -16,6 +17,17 @@ def _default_allowed_domains() -> List[str]:
         "github.com",
         "raw.githubusercontent.com",
     ]
+
+
+def load_yaml_config(config_path: Path) -> Dict[str, Any]:
+    """Load configuration from a YAML file."""
+    try:
+        import yaml
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f) or {}
+    except ImportError:
+        # Fallback if PyYAML is not available
+        raise ImportError("PyYAML is required for YAML config loading. Install with: pip install PyYAML")
 
 
 class NovaSettings(BaseModel):
@@ -125,4 +137,4 @@ def _reset_settings_cache() -> None:
     settings = get_settings()
 
 
-__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache"]
+__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]

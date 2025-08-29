@@ -18,15 +18,15 @@ def main():
     console.print("\n" + "="*70)
     console.print("[bold green]🤖 Nova CI-Rescue - Real OpenAI LLM Demo[/bold green]")
     console.print("="*70)
-    
+
     # Check configuration
     settings = get_settings()
     if not settings.openai_api_key:
         console.print("[red]❌ OpenAI API key not configured![/red]")
         return 1
-    
+
     console.print(f"✅ Using OpenAI Model: [bold cyan]{settings.default_llm_model}[/bold cyan]\n")
-    
+
     # Example failing test
     failing_test = {
         "name": "test_calculator",
@@ -37,13 +37,13 @@ def main():
 E   AssertionError: Expected 6 but got 5
 E   assert 5 == 6"""
     }
-    
+
     # Show the failing test
     console.print("[bold]📋 Failing Test:[/bold]")
     console.print(f"  Name: {failing_test['name']}")
     console.print(f"  File: {failing_test['file']}")
     console.print(f"  Error: AssertionError - Expected 6 but got 5\n")
-    
+
     # Show the test code
     test_code = """def add(a, b):
     return a + b
@@ -51,12 +51,12 @@ E   assert 5 == 6"""
 def test_calculator():
     assert add(2, 3) == 6, f"Expected 6 but got {add(2, 3)}"
 """
-    
+
     console.print("[bold]📝 Test File Content:[/bold]")
     syntax = Syntax(test_code, "python", theme="monokai", line_numbers=True)
     console.print(syntax)
     console.print()
-    
+
     # Initialize LLM agent
     try:
         agent = LLMAgent(Path.cwd())
@@ -64,13 +64,13 @@ def test_calculator():
     except Exception as e:
         console.print(f"[red]❌ Failed to initialize LLM: {e}[/red]")
         return 1
-    
+
     # Step 1: Ask LLM to analyze and plan
     console.print("="*70)
     console.print("[bold cyan]Step 1: LLM Analysis & Planning[/bold cyan]")
     console.print("="*70)
     console.print("[dim]Sending test failure to OpenAI for analysis...[/dim]\n")
-    
+
     try:
         plan = agent.create_plan([failing_test], iteration=1)
         console.print("[bold]🧠 LLM's Analysis:[/bold]")
@@ -81,26 +81,26 @@ def test_calculator():
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         return 1
-    
+
     # Step 2: Generate patch
     console.print("="*70)
     console.print("[bold cyan]Step 2: LLM Patch Generation[/bold cyan]")
     console.print("="*70)
     console.print("[dim]Asking OpenAI to generate a fix...[/dim]\n")
-    
+
     # Create temporary test file for the agent to read
     temp_file = Path("test_calc.py")
     temp_file.write_text(test_code)
-    
+
     try:
         patch = agent.generate_patch([failing_test], iteration=1)
-        
+
         if patch:
             console.print("[bold]🔧 Generated Patch:[/bold]")
             syntax = Syntax(patch, "diff", theme="monokai")
             console.print(syntax)
             console.print()
-            
+
             # Show what the fix does
             if "== 6" in patch and "== 5" in patch:
                 console.print("[green]✅ LLM correctly identified the issue:[/green]")
@@ -117,17 +117,17 @@ def test_calculator():
         # Clean up temp file
         if temp_file.exists():
             temp_file.unlink()
-    
+
     # Step 3: Review
     if patch:
         console.print("="*70)
         console.print("[bold cyan]Step 3: LLM Code Review[/bold cyan]")
         console.print("="*70)
         console.print("[dim]Asking OpenAI to review the patch...[/dim]\n")
-        
+
         try:
             approved, reason = agent.review_patch(patch, [failing_test])
-            
+
             if approved:
                 console.print(f"[green]✅ Patch Approved[/green]")
             else:
@@ -135,7 +135,7 @@ def test_calculator():
             console.print(f"   Reason: {reason}\n")
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
-    
+
     # Summary
     console.print("="*70)
     console.print("[bold green]✨ Demo Complete![/bold green]")
@@ -146,7 +146,7 @@ def test_calculator():
     console.print("  3️⃣  Automated code review before applying changes")
     console.print("\n[dim]Nova CI-Rescue uses this same process to automatically[/dim]")
     console.print("[dim]fix all failing tests in your repository.[/dim]\n")
-    
+
     return 0
 
 if __name__ == "__main__":

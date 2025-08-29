@@ -11,7 +11,7 @@ Nova CI-Rescue is an autonomous agent that fixes failing tests in repositories. 
 - **Tool Suite**: Git operations, diff application, HTTP client with allowlist
 - **Package Structure**: Proper Python package with pyproject.toml and entry points
 
-### ⚠️ What's Partially Done  
+### ⚠️ What's Partially Done
 - **CLI**: Referenced but not implemented
 - **Telemetry**: System exists but node-level logging missing
 - **Agent Loop**: Design complete but code missing
@@ -126,7 +126,7 @@ Nova CI-Rescue is an autonomous agent that fixes failing tests in repositories. 
 
 ### 🔥 P1 - Critical (Do next)
 1. Complete telemetry integration
-2. Add pytest integration  
+2. Add pytest integration
 3. Implement LLM clients
 4. Create test repository
 5. Build evaluation suite
@@ -163,30 +163,30 @@ def fix(
     settings = get_settings()
     settings.max_iters = max_iters
     settings.run_timeout_sec = timeout
-    
+
     # Initialize telemetry
     logger = JSONLLogger(settings, enabled=not no_telemetry)
     run_id = logger.start_run(repo_path)
-    
+
     try:
         # Create fix branch
         repo = Path(repo_path)
         branch_name = f"nova-fix/{run_id}"
         ensure_branch(repo, branch_name)
-        
+
         # Get initial failing tests
         test_results = run_pytest(repo, settings.test_timeout_sec)
         if not test_results.failures:
             print("✅ All tests passing! Nothing to fix.")
             return
-        
+
         # Build and run agent
         agent = build_agent(settings, logger)
         result = agent.run(
             repo_path=repo,
             failing_tests=test_results.failures
         )
-        
+
         # Print results
         if result.success:
             print(f"✅ Fixed {result.fixed_count} tests!")
@@ -194,7 +194,7 @@ def fix(
         else:
             print(f"❌ Could not fix all tests")
             print(f"Fixed: {result.fixed_count}/{len(test_results.failures)}")
-            
+
     except KeyboardInterrupt:
         print("\n⚠️ Interrupted! Rolling back changes...")
         reset_to_head(repo)
@@ -228,30 +228,30 @@ class AgentState(BaseModel):
 ```python
 def planner_node(state: AgentState, llm: LLMClient, logger: JSONLLogger) -> AgentState:
     """Generate fix plan based on failing tests."""
-    
+
     # Log start
     logger.log_event("planner_start", {
         "iteration": state.current_iteration,
         "failing_count": len(state.failing_tests)
     })
-    
+
     # Generate plan via LLM
     prompt = build_planner_prompt(state.failing_tests)
     response = llm.complete(
         system="You are an expert test fixer...",
         user=prompt
     )
-    
+
     # Parse plan
     plan = parse_plan(response)
     state.plan = plan
-    
+
     # Log result
     logger.log_event("planner_complete", {
         "plan_steps": len(plan),
         "plan": plan[:3]  # First 3 steps
     })
-    
+
     return state
 ```
 

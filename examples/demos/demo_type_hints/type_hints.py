@@ -76,14 +76,14 @@ def calculate_average(numbers: List[Union[int, float]]) -> float:
 
 class DataProcessor:
     """Data processor with type hint bugs."""
-    
+
     def __init__(self, data: List[Dict[str, Any]]):
         self.data: Dict = data  # BUG: Wrong type annotation
-    
+
     def process(self) -> List[str]:
         """Process data - wrong return type."""
         return len(self.data)  # BUG: Returns int instead of List[str]
-    
+
     def get_item(self, index: int) -> Optional[Dict[str, Any]]:
         """Get item by index - always returns something."""
         return self.data[index]  # BUG: No bounds checking

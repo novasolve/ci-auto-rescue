@@ -5,17 +5,17 @@ Use this template for every green run — in Slite and in PR comments.
 ```yaml
 # Proof Checklist — Nova CI-Rescue Happy Path
 
-⏱ Duration:  
-🔁 Iterations:  
-🧪 Tests Before → After: `X failed / Y passed` → `0 failed / Y+ passed`  
-🧩 Files changed / LOC:  
-📦 Artifacts path: `.nova/<run>/…`  
+⏱ Duration:
+🔁 Iterations:
+🧪 Tests Before → After: `X failed / Y passed` → `0 failed / Y+ passed`
+🧩 Files changed / LOC:
+📦 Artifacts path: `.nova/<run>/…`
 ✅ Status: **GREEN / FAIL**
 
 Links:
-- Action run: 
-- PR: 
-- Artifacts download: 
+- Action run:
+- PR:
+- Artifacts download:
 - Proof wall entry:
 ```
 
@@ -26,7 +26,7 @@ Links:
 
 ⏱ Duration: 2m 34s
 🔁 Iterations: 3
-🧪 Tests Before → After: `5 failed / 95 passed` → `0 failed / 100 passed`  
+🧪 Tests Before → After: `5 failed / 95 passed` → `0 failed / 100 passed`
 🧩 Files changed / LOC: 3 files / 42 LOC
 📦 Artifacts path: `.nova/20250813T201234Z/`
 ✅ Status: **GREEN**

@@ -97,7 +97,7 @@ echo -e "${YELLOW}$ git commit -m 'feat: optimize calculator performance'${NC}"
 git commit -m "feat: optimize calculator performance
 
 - Improved addition algorithm
-- Simplified subtraction logic  
+- Simplified subtraction logic
 - Removed unnecessary error checks
 - Performance improvements"
 echo ""
@@ -156,7 +156,7 @@ echo -e "${RED}❌ CI Failed! Tests are not passing.${NC}"
 echo ""
 echo "Failed tests:"
 echo "- test_subtraction"
-echo "- test_division_by_zero" 
+echo "- test_division_by_zero"
 echo "- test_square_root_negative"
 echo "- test_average_empty_list"
 echo ""
@@ -188,7 +188,7 @@ cat << 'EOF'
 [Nova] 🔧 Applying fixes:
        ✓ Fixed subtract() to use subtraction operator
        ✓ Added zero check in divide()
-       ✓ Added negative check in square_root()  
+       ✓ Added negative check in square_root()
        ✓ Added empty list check in average()
 
 [Nova] ✅ All tests now pass!

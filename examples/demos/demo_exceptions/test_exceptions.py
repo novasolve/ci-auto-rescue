@@ -57,11 +57,11 @@ def test_recursive_limit():
 def test_validate_age():
     """Test age validation."""
     assert validate_age(25) == True
-    
+
     # Should raise ValueError with message
     with pytest.raises(ValueError, match="Age cannot be negative"):
         validate_age(-5)
-    
+
     # Should raise ValueError for too high age
     with pytest.raises(ValueError, match="Age cannot exceed 150"):
         validate_age(200)
@@ -90,7 +90,7 @@ def test_get_nested_value():
             }
         }
     }
-    
+
     assert get_nested_value(data, ["user", "profile", "name"]) == "John"
     # Should return None for missing keys
     assert get_nested_value(data, ["user", "email"]) is None
@@ -115,15 +115,15 @@ class MockResource:
         self.opened = False
         self.closed = False
         self.should_fail = False
-    
+
     def open(self):
         self.opened = True
-    
+
     def process(self):
         if self.should_fail:
             raise RuntimeError("Processing failed")
         return "data"
-    
+
     def close(self):
         self.closed = True
 
@@ -134,7 +134,7 @@ def test_cleanup_resources():
     result = cleanup_resources(resource)
     assert result == "data"
     assert resource.closed == True
-    
+
     # Failure case - should still close
     resource = MockResource()
     resource.should_fail = True

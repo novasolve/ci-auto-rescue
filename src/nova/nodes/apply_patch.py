@@ -2,7 +2,7 @@
 Apply patch node for Nova CI-Rescue agent workflow.
 """
 
-from pathlib import Path
+
 from typing import Dict, Any, Optional
 from rich.console import Console
 import tempfile

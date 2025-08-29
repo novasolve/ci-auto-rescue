@@ -13,10 +13,10 @@ console = Console()
 
 class ActorNode:
     """Node responsible for generating patches to fix failing tests."""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-    
+
     def execute(
         self,
         state: AgentState,
@@ -26,18 +26,18 @@ class ActorNode:
     ) -> Optional[str]:
         """
         Generate a patch to fix failing tests.
-        
+
         Args:
             state: Current agent state
             llm_agent: LLM agent instance for generating patches
             telemetry: Optional telemetry logger
             critic_feedback: Optional feedback from previous critic rejection
-            
+
         Returns:
             Unified diff string or None if no patch can be generated
         """
         iteration = state.current_iteration
-        
+
         # Log actor start
         if telemetry:
             telemetry.log_event("actor_start", {
@@ -45,19 +45,19 @@ class ActorNode:
                 "plan_available": state.plan is not None,
                 "has_critic_feedback": critic_feedback is not None
             })
-        
+
         if self.verbose:
             console.print(f"[cyan]🎭 Generating patch based on plan...[/cyan]")
-        
+
         # Generate patch with plan context and critic feedback if available
         patch_diff = llm_agent.generate_patch(
-            state.failing_tests, 
-            iteration, 
-            plan=state.plan, 
+            state.failing_tests,
+            iteration,
+            plan=state.plan,
             critic_feedback=critic_feedback,
             state=state
         )
-        
+
         if not patch_diff:
             console.print("[red]❌ Could not generate a patch[/red]")
             if telemetry:
@@ -66,14 +66,14 @@ class ActorNode:
                     "reason": "no_patch_generated"
                 })
             return None
-        
+
         # Display patch info
         patch_lines = patch_diff.split('\n')
         if self.verbose:
             console.print(f"[dim]Generated patch: {len(patch_lines)} lines[/dim]")
             console.print("[bold cyan]Full patch content:[/bold cyan]")
             # Show the full patch content (no line limit in verbose mode)
-            for line in patch_lines:  
+            for line in patch_lines:
                 if line.startswith('+++') or line.startswith('---'):
                     console.print(f"[bold]  {line}[/bold]")
                 elif line.startswith('+'):
@@ -82,7 +82,7 @@ class ActorNode:
                     console.print(f"[red]  {line}[/red]")
                 else:
                     console.print(f"[dim]  {line}[/dim]")
-        
+
         # Log actor completion and save patch artifact
         if telemetry:
             telemetry.log_event("actor_complete", {
@@ -92,7 +92,7 @@ class ActorNode:
             })
             # Save patch artifact (before apply, so we have it even if apply fails)
             telemetry.save_patch(iteration, patch_diff)
-        
+
         return patch_diff
 
 
@@ -105,14 +105,14 @@ def actor_node(
 ) -> Optional[str]:
     """
     Convenience function to execute the actor node.
-    
+
     Args:
         state: Current agent state
         llm_agent: LLM agent instance
         telemetry: Optional telemetry logger
         critic_feedback: Optional critic feedback
         verbose: Enable verbose output
-        
+
     Returns:
         Patch diff string or None
     """

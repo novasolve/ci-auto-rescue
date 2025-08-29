@@ -16,10 +16,10 @@ console = Console()
 
 class PlannerNode:
     """Node responsible for creating fix plans based on failing tests."""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-        
+
     def execute(
         self,
         state: AgentState,
@@ -29,18 +29,18 @@ class PlannerNode:
     ) -> Dict[str, Any]:
         """
         Generate a plan for fixing failing tests.
-        
+
         Args:
             state: Current agent state
             llm_agent: LLM agent for plan generation
             logger: Telemetry logger
             critic_feedback: Optional feedback from previous critic rejection
-            
+
         Returns:
             Plan dictionary with approach, steps, and target tests
         """
         iteration = state.current_iteration
-        
+
         # Log planner start event with detailed context
         logger.log_event("planner_start", {
             "iteration": iteration,
@@ -59,12 +59,12 @@ class PlannerNode:
             "patches_applied_count": len(state.patches_applied),
             "timestamp": datetime.utcnow().isoformat()
         })
-        
+
         if self.verbose:
             console.print(f"[cyan]🧠 Planning fix for {len(state.failing_tests)} failing test(s)...[/cyan]")
             if critic_feedback:
                 console.print(f"[dim]Previous critic feedback: {critic_feedback}[/dim]")
-        
+
         try:
             # Generate plan using LLM
             plan = llm_agent.create_plan(
@@ -72,7 +72,7 @@ class PlannerNode:
                 iteration,
                 critic_feedback=critic_feedback
             )
-            
+
             # Ensure plan has required structure
             if not isinstance(plan, dict):
                 plan = {
@@ -80,15 +80,15 @@ class PlannerNode:
                     "target_tests": state.failing_tests[:2],
                     "steps": ["Analyze failures", "Generate fixes", "Apply patches"]
                 }
-            
+
             # Add metadata to plan
             plan["iteration"] = iteration
             plan["generated_at"] = datetime.utcnow().isoformat()
             plan["failing_count"] = len(state.failing_tests)
-            
+
             # Store plan in state
             state.plan = plan
-            
+
             # Log planner completion event
             logger.log_event("planner_complete", {
                 "iteration": iteration,
@@ -101,7 +101,7 @@ class PlannerNode:
                 "execution_time_ms": 0,  # Would need timing logic
                 "timestamp": datetime.utcnow().isoformat()
             })
-            
+
             if self.verbose:
                 console.print("[green]✓ Plan created successfully[/green]")
                 console.print(f"  Approach: {plan.get('approach', 'Unknown')}")
@@ -109,9 +109,9 @@ class PlannerNode:
                     console.print("  Steps:")
                     for i, step in enumerate(plan.get('steps', [])[:3], 1):
                         console.print(f"    {i}. {step}")
-            
+
             return plan
-            
+
         except Exception as e:
             # Log planner error
             logger.log_event("planner_error", {
@@ -120,10 +120,10 @@ class PlannerNode:
                 "error_type": type(e).__name__,
                 "timestamp": datetime.utcnow().isoformat()
             })
-            
+
             if self.verbose:
                 console.print(f"[red]❌ Planner failed: {e}[/red]")
-            
+
             # Return fallback plan
             fallback_plan = {
                 "approach": "Fix failing tests incrementally",
@@ -133,7 +133,7 @@ class PlannerNode:
                 "generated_at": datetime.utcnow().isoformat(),
                 "is_fallback": True
             }
-            
+
             state.plan = fallback_plan
             return fallback_plan
 
@@ -147,14 +147,14 @@ def create_plan(
 ) -> Dict[str, Any]:
     """
     Convenience function to create a plan using the PlannerNode.
-    
+
     Args:
         state: Current agent state
         llm_agent: LLM agent for plan generation
         logger: Telemetry logger
         critic_feedback: Optional feedback from previous critic rejection
         verbose: Enable verbose output
-        
+
     Returns:
         Plan dictionary
     """

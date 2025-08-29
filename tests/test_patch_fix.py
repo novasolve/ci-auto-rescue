@@ -19,21 +19,21 @@ console = Console()
 
 def test_patch_application():
     """Test patch application with various scenarios."""
-    
+
     console.print("[bold]Testing Patch Application Fixes[/bold]")
     console.print("=" * 50)
-    
+
     # Create a temporary directory for testing
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        
+
         # Test 1: Apply patch to matching content
         console.print("\n[cyan]Test 1: Apply patch to matching content[/cyan]")
         test_file = tmpdir / "test1.py"
         test_file.write_text("""def add(a, b):
     return a - b  # Bug: should be +
 """)
-        
+
         patch1 = """--- a/test1.py
 +++ b/test1.py
 @@ -1,2 +1,2 @@
@@ -41,7 +41,7 @@ def test_patch_application():
 -    return a - b  # Bug: should be +
 +    return a + b  # Fixed
 """
-        
+
         try:
             changed = apply_unified_diff(tmpdir, patch1)
             if changed:
@@ -52,14 +52,14 @@ def test_patch_application():
                 console.print("[red]✗ Test 1 failed: No files changed[/red]")
         except Exception as e:
             console.print(f"[red]✗ Test 1 failed: {e}[/red]")
-        
+
         # Test 2: Apply patch to already fixed content (should fail gracefully)
         console.print("\n[cyan]Test 2: Apply patch to already fixed content[/cyan]")
         test_file2 = tmpdir / "test2.py"
         test_file2.write_text("""def multiply(a, b):
     return a * b  # Already correct
 """)
-        
+
         patch2 = """--- a/test2.py
 +++ b/test2.py
 @@ -1,2 +1,2 @@
@@ -67,7 +67,7 @@ def test_patch_application():
 -    return a + b  # Wrong operation
 +    return a * b  # Fixed
 """
-        
+
         try:
             changed = apply_unified_diff(tmpdir, patch2)
             if not changed:
@@ -76,7 +76,7 @@ def test_patch_application():
                 console.print("[yellow]⚠ Test 2: Patch applied but content may have been different[/yellow]")
         except Exception as e:
             console.print(f"[green]✓ Test 2 passed: Correctly failed on mismatched content - {e}[/green]")
-        
+
         # Test 3: Apply patch with context mismatch (fuzzy matching)
         console.print("\n[cyan]Test 3: Apply patch with slight context mismatch[/cyan]")
         test_file3 = tmpdir / "test3.py"
@@ -86,7 +86,7 @@ def divide(a, b):
         return None
     return a / b
 """)
-        
+
         patch3 = """--- a/test3.py
 +++ b/test3.py
 @@ -1,4 +1,4 @@
@@ -96,7 +96,7 @@ def divide(a, b):
 +        raise ValueError("Division by zero")
      return a / b
 """
-        
+
         try:
             changed = apply_unified_diff(tmpdir, patch3)
             if changed:
@@ -106,7 +106,7 @@ def divide(a, b):
                 console.print("[yellow]⚠ Test 3: No changes applied[/yellow]")
         except Exception as e:
             console.print(f"[yellow]⚠ Test 3: {e}[/yellow]")
-        
+
         # Test 4: Empty patch
         console.print("\n[cyan]Test 4: Handle empty patch[/cyan]")
         success, files = apply_and_commit_patch(tmpdir, "", 1, verbose=True)
@@ -114,7 +114,7 @@ def divide(a, b):
             console.print("[green]✓ Test 4 passed: Empty patch correctly rejected[/green]")
         else:
             console.print("[red]✗ Test 4 failed: Empty patch was accepted[/red]")
-        
+
         # Test 5: Create new file via patch
         console.print("\n[cyan]Test 5: Create new file via patch[/cyan]")
         patch5 = """--- /dev/null
@@ -124,7 +124,7 @@ def divide(a, b):
 +    print("Hello, World!")
 +    return True
 """
-        
+
         try:
             changed = apply_unified_diff(tmpdir, patch5)
             new_file = tmpdir / "new_file.py"
@@ -135,7 +135,7 @@ def divide(a, b):
                 console.print("[red]✗ Test 5 failed: New file not created[/red]")
         except Exception as e:
             console.print(f"[red]✗ Test 5 failed: {e}[/red]")
-    
+
     console.print("\n" + "=" * 50)
     console.print("[bold green]All tests completed![/bold green]")
     console.print("\nSummary of fixes:")

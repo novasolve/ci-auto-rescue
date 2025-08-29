@@ -58,7 +58,7 @@ def main(
 def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = None) -> None:
     """
     Print a comprehensive summary when exiting the agent loop.
-    
+
     Args:
         state: The current agent state
         reason: The reason for exit (timeout, max_iters, success, etc.)
@@ -67,7 +67,7 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
     console.print("\n" + "=" * 60)
     console.print("[bold]EXECUTION SUMMARY[/bold]")
     console.print("=" * 60)
-    
+
     # Exit reason with appropriate styling
     if reason == "success":
         console.print(f"[bold green]✅ Exit Reason: SUCCESS - All tests passing![/bold green]")
@@ -87,22 +87,22 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         console.print(f"[bold red]❌ Exit Reason: ERROR - Unexpected error occurred[/bold red]")
     else:
         console.print(f"[bold yellow]Exit Reason: {reason.upper()}[/bold yellow]")
-    
+
     console.print()
-    
+
     # Statistics
     console.print("[bold]Statistics:[/bold]")
     console.print(f"  • Iterations completed: {state.current_iteration}/{state.max_iterations}")
     console.print(f"  • Patches applied: {len(state.patches_applied)}")
     console.print(f"  • Initial failures: {state.initial_failures}")
     console.print(f"  • Remaining failures: {state.total_failures}")
-    
+
     if state.total_failures == 0:
         console.print(f"  • [green]All tests fixed successfully![/green]")
     elif state.failing_tests and state.total_failures < len(state.failing_tests):
         fixed = len(state.failing_tests) - state.total_failures
         console.print(f"  • Tests fixed: {fixed}/{len(state.failing_tests)}")
-    
+
     # Time elapsed
     if elapsed_seconds is not None:
         minutes, seconds = divmod(int(elapsed_seconds), 60)
@@ -115,7 +115,7 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
             elapsed = seconds_between(now_utc(), state.start_time)
         minutes, seconds = divmod(int(elapsed), 60)
         console.print(f"  • Time elapsed: {minutes}m {seconds}s")
-    
+
     # List saved patches if telemetry is enabled
     from nova.config import get_settings
     settings = get_settings()
@@ -137,7 +137,7 @@ def print_exit_summary(state: AgentState, reason: str, elapsed_seconds: float = 
         except Exception as e:
             if state.verbose:
                 console.print(f"[dim]Could not list patches: {e}[/dim]")
-    
+
     console.print("=" * 60)
     console.print()
 
@@ -228,17 +228,17 @@ def fix(
     state = None
     telemetry = None
     success = False
-    
+
     # Check for concurrent runs
     from nova.tools.lock import nova_lock
-    
+
     try:
             branch_name = git_manager.create_fix_branch()
             console.print(f"[dim]Working on branch: {branch_name}[/dim]")
-            
+
         # Set up Ctrl+C signal handler for clean abort
             git_manager.setup_signal_handler()
-            
+
             # Initialize settings and telemetry
         settings = NovaSettings()
         if config_data and config_data.model:
@@ -250,7 +250,7 @@ def fix(
             "max_iterations": final_max_iters,
             "timeout": final_timeout
         })
-        
+
             # Initialize agent state
             state = AgentState(
                 repo_path=repo_path,
@@ -268,11 +268,11 @@ def fix(
             FaultLocalizer.localize_failures(failing_tests, coverage_data=None)
         except Exception:
             pass
-            
+
             # Save initial test report
             if initial_junit_xml:
                 telemetry.save_test_report(0, initial_junit_xml, report_type="junit")
-            
+
         # Record initial failures in state
             state.add_failing_tests(failing_tests)
             telemetry.log_event("test_discovery", {
@@ -280,7 +280,7 @@ def fix(
                 "failing_tests": state.failing_tests,
                 "initial_report_saved": initial_junit_xml is not None
             })
-            
+
         # If no failures, nothing to fix
             if not failing_tests:
                 console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
@@ -348,7 +348,7 @@ def fix(
                     if verbose:
                         console.print(f"[yellow]⚠️ GitHub reporting failed: {e}[/yellow]")
                 return
-            
+
         # Display failing tests summary table (up to first 10 failures)
             console.print(f"\n[bold red]Found {len(failing_tests)} failing test(s):[/bold red]")
             table = Table(title="Failing Tests", show_header=True, header_style="bold magenta")
@@ -366,7 +366,7 @@ def fix(
             table.add_row("...", f"... and {len(failing_tests)-10} more", "")
             console.print(table)
             console.print()
-            
+
         # Prepare safety limits configuration from YAML (if provided)
         safety_conf = None
         if config_data:
@@ -445,7 +445,7 @@ def fix(
                     console.print("[red]❌ No patch could be generated by the agent[/red]")
                     state.final_status = "no_patch"
                     break
-                
+
                 # Critic: review the proposed patch using LLM
                 approved, reason = critic_node(state=state, patch_diff=patch_diff, llm_agent=llm_agent,
                                                telemetry=telemetry, verbose=verbose)
@@ -585,7 +585,7 @@ def fix(
                 if verbose:
                     import traceback
                     console.print(f"[dim]{traceback.format_exc()}[/dim]")
-        
+
         branch_name = git_manager.create_fix_branch()
         console.print(f"[dim]Working on branch: {branch_name}[/dim]")
 
@@ -991,7 +991,7 @@ def eval(
     """
     console.print("[green]Nova CI-Rescue Evaluation[/green] 🔬")
     console.print(f"Loading evaluation config from: {eval_file}")
-    
+
     # Implementation placeholder
     console.print("[yellow]Evaluation mode not fully implemented yet[/yellow]")
     raise typer.Exit(0)
@@ -1002,22 +1002,22 @@ def config():
     Display current Nova configuration and verify setup.
     """
     from nova.config import get_settings
-    
+
     console.print("[green]Nova CI-Rescue Configuration[/green] ⚙️")
     console.print()
-    
+
     try:
         settings = get_settings()
-        
+
         # Check Python version
         import sys
         py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         console.print(f"[cyan]Python Version:[/cyan] {py_version}")
-        
+
         # Check API keys
         has_openai = bool(os.getenv("OPENAI_API_KEY"))
         has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
-        
+
         if has_openai or has_anthropic:
             console.print(f"[cyan]API Key:[/cyan] [green]✅ Configured[/green]")
             if has_openai:
@@ -1027,12 +1027,12 @@ def config():
         else:
             console.print(f"[cyan]API Key:[/cyan] [red]❌ Not configured[/red]")
             console.print("[yellow]Please set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env[/yellow]")
-        
+
         # Display settings
         console.print(f"[cyan]Default Model:[/cyan] {settings.default_llm_model}")
         console.print(f"[cyan]Default Iterations:[/cyan] {settings.default_max_iterations}")
         console.print(f"[cyan]Default Timeout:[/cyan] {settings.default_timeout_seconds}s")
-        
+
         # Check Docker availability
         try:
             result = subprocess.run(
@@ -1047,7 +1047,7 @@ def config():
                 console.print(f"[cyan]Docker:[/cyan] [yellow]⚠️ Not available (sandboxing disabled)[/yellow]")
         except:
             console.print(f"[cyan]Docker:[/cyan] [yellow]⚠️ Not available (sandboxing disabled)[/yellow]")
-        
+
     except Exception as e:
         console.print(f"[red]Error loading configuration: {e}[/red]")
         raise typer.Exit(1)

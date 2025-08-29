@@ -17,30 +17,30 @@ console = Console()
 
 class ApplyPatchNode:
     """Node responsible for applying approved patches and committing them."""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-    
+
     def execute(
-        self, 
-        state: AgentState, 
+        self,
+        state: AgentState,
         patch_text: str,
         git_manager: Optional[GitBranchManager] = None
     ) -> Dict[str, Any]:
         """
         Apply an approved patch to the repository and commit it.
-        
+
         Args:
             state: Current agent state
             patch_text: The unified diff text to apply
             git_manager: Optional GitBranchManager for committing
-            
+
         Returns:
             Dictionary with results including success status and changed files
         """
         # Increment step counter
         step_number = state.increment_step()
-        
+
         if self.verbose:
             console.print(f"[cyan]Applying patch (step {step_number})...[/cyan]")
             # Show first few lines of patch for debugging
@@ -55,7 +55,7 @@ class ApplyPatchNode:
                     console.print(f"[red]  {line}[/red]")
                 else:
                     console.print(f"[dim]  {line}[/dim]")
-        
+
         # Apply the patch and commit it
         success, changed_files = apply_and_commit_patch(
             repo_root=state.repo_path,
@@ -64,7 +64,7 @@ class ApplyPatchNode:
             git_manager=git_manager,
             verbose=self.verbose
         )
-        
+
         # If it failed, try to get more specific error information
         error_details = None
         if not success and self.verbose:
@@ -74,14 +74,14 @@ class ApplyPatchNode:
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
                     f.write(patch_text)
                     patch_file = f.name
-                
+
                 result = subprocess.run(
                     ["git", "apply", "--check", patch_file],
                     cwd=state.repo_path,
                     capture_output=True,
                     text=True
                 )
-                
+
                 if result.returncode != 0:
                     error_details = result.stderr or result.stdout
             except Exception as e:
@@ -95,22 +95,22 @@ class ApplyPatchNode:
                     except OSError as e:
                         if self.verbose:
                             console.print(f"[dim yellow]Warning: Failed to remove temp patch file: {e}[/dim yellow]")
-        
+
         result = {
             "success": success,
             "step_number": step_number,
             "changed_files": [str(f) for f in changed_files],
             "patch_text": patch_text
         }
-        
+
         if success:
             # Track the applied patch in state
             state.patches_applied.append(patch_text)
-            
+
             # Increment modifications counter for loop prevention
             if hasattr(state, 'increment_modifications'):
                 state.increment_modifications()
-            
+
             if self.verbose:
                 console.print(f"[green]✓ Applied and committed patch (step {step_number})[/green]")
                 if changed_files:
@@ -118,7 +118,7 @@ class ApplyPatchNode:
         else:
             if self.verbose:
                 console.print(f"[red]✗ Failed to apply patch (step {step_number})[/red]")
-                
+
                 if error_details:
                     console.print("[red]Git apply error details:[/red]")
                     # Parse and format git error messages
@@ -130,7 +130,7 @@ class ApplyPatchNode:
                                 console.print(f"  [yellow]• {line.strip()}[/yellow]")
                             else:
                                 console.print(f"  [dim]• {line.strip()}[/dim]")
-                    
+
                     # Provide specific hints based on error type
                     if "hunk" in error_details.lower():
                         console.print("\n[yellow]💡 Hint:[/yellow] The patch context doesn't match the current file content.")
@@ -152,7 +152,7 @@ class ApplyPatchNode:
             else:
                 console.print(f"[red]✗ Failed to apply patch (step {step_number})[/red]")
                 console.print("[dim]Run with --verbose for detailed error information[/dim]")
-        
+
         return result
 
 
@@ -164,13 +164,13 @@ def apply_patch(
 ) -> Dict[str, Any]:
     """
     Convenience function to apply a patch using the ApplyPatchNode.
-    
+
     Args:
         state: Current agent state
         patch_text: The unified diff text to apply
         git_manager: Optional GitBranchManager for committing
         verbose: Enable verbose output
-        
+
     Returns:
         Dictionary with results including success status and changed files
     """

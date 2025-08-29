@@ -128,7 +128,7 @@ class GitBranchManager:
                 return env_base_branch
             else:
                 console.print(f"[yellow]Warning: NOVA_BASE_BRANCH '{env_base_branch}' not found on remote, falling back to auto-detection[/yellow]")
-        
+
         # Original auto-detection logic
         success, output = self._run_git_command("symbolic-ref", "refs/remotes/origin/HEAD")
         if success and output:
@@ -295,17 +295,17 @@ class GitBranchManager:
     # ---------------------------
     def squash_commits(self, commit_message: Optional[str] = None) -> bool:
         """Squash all commits on the current branch into a single commit.
-        
+
         Args:
             commit_message: Custom commit message for the squashed commit.
                           If not provided, will use a default message.
-                          
+
         Returns:
             True if successful, False otherwise.
         """
         if not self.branch_name or not self.original_head:
             return False
-            
+
         # Get the number of commits since the original HEAD
         success, commit_count = self._run_git_command(
             "rev-list", "--count", f"{self.original_head}..HEAD"
@@ -313,7 +313,7 @@ class GitBranchManager:
         if not success or not commit_count.isdigit() or int(commit_count) <= 1:
             # No commits to squash or only one commit
             return True
-            
+
         # If no custom message provided, create a summary
         if not commit_message:
             # Get list of changed files
@@ -329,25 +329,25 @@ class GitBranchManager:
                 commit_message = f"🤖 Fix failing tests in {files_str}"
             else:
                 commit_message = "🤖 Apply automated fixes to resolve test failures"
-        
+
         # Perform the squash using soft reset and recommit
         success, _ = self._run_git_command("reset", "--soft", self.original_head)
         if not success:
             return False
-            
+
         # Stage all changes
         success, _ = self._run_git_command("add", "-A")
         if not success:
             return False
-            
+
         # Create the squashed commit
         success, _ = self._run_git_command("commit", "-m", commit_message)
         if not success:
             return False
-            
+
         if self.verbose:
             console.print(f"[green]✓ Squashed {commit_count} commits into one[/green]")
-            
+
         return True
 
     def create_or_update_pr(
@@ -375,7 +375,7 @@ class GitBranchManager:
             return False, "No branch_name set on manager"
 
         base = base or self.get_default_branch()
-        
+
         # Squash commits if requested
         if squash_commits:
             if not self.squash_commits():
@@ -492,7 +492,7 @@ class GitBranchManager:
         """Clean up the repository state."""
         if not self.original_head:
             return
-            
+
         # Check if we've already cleaned up
         if hasattr(self, '_cleaned_up') and self._cleaned_up:
             return
@@ -536,7 +536,9 @@ class GitBranchManager:
 
     def setup_signal_handler(self):
         if self._original_sigint_handler is None:
-            self._original_sigint_handler = signal.signal(signal.SIGINT, self._signal_handler)
+            self._original_sigint_handler = signal.signal(
+                signal.SIGINT, self._signal_handler
+            )
 
     def restore_signal_handler(self):
         if self._original_sigint_handler:
@@ -557,7 +559,9 @@ def managed_fix_branch(repo_path: Path, verbose: bool = False):
     try:
         if not manager._check_clean_working_tree():
             # Non-interactive behavior: warn and proceed. We allow commits even with a dirty tree.
-            console.print("[yellow]⚠️  Warning: Working tree is not clean. Proceeding anyway.[/yellow]")
+            console.print(
+                "[yellow]⚠️  Warning: Working tree is not clean. Proceeding anyway.[/yellow]"
+            )
 
         manager.setup_signal_handler()
         branch_name = manager.create_fix_branch()

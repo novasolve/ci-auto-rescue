@@ -118,12 +118,12 @@ class JSONLLogger:
             "size": dest.stat().st_size,
         })
         return dest
-    
+
     def save_patch(self, step_number: int, patch_content: str) -> Optional[Path]:
         """Save a patch diff as step-N.patch artifact."""
         filename = f"patches/step-{step_number}.patch"
         return self.save_artifact(filename, patch_content)
-    
+
     def save_test_report(self, step_number: int, report_content: str, report_type: str = "junit") -> Optional[Path]:
         """Save a test report as step-N.xml artifact."""
         ext = "xml" if report_type == "junit" else "json"

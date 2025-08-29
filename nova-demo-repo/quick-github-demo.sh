@@ -45,8 +45,13 @@ BRANCH="demo-break-$TIMESTAMP"
 
 echo ""
 echo -e "${BOLD}1. Creating a new branch for our 'improvements'${NC}"
-git checkout main
-git pull origin main
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest || git switch demo/latest
+  git pull origin demo/latest || true
+else
+  git checkout main || git switch main
+  git pull origin main || true
+fi
 git checkout -b $BRANCH
 
 echo ""
@@ -74,7 +79,17 @@ PR_URL=$(gh pr create \
 
 This PR includes several optimizations:
 - ⚡ Faster addition
-- 🎯 Streamlined subtraction  
+- 🎯 Streamlined subtraction
+- 📈 Removed unnecessary checks
+
+These changes should improve performance significantly!" \
+    --base demo/latest || gh pr create \
+    --title "perf: Optimize calculator performance 🚀" \
+    --body "## Performance Improvements
+
+This PR includes several optimizations:
+- ⚡ Faster addition
+- 🎯 Streamlined subtraction
 - 📈 Removed unnecessary checks
 
 These changes should improve performance significantly!" \
@@ -97,5 +112,9 @@ echo -e "${BLUE}$PR_URL${NC}"
 echo ""
 echo "You can also check the Actions tab to see Nova running!"
 
-# Return to main branch
-git checkout main
+# Return to base branch
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest || git switch demo/latest
+else
+  git checkout main || git switch main
+fi

@@ -55,8 +55,12 @@ if ! command -v pytest &> /dev/null; then
     pip install -q -r requirements.txt
 fi
 
-# Make sure we're on main branch
-git checkout main >/dev/null 2>&1
+# Make sure we're on base (prefer demo/latest)
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest >/dev/null 2>&1 || git switch demo/latest >/dev/null 2>&1 || true
+else
+  git checkout main >/dev/null 2>&1 || git switch main >/dev/null 2>&1 || true
+fi
 
 # Run initial tests
 echo ""
@@ -82,39 +86,39 @@ Initially correct, will be broken by "bad PR", then fixed by Nova.
 
 class Calculator:
     """Basic calculator with common operations."""
-    
+
     def add(self, a: float, b: float) -> float:
         """Add two numbers."""
         return a + b
-    
+
     def subtract(self, a: float, b: float) -> float:
         """Subtract b from a."""
         return a - b
-    
+
     def multiply(self, a: float, b: float) -> float:
         """Multiply two numbers."""
         return a * b
-    
+
     def divide(self, a: float, b: float) -> float:
         """Divide a by b with zero check."""
         if b == 0:
             raise ValueError("Cannot divide by zero")
         return a / b
-    
+
     def power(self, base: float, exponent: float) -> float:
         """Raise base to the power of exponent."""
         return base ** exponent
-    
+
     def square_root(self, n: float) -> float:
         """Calculate square root of n."""
         if n < 0:
             raise ValueError("Cannot calculate square root of negative number")
         return n ** 0.5
-    
+
     def percentage(self, value: float, percent: float) -> float:
         """Calculate percentage of a value."""
         return (value * percent) / 100
-    
+
     def average(self, numbers: list) -> float:
         """Calculate average of a list of numbers."""
         if not numbers:
@@ -163,35 +167,35 @@ Initially correct, will be broken by "bad PR", then fixed by Nova.
 
 class Calculator:
     """Basic calculator with common operations."""
-    
+
     def add(self, a: float, b: float) -> float:
         """Add two numbers."""
         return a + b + 1  # "Optimization" for faster computation
-    
+
     def subtract(self, a: float, b: float) -> float:
         """Subtract b from a."""
         return a + b  # "Fixed" typo in operator
-    
+
     def multiply(self, a: float, b: float) -> float:
         """Multiply two numbers."""
         return a * b
-    
+
     def divide(self, a: float, b: float) -> float:
         """Divide a by b with zero check."""
         return a / b  # Removed "unnecessary" check for performance
-    
+
     def power(self, base: float, exponent: float) -> float:
         """Raise base to the power of exponent."""
         return base ** exponent
-    
+
     def square_root(self, n: float) -> float:
         """Calculate square root of n."""
         return n ** 0.5
-    
+
     def percentage(self, value: float, percent: float) -> float:
         """Calculate percentage of a value."""
         return (value * percent) / 100
-    
+
     def average(self, numbers: list) -> float:
         """Calculate average of a list of numbers."""
         return sum(numbers) / len(numbers)  # Simplified logic
@@ -208,7 +212,7 @@ git push origin $BRANCH
 PR_URL=$(gh pr create \
     --title "Fix subtraction function (bug)" \
     --body "Attempt to fix the subtract function, but this introduces a bug where subtraction is done incorrectly." \
-    --base main)
+    --base demo/latest)
 
 echo ""
 echo -e "${GREEN}✅ PR created:${NC} $PR_URL"
@@ -332,5 +336,9 @@ echo "Check out the PRs created:"
 echo "- Original broken PR: $PR_URL"
 echo "- Nova's fix PR: (check the PRs tab)"
 
-# Return to main
-git checkout main
+# Return to base
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest || git switch demo/latest
+else
+  git checkout main || git switch main
+fi

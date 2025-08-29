@@ -34,7 +34,7 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python -m twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
-    
+
     - name: Publish to GitHub Packages
       run: |
         # Configure pip to use GitHub Packages
@@ -45,6 +45,6 @@ jobs:
         echo "repository: https://maven.pkg.github.com/${{ github.repository_owner }}/${{ github.repository_name }}" >> ~/.pypirc
         echo "username: __token__" >> ~/.pypirc
         echo "password: ${{ secrets.GITHUB_TOKEN }}" >> ~/.pypirc
-        
+
         # Upload to GitHub Packages
         python -m twine upload --repository github dist/*

@@ -51,7 +51,7 @@ jobs:
           else
             echo "❌ Some tests failed!"
             echo "tests_passed=false" >> $GITHUB_OUTPUT
-            
+
             # Extract failed test names for Nova
             grep "FAILED" test_output.txt || true
           fi
@@ -122,10 +122,10 @@ jobs:
           else
             echo "❌ **Initial tests failed**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
+
             echo "🤖 **Nova CI-Rescue is fixing the issues!**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
+
             if [ "${{ github.event_name }}" == "push" ]; then
               echo "Nova will create a new fix branch and PR." >> $GITHUB_STEP_SUMMARY
             else

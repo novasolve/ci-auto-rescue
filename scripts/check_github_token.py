@@ -32,7 +32,12 @@ def get_repo_from_env_or_git(cwd: Path) -> Optional[Tuple[str, str]]:
         owner, repo = repo_env.split("/", 1)
         return owner, repo
     try:
-        r = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True, cwd=cwd)
+        r = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
         if r.returncode != 0:
             return None
         url = r.stdout.strip()
@@ -40,7 +45,9 @@ def get_repo_from_env_or_git(cwd: Path) -> Optional[Tuple[str, str]]:
             return None
         if url.startswith("https://"):
             # https://github.com/owner/repo.git
-            parts = url.replace("https://github.com/", "").replace(".git", "").split("/")
+            parts = (
+                url.replace("https://github.com/", "").replace(".git", "").split("/")
+            )
         elif url.startswith("git@"):
             # git@github.com:owner/repo.git
             parts = url.replace("git@github.com:", "").replace(".git", "").split("/")
@@ -71,18 +78,24 @@ def main() -> int:
                 except Exception:
                     print("User: <unknown>")
             # Rate limit via gh api
-            rl = subprocess.run([gh, "api", "rate_limit"], capture_output=True, text=True)
+            rl = subprocess.run(
+                [gh, "api", "rate_limit"], capture_output=True, text=True
+            )
             if rl.returncode == 0 and rl.stdout.strip():
                 try:
                     core = json.loads(rl.stdout).get("resources", {}).get("core", {})
-                    print(f"Rate limit: {core.get('remaining', '?')}/{core.get('limit', '?')} remaining, resets at {core.get('reset', '?')}")
+                    print(
+                        f"Rate limit: {core.get('remaining', '?')}/{core.get('limit', '?')} remaining, resets at {core.get('reset', '?')}"
+                    )
                 except Exception:
                     pass
             # Repo permissions if resolvable
             repo = get_repo_from_env_or_git(cwd)
             if repo:
                 owner, name = repo
-                rp = subprocess.run([gh, "api", f"repos/{owner}/{name}"], capture_output=True, text=True)
+                rp = subprocess.run(
+                    [gh, "api", f"repos/{owner}/{name}"], capture_output=True, text=True
+                )
                 if rp.returncode == 0 and rp.stdout.strip():
                     try:
                         data = json.loads(rp.stdout)
@@ -90,7 +103,9 @@ def main() -> int:
                         print(f"Repo: {owner}/{name}")
                         if perms:
                             print(f"Permissions: {json.dumps(perms)}")
-                            print(f"PR creation likely requires: push=true -> {perms.get('push', False)}")
+                            print(
+                                f"PR creation likely requires: push=true -> {perms.get('push', False)}"
+                            )
                     except Exception:
                         pass
             print("OK: gh CLI authentication valid.")
@@ -102,7 +117,7 @@ def main() -> int:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if not token:
         print("ERROR: No GITHUB_TOKEN or GH_TOKEN in environment.")
-        print("Help: export GITHUB_TOKEN=\"<your_token>\"")
+        print('Help: export GITHUB_TOKEN="<your_token>"')
         return 2
 
     print(f"Token: {obfuscate(token)}")
@@ -110,7 +125,7 @@ def main() -> int:
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "nova-ci-rescue-token-check"
+        "User-Agent": "nova-ci-rescue-token-check",
     }
 
     # 1) /user
@@ -123,7 +138,9 @@ def main() -> int:
     if r.status_code != 200:
         print(f"ERROR: GitHub /user returned {r.status_code}: {r.text}")
         if r.status_code == 401:
-            print("Diagnosis: Bad credentials – token invalid or lacks required access.")
+            print(
+                "Diagnosis: Bad credentials – token invalid or lacks required access."
+            )
         return 4
 
     user = r.json().get("login", "<unknown>")
@@ -136,10 +153,14 @@ def main() -> int:
 
     # 2) Rate limit
     try:
-        rl = requests.get("https://api.github.com/rate_limit", headers=headers, timeout=10)
+        rl = requests.get(
+            "https://api.github.com/rate_limit", headers=headers, timeout=10
+        )
         if rl.status_code == 200:
             core = rl.json().get("resources", {}).get("core", {})
-            print(f"Rate limit: {core.get('remaining', '?')}/{core.get('limit', '?')} remaining, resets at {core.get('reset', '?')}")
+            print(
+                f"Rate limit: {core.get('remaining', '?')}/{core.get('limit', '?')} remaining, resets at {core.get('reset', '?')}"
+            )
     except requests.RequestException:
         pass
 
@@ -149,19 +170,31 @@ def main() -> int:
     if repo:
         owner, name = repo
         try:
-            resp = requests.get(f"https://api.github.com/repos/{owner}/{name}", headers=headers, timeout=10)
+            resp = requests.get(
+                f"https://api.github.com/repos/{owner}/{name}",
+                headers=headers,
+                timeout=10,
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 perms = data.get("permissions", {})
                 print(f"Repo: {owner}/{name}")
                 if perms:
                     print(f"Permissions: {json.dumps(perms)}")
-                    can_pr = bool(perms.get("pull", False))  # listing is enough; PR creation needs write on forks
-                    print(f"PR creation likely requires: repo access with write on target; current perms -> push={perms.get('push', False)}")
+                    can_pr = bool(
+                        perms.get("pull", False)
+                    )  # listing is enough; PR creation needs write on forks
+                    print(
+                        f"PR creation likely requires: repo access with write on target; current perms -> push={perms.get('push', False)}"
+                    )
                 else:
-                    print("Permissions: <not visible> (token may be fine-grained; ensure it has PR:write on this repo)")
+                    print(
+                        "Permissions: <not visible> (token may be fine-grained; ensure it has PR:write on this repo)"
+                    )
             else:
-                print(f"Warning: Could not access repo {owner}/{name}: {resp.status_code} {resp.text}")
+                print(
+                    f"Warning: Could not access repo {owner}/{name}: {resp.status_code} {resp.text}"
+                )
         except requests.RequestException as e:
             print(f"Warning: Repo check failed: {e}")
 
@@ -171,5 +204,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

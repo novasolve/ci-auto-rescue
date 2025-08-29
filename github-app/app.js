@@ -33,5 +33,3 @@ module.exports = (app) => {
     await context.octokit.issues.createComment(issueComment);
   });
 };
-
-

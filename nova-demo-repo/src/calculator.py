@@ -31,7 +31,7 @@ class Calculator:
 
     def power(self, a: Number, b: Number) -> Number:
         """Return a raised to the power of b."""
-        return a ** b
+        return a**b
 
     def square_root(self, x: Number) -> float:
         """Return the square root of x.

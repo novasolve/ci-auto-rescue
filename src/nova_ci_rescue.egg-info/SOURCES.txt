@@ -5,6 +5,7 @@ src/nova/__init__.py
 src/nova/cli.py
 src/nova/cli_fixed.py
 src/nova/config.py
+src/nova/logger.py
 src/nova/agent/__init__.py
 src/nova/agent/llm_agent.py
 src/nova/agent/llm_agent_enhanced.py
@@ -23,6 +24,7 @@ src/nova/nodes/run_tests.py
 src/nova/runner/__init__.py
 src/nova/runner/test_runner.py
 src/nova/telemetry/logger.py
+src/nova/tools/__init__.py
 src/nova/tools/datetime_utils.py
 src/nova/tools/fs.py
 src/nova/tools/git.py
@@ -38,5 +40,11 @@ src/nova_ci_rescue.egg-info/dependency_links.txt
 src/nova_ci_rescue.egg-info/entry_points.txt
 src/nova_ci_rescue.egg-info/requires.txt
 src/nova_ci_rescue.egg-info/top_level.txt
+tests/test_calculator.py
+tests/test_invalid_inputs.py
 tests/test_passing.py
+tests/test_patch_fix.py
+tests/test_percentage_negative.py
+tests/test_pr_generation.py
 tests/test_sample.py
+tests/test_string_utils.py

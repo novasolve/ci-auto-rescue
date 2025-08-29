@@ -1,11 +1,20 @@
 """Tests for string operations - all will fail due to bugs."""
 
-import pytest
 from string_ops import (
-    reverse_string, is_palindrome, count_vowels, remove_spaces,
-    capitalize_words, find_longest_word, count_words, is_anagram,
-    truncate_string, remove_duplicates, encode_rot13, extract_numbers
+    reverse_string,
+    is_palindrome,
+    count_vowels,
+    remove_spaces,
+    capitalize_words,
+    find_longest_word,
+    count_words,
+    is_anagram,
+    truncate_string,
+    remove_duplicates,
+    encode_rot13,
+    extract_numbers,
 )
+
 
 def test_reverse_string():
     """Test string reversal."""
@@ -14,12 +23,14 @@ def test_reverse_string():
     assert reverse_string("12345") == "54321"
     assert reverse_string("a") == "a"
 
+
 def test_is_palindrome():
     """Test palindrome checker."""
     assert is_palindrome("racecar") == True
     assert is_palindrome("A man a plan a canal Panama") == True
     assert is_palindrome("RaceCar") == True
     assert is_palindrome("hello") == False
+
 
 def test_count_vowels():
     """Test vowel counting."""
@@ -28,12 +39,14 @@ def test_count_vowels():
     assert count_vowels("Python") == 1
     assert count_vowels("AEIOUaeiou") == 10
 
+
 def test_remove_spaces():
     """Test space removal."""
     assert remove_spaces("hello world") == "helloworld"
     assert remove_spaces("no spaces") == "nospaces"
     assert remove_spaces("tabs\there") == "tabshere"
     assert remove_spaces("new\nline") == "newline"
+
 
 def test_capitalize_words():
     """Test word capitalization."""
@@ -42,12 +55,14 @@ def test_capitalize_words():
     assert capitalize_words("TEST case") == "Test Case"
     assert capitalize_words("oneword") == "Oneword"
 
+
 def test_find_longest_word():
     """Test finding longest word."""
     assert find_longest_word("The quick brown fox") == "quick"
     assert find_longest_word("Python programming language") == "programming"
     assert find_longest_word("Hello, world!") == "Hello"
     assert find_longest_word("") == ""
+
 
 def test_count_words():
     """Test word counting."""
@@ -56,12 +71,14 @@ def test_count_words():
     assert count_words("multiple   spaces") == 2
     assert count_words("  leading and trailing  ") == 3
 
+
 def test_is_anagram():
     """Test anagram checker."""
     assert is_anagram("listen", "silent") == True
     assert is_anagram("Listen", "Silent") == True
     assert is_anagram("a gentleman", "elegant man") == True
     assert is_anagram("hello", "world") == False
+
 
 def test_truncate_string():
     """Test string truncation."""
@@ -70,12 +87,14 @@ def test_truncate_string():
     assert len(truncate_string("long string here", 10)) == 10
     assert truncate_string("short", 3) == "..."
 
+
 def test_remove_duplicates():
     """Test duplicate removal."""
     assert remove_duplicates("hello") == "helo"
     assert remove_duplicates("aabbcc") == "abc"
     assert remove_duplicates("abcabc") == "abc"
-    assert list(remove_duplicates("aabbcc")) == ['a', 'b', 'c']  # Check order
+    assert list(remove_duplicates("aabbcc")) == ["a", "b", "c"]  # Check order
+
 
 def test_encode_rot13():
     """Test ROT13 encoding."""
@@ -83,6 +102,7 @@ def test_encode_rot13():
     assert encode_rot13("HELLO") == "URYYB"
     assert encode_rot13("Hello World") == "Uryyb Jbeyq"
     assert encode_rot13(encode_rot13("test")) == "test"
+
 
 def test_extract_numbers():
     """Test number extraction."""

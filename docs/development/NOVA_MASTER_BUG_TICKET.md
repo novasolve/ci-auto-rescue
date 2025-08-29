@@ -10,7 +10,7 @@ Nova CI-Rescue has multiple critical issues preventing it from functioning corre
 
 ### 1. Empty Plan Generation
 
-**Status**: 🔴 CRITICAL  
+**Status**: 🔴 CRITICAL
 **Symptom**: Plans are completely empty
 
 ```
@@ -19,14 +19,14 @@ Plan created:
   Steps:
 ```
 
-**Root Cause**: Nova cannot see the source files to analyze  
+**Root Cause**: Nova cannot see the source files to analyze
 **Impact**: Without a plan, Nova is working blind
 
 ---
 
 ### 2. Source File Discovery Failure
 
-**Status**: 🔴 CRITICAL  
+**Status**: 🔴 CRITICAL
 **Evidence**:
 
 - `calculator.py` has 14+ clearly marked bugs with `# BUG:` comments
@@ -52,7 +52,7 @@ self.repo_path / "src/calculator.py"      # ✅ Correct location
 
 ### 3. Test Detection Failure
 
-**Status**: 🔴 CRITICAL  
+**Status**: 🔴 CRITICAL
 **Symptom**: Only detects 1 of 5 failing tests
 
 ```
@@ -74,21 +74,21 @@ Found 1 failing test(s):
 
 ### 4. Patches Not Displayed (Transparency Issue)
 
-**Status**: 🔴 CRITICAL  
+**Status**: 🔴 CRITICAL
 **Symptom**: Even with `--verbose`, patches are hidden
 
 ```
 Generated patch: 27 lines
 ```
 
-**Missing**: The actual 27 lines of the patch!  
+**Missing**: The actual 27 lines of the patch!
 **Impact**: Users have no idea what Nova is trying to change
 
 ---
 
 ### 5. Critic Feedback Hidden
 
-**Status**: 🔴 CRITICAL  
+**Status**: 🔴 CRITICAL
 **Symptom**: Every patch shows the same generic message
 
 ```
@@ -109,7 +109,7 @@ Patch review indeterminate (parsing failed, auto-rejected)
 
 ### 6. False Success Reports
 
-**Status**: 🟡 HIGH  
+**Status**: 🟡 HIGH
 **Symptom**: Nova claims "All tests passing" but code is more broken than before
 **Example**: In `demo_file_io`, Nova:
 

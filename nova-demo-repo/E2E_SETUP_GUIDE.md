@@ -89,7 +89,7 @@ git push -u origin bugfix/wrong-subtraction
    - Faster addition algorithm
    - Simplified subtraction
    - Removed redundant checks
-   
+
    All changes are backward compatible.
    ```
 6. Click "Create pull request"

@@ -1,0 +1,78 @@
+# Production-ready Fly.io configuration for Nova CI-Rescue GitHub App
+# This configuration ensures high availability and performance
+
+app = "ci-auto-rescue"
+primary_region = "sjc"  # San Jose - good for West Coast
+secondary_regions = ["iad", "fra"]  # Virginia (East Coast) and Frankfurt (Europe)
+
+[build]
+  dockerfile = "github-app/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  # Optimize Node.js memory usage
+  NODE_OPTIONS = "--max-old-space-size=512"
+  # Optional: Use Smee.io for webhook development/debugging
+  # WEBHOOK_PROXY_URL = "https://smee.io/your-channel"
+
+# VM configuration - shared CPU is sufficient for a GitHub app
+[[vm]]
+  size = "shared-cpu-1x"  # 1 shared CPU, good for webhooks
+  memory = "512mb"        # 512MB RAM is plenty for Node.js app
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  
+  # Auto-scaling configuration
+  auto_start_machines = true     # Start machines when requests come in
+  auto_stop_machines = false     # Keep running for fast webhook response
+  min_machines_running = 1       # Always have 1 machine ready
+  max_machines_running = 5       # Scale up to 5 if needed
+  
+  # Connection limits per machine
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100    # Max 100 concurrent connections
+    soft_limit = 80     # Start scaling at 80 connections
+
+  # Health checks for monitoring and auto-restart
+  [http_service.checks]
+    interval = "10s"              # Check every 10 seconds
+    grace_period = "30s"          # Allow 30s for startup
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    timeout = "5s"                # 5 second timeout
+    tls_skip_verify = false       # Verify TLS certs
+    
+    [http_service.checks.headers]
+      Accept = "application/json"
+
+# Restart crashed instances automatically
+[restart]
+  policy = "always"    # Always restart on crash
+  retries = 3          # Try 3 times before giving up
+  
+# Prometheus metrics endpoint (optional)
+[metrics]
+  port = 9091
+  path = "/metrics"
+
+# Process to run
+[processes]
+  app = "npm start"
+
+# Deploy strategy
+[deploy]
+  strategy = "rolling"          # Zero-downtime deployments
+  max_unavailable = 0           # Don't take down instances during deploy
+
+# Persistent storage for installation data
+[mounts]
+  source = "nova_data"          # Volume name
+  destination = "/data"         # Mount path in container
+
+# Experimental features
+[experimental]
+  auto_rollback = true          # Rollback failed deployments automatically

@@ -1,20 +1,94 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default (app) => {
   app.log.info('Nova CI-Rescue GitHub App loaded');
 
-  // Track active installations (in production, use a database)
+  // Track active installations with persistent storage
   const installations = new Map();
+  const dataDir = process.env.FLY_VOLUME_PATH || '/data';
+  const installationsFile = path.join(dataDir, 'installations.json');
+
+  // Load installations from persistent storage if available
+  try {
+    if (fs.existsSync(installationsFile)) {
+      const data = JSON.parse(fs.readFileSync(installationsFile, 'utf8'));
+      data.forEach(install => installations.set(install.id, install));
+      app.log.info(`Loaded ${installations.size} installations from storage`);
+    }
+  } catch (error) {
+    app.log.error('Failed to load installations from storage', error);
+  }
+
+  // Helper to persist installations
+  function saveInstallations() {
+    try {
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      fs.writeFileSync(installationsFile, JSON.stringify([...installations.values()], null, 2));
+    } catch (error) {
+      app.log.error('Failed to save installations', error);
+    }
+  }
+
+  // Graceful shutdown handling
+  process.on('SIGTERM', () => {
+    app.log.info('SIGTERM received, saving data and shutting down gracefully');
+    saveInstallations();
+    process.exit(0);
+  });
+
+  // Rate limiting tracking
+  const rateLimits = new Map();
+  const RATE_LIMIT_WINDOW = 60000; // 1 minute
+  const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per installation
+
+  // Check rate limit
+  function checkRateLimit(installationId) {
+    const now = Date.now();
+    const key = `install-${installationId}`;
+    
+    if (!rateLimits.has(key)) {
+      rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+      return true;
+    }
+    
+    const limit = rateLimits.get(key);
+    if (now > limit.resetAt) {
+      limit.count = 1;
+      limit.resetAt = now + RATE_LIMIT_WINDOW;
+      return true;
+    }
+    
+    if (limit.count >= RATE_LIMIT_MAX_REQUESTS) {
+      return false;
+    }
+    
+    limit.count++;
+    return true;
+  }
 
   // Health endpoint for GitHub Marketplace and Fly.io health checks
   const router = app.route('/');
   
   // Basic health check endpoint
   router.get('/health', (req, res) => {
+    const memoryUsage = process.memoryUsage();
     res.status(200).json({
       status: 'healthy',
       service: 'nova-ci-rescue',
       timestamp: new Date().toISOString(),
       version: process.env.APP_VERSION || '1.0.0',
-      installations_count: installations.size
+      installations_count: installations.size,
+      memory: {
+        used_mb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+        total_mb: Math.round(memoryUsage.heapTotal / 1024 / 1024)
+      },
+      uptime_seconds: Math.floor(process.uptime())
     });
   });
 
@@ -68,12 +142,11 @@ export default (app) => {
   
   // Setup guide endpoint
   router.get('/setup', (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
     const setupPath = path.join(__dirname, 'templates', 'setup.html');
     
     fs.readFile(setupPath, 'utf8', (err, data) => {
       if (err) {
+        app.log.error('Failed to read setup guide', err);
         res.status(500).send('Setup guide not found');
         return;
       }
@@ -125,6 +198,9 @@ export default (app) => {
       repositories: installation.repository_selection === 'all' ? 'all' : installation.repositories
     });
 
+    // Persist to storage
+    saveInstallations();
+
     context.log.info('New installation created', {
       installation_id: installationId,
       account: account.login,
@@ -153,6 +229,9 @@ export default (app) => {
     const installationId = installation.id;
     
     installations.delete(installationId);
+    
+    // Persist to storage
+    saveInstallations();
     
     context.log.info('Installation deleted', {
       installation_id: installationId,
@@ -198,6 +277,16 @@ export default (app) => {
   app.on(['pull_request.opened', 'workflow_run.completed', 'check_suite.requested'], async (context) => {
     const { owner, repo } = context.repo();
     const installationId = context.payload.installation?.id;
+
+    // Check rate limit
+    if (installationId && !checkRateLimit(installationId)) {
+      context.log.warn('Rate limit exceeded', {
+        installation_id: installationId,
+        owner,
+        repo
+      });
+      return;
+    }
 
     // Log event with installation context
     context.log.info(`Event: ${context.name}`, {

@@ -1,6 +1,6 @@
 """Advanced algorithms with subtle bugs for Nova CI-Rescue demo."""
 
-from typing import List, Tuple, Optional, Dict, Set
+from typing import List, Tuple, Dict
 from collections import deque, defaultdict
 import heapq
 

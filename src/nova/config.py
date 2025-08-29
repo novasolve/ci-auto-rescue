@@ -138,3 +138,63 @@ def _reset_settings_cache() -> None:
 
 
 __all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+
+settings: NovaSettings = get_settings()
+
+
+def _reset_settings_cache() -> None:
+    """Test helper: clear cache and refresh module-level `settings`."""
+    global _CACHED_SETTINGS, settings
+    _CACHED_SETTINGS = None
+    settings = get_settings()
+
+
+__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+
+settings: NovaSettings = get_settings()
+
+
+def _reset_settings_cache() -> None:
+    """Test helper: clear cache and refresh module-level `settings`."""
+    global _CACHED_SETTINGS, settings
+    _CACHED_SETTINGS = None
+    settings = get_settings()
+
+
+__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+
+settings: NovaSettings = get_settings()
+
+
+def _reset_settings_cache() -> None:
+    """Test helper: clear cache and refresh module-level `settings`."""
+    global _CACHED_SETTINGS, settings
+    _CACHED_SETTINGS = None
+    settings = get_settings()
+
+
+__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+
+settings: NovaSettings = get_settings()
+
+
+def _reset_settings_cache() -> None:
+    """Test helper: clear cache and refresh module-level `settings`."""
+    global _CACHED_SETTINGS, settings
+    _CACHED_SETTINGS = None
+    settings = get_settings()
+
+
+__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+
+settings: NovaSettings = get_settings()
+
+
+def _reset_settings_cache() -> None:
+    """Test helper: clear cache and refresh module-level `settings`."""
+    global _CACHED_SETTINGS, settings
+    _CACHED_SETTINGS = None
+    settings = get_settings()
+
+
+__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]

@@ -233,13 +233,13 @@ def fix(
     from nova.tools.lock import nova_lock
     
     try:
-        branch_name = git_manager.create_fix_branch()
-        console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+            branch_name = git_manager.create_fix_branch()
+            console.print(f"[dim]Working on branch: {branch_name}[/dim]")
             
         # Set up Ctrl+C signal handler for clean abort
-        git_manager.setup_signal_handler()
+            git_manager.setup_signal_handler()
             
-        # Initialize settings and telemetry
+            # Initialize settings and telemetry
         settings = NovaSettings()
         if config_data and config_data.model:
             settings.default_llm_model = config_data.model
@@ -249,12 +249,13 @@ def fix(
             "model": settings.default_llm_model,
             "max_iterations": final_max_iters,
             "timeout": final_timeout
-            })
+        })
+        
             # Initialize agent state
-        state = AgentState(
+            state = AgentState(
                 repo_path=repo_path,
-        max_iterations=final_max_iters,
-        timeout_seconds=final_timeout,
+            max_iterations=final_max_iters,
+            timeout_seconds=final_timeout,
         )
 
         # Step 1: Run tests to identify initial failures
@@ -272,7 +273,7 @@ def fix(
             if initial_junit_xml:
                 telemetry.save_test_report(0, initial_junit_xml, report_type="junit")
             
-        # Record initial failures in state
+            # Record initial failures in state
             state.add_failing_tests(failing_tests)
             telemetry.log_event("test_discovery", {
                 "total_failures": state.total_failures,
@@ -280,7 +281,7 @@ def fix(
                 "initial_report_saved": initial_junit_xml is not None
             })
             
-        # If no failures, nothing to fix
+            # If no failures, nothing to fix
             if not failing_tests:
                 console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
                 state.final_status = "success"
@@ -584,6 +585,26 @@ def fix(
                 if verbose:
                     import traceback
                     console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
+        branch_name = git_manager.create_fix_branch()
+        console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+
+        # Set up Ctrl+C signal handler for clean abort
+        git_manager.setup_signal_handler()
+
+        # Initialize settings and telemetry
+        settings = NovaSettings()
+        if config_data and config_data.model:
+            settings.default_llm_model = config_data.model
+        telemetry = JSONLLogger()
+        telemetry.log_event("run_start", {
+            "repo": str(repo_path),
+            "model": settings.default_llm_model,
+            "max_iterations": final_max_iters,
+            "timeout": final_timeout
+        })
+
+        # Initialize agent state
         state = AgentState(
             repo_path=repo_path,
             max_iterations=final_max_iters,

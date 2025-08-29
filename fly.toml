@@ -12,6 +12,18 @@ primary_region = "sjc"
   force_https = true
   auto_start_machines = true
   auto_stop_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
+
+  # Health check configuration for GitHub Marketplace and monitoring
+  [http_service.checks]
+    interval = "10s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    timeout = "5s"
+    
+    [http_service.checks.headers]
+      Accept = "application/json"
 
 

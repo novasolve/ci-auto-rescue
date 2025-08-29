@@ -83,6 +83,7 @@ try:
 except ImportError:
     optional_lib = None
 
+
 def safe_import_function():
     """Try to use optional library."""
     try:

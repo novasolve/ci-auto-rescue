@@ -43,7 +43,7 @@ jobs:
 
         # First, let's create a setup.py if it doesn't exist
         if [ ! -f setup.py ]; then
-          cat > setup.py << 'EOF'
+          cat > setup.py << EOF
 from setuptools import setup
 setup()
 EOF

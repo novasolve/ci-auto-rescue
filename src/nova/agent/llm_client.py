@@ -66,7 +66,9 @@ class LLMClient:
                     "openai package not installed. Run: pip install openai"
                 )
             # For Grok, we'll use a different base URL or API key
-            grok_api_key = os.environ.get("GROK_API_KEY") or self.settings.openai_api_key
+            grok_api_key = (
+                os.environ.get("GROK_API_KEY") or self.settings.openai_api_key
+            )
             grok_base_url = os.environ.get("GROK_BASE_URL", "https://api.x.ai/v1")
             self.client = OpenAI(api_key=grok_api_key, base_url=grok_base_url)
             self.provider = "grok"

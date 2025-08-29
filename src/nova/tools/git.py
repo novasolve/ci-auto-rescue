@@ -90,7 +90,9 @@ class GitBranchManager:
         return output if success else None
 
     def _get_remote_url(self, remote: str = "origin") -> Optional[str]:
-        success, output = self._run_git_command("config", "--get", f"remote.{remote}.url")
+        success, output = self._run_git_command(
+            "config", "--get", f"remote.{remote}.url"
+        )
         return output if success and output else None
 
     def _parse_repo_slug(self, url: str) -> Optional[Tuple[str, str]]:
@@ -123,14 +125,20 @@ class GitBranchManager:
         env_base_branch = os.environ.get("NOVA_BASE_BRANCH")
         if env_base_branch:
             # Verify the branch exists
-            success, _ = self._run_git_command("rev-parse", "--verify", f"origin/{env_base_branch}")
+            success, _ = self._run_git_command(
+                "rev-parse", "--verify", f"origin/{env_base_branch}"
+            )
             if success:
                 return env_base_branch
             else:
-                console.print(f"[yellow]Warning: NOVA_BASE_BRANCH '{env_base_branch}' not found on remote, falling back to auto-detection[/yellow]")
+                console.print(
+                    f"[yellow]Warning: NOVA_BASE_BRANCH '{env_base_branch}' not found on remote, falling back to auto-detection[/yellow]"
+                )
 
         # Original auto-detection logic
-        success, output = self._run_git_command("symbolic-ref", "refs/remotes/origin/HEAD")
+        success, output = self._run_git_command(
+            "symbolic-ref", "refs/remotes/origin/HEAD"
+        )
         if success and output:
             branch = output.replace("refs/remotes/origin/", "").strip()
             if branch:
@@ -192,7 +200,9 @@ class GitBranchManager:
 
         self.original_branch = self._get_current_branch()
         if self.original_branch == "HEAD":
-            success, output = self._run_git_command("branch", "--contains", self.original_head)
+            success, output = self._run_git_command(
+                "branch", "--contains", self.original_head
+            )
             if success and output:
                 branches = output.strip().split("\n")
                 for branch in branches:
@@ -205,7 +215,9 @@ class GitBranchManager:
                 if success:
                     self.original_branch = "main"
                 else:
-                    success, _ = self._run_git_command("rev-parse", "--verify", "master")
+                    success, _ = self._run_git_command(
+                        "rev-parse", "--verify", "master"
+                    )
                     if success:
                         self.original_branch = "master"
 
@@ -321,7 +333,7 @@ class GitBranchManager:
                 "diff", "--name-only", f"{self.original_head}..HEAD"
             )
             if success and changed_files:
-                file_list = changed_files.strip().split('\n')
+                file_list = changed_files.strip().split("\n")
                 file_names = [Path(f).name for f in file_list[:5]]
                 if len(file_list) > 5:
                     file_names.append(f"and {len(file_list) - 5} more files")
@@ -395,7 +407,21 @@ class GitBranchManager:
         # 3) Prefer gh CLI if available and authenticated
         if prefer_gh_cli and self._gh_authenticated():
             # Check if an open PR already exists for this head/base
-            cmd = ["gh", "pr", "list", "--state", "open", "--head", branch, "--base", base, "--json", "url", "--jq", ".[0].url"]
+            cmd = [
+                "gh",
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--head",
+                branch,
+                "--base",
+                base,
+                "--json",
+                "url",
+                "--jq",
+                ".[0].url",
+            ]
             if repo_slug:
                 cmd[2:2] = ["-R", repo_slug]  # insert after "gh", "pr"
             ok, url = self._run_cli(cmd)
@@ -403,7 +429,19 @@ class GitBranchManager:
                 return True, url
 
             # Create PR
-            cmd = ["gh", "pr", "create", "--title", title, "--body", body, "--base", base, "--head", branch]
+            cmd = [
+                "gh",
+                "pr",
+                "create",
+                "--title",
+                title,
+                "--body",
+                body,
+                "--base",
+                base,
+                "--head",
+                branch,
+            ]
             if repo_slug:
                 cmd[2:2] = ["-R", repo_slug]
             if draft:
@@ -436,7 +474,10 @@ class GitBranchManager:
                 "Run `gh auth login` or set GITHUB_TOKEN / GH_TOKEN."
             )
         if not repo_slug:
-            return False, f"Unable to parse repository slug from remote URL: {remote_url}"
+            return (
+                False,
+                f"Unable to parse repository slug from remote URL: {remote_url}",
+            )
 
         owner, repo = slug
         headers = {
@@ -469,7 +510,9 @@ class GitBranchManager:
                 "draft": draft,
             }
             data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(create_url, data=data, headers=headers, method="POST")
+            req = urllib.request.Request(
+                create_url, data=data, headers=headers, method="POST"
+            )
             with urllib.request.urlopen(req) as resp:
                 pr = json.loads(resp.read().decode("utf-8"))
             pr_url = pr.get("html_url") or pr.get("url") or ""
@@ -494,23 +537,35 @@ class GitBranchManager:
             return
 
         # Check if we've already cleaned up
-        if hasattr(self, '_cleaned_up') and self._cleaned_up:
+        if hasattr(self, "_cleaned_up") and self._cleaned_up:
             return
         self._cleaned_up = True
 
         if success:
-            console.print(f"\n[green]✅ Success! Changes saved to branch: {self.branch_name}[/green]")
+            console.print(
+                f"\n[green]✅ Success! Changes saved to branch: {self.branch_name}[/green]"
+            )
         else:
-            console.print("\n[yellow]⚠️  Cleaning up... resetting to original state[/yellow]")
+            console.print(
+                "\n[yellow]⚠️  Cleaning up... resetting to original state[/yellow]"
+            )
             current_branch = self._get_current_branch()
             if current_branch and current_branch.startswith("nova-auto-fix/"):
                 if self.original_branch and self.original_branch != "HEAD":
-                    ok, output = self._run_git_command("checkout", "-f", self.original_branch)
+                    ok, output = self._run_git_command(
+                        "checkout", "-f", self.original_branch
+                    )
                     if not ok:
-                        console.print(f"[yellow]Warning: Failed to checkout {self.original_branch}, trying HEAD[/yellow]")
-                        ok, _ = self._run_git_command("checkout", "-f", self.original_head)
+                        console.print(
+                            f"[yellow]Warning: Failed to checkout {self.original_branch}, trying HEAD[/yellow]"
+                        )
+                        ok, _ = self._run_git_command(
+                            "checkout", "-f", self.original_head
+                        )
                         if not ok:
-                            console.print("[red]Warning: Failed to checkout original state[/red]")
+                            console.print(
+                                "[red]Warning: Failed to checkout original state[/red]"
+                            )
                 else:
                     self._run_git_command("checkout", "-f", self.original_head)
 

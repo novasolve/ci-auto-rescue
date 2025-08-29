@@ -55,8 +55,12 @@ if ! command -v pytest &> /dev/null; then
     pip install -q -r requirements.txt
 fi
 
-# Make sure we're on main branch
-git checkout main >/dev/null 2>&1
+# Make sure we're on base (prefer demo/latest)
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest >/dev/null 2>&1 || git switch demo/latest >/dev/null 2>&1 || true
+else
+  git checkout main >/dev/null 2>&1 || git switch main >/dev/null 2>&1 || true
+fi
 
 # Run initial tests
 echo ""
@@ -208,7 +212,7 @@ git push origin $BRANCH
 PR_URL=$(gh pr create \
     --title "Fix subtraction function (bug)" \
     --body "Attempt to fix the subtract function, but this introduces a bug where subtraction is done incorrectly." \
-    --base main)
+    --base demo/latest)
 
 echo ""
 echo -e "${GREEN}✅ PR created:${NC} $PR_URL"
@@ -332,5 +336,9 @@ echo "Check out the PRs created:"
 echo "- Original broken PR: $PR_URL"
 echo "- Nova's fix PR: (check the PRs tab)"
 
-# Return to main
-git checkout main
+# Return to base
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest || git switch demo/latest
+else
+  git checkout main || git switch main
+fi

@@ -18,6 +18,9 @@ class AgentState:
     branch_name: Optional[str] = None
     original_commit: Optional[str] = None
     
+    # Output verbosity (for backwards compatibility with older CLIs)
+    verbose: bool = False
+    
     # Test failure information
     failing_tests: List[Dict[str, Any]] = field(default_factory=list)
     initial_failing_tests: List[Dict[str, Any]] = field(default_factory=list)  # Store original failures for PR

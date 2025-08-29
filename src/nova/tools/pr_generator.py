@@ -240,7 +240,7 @@ The following files were modified:
                         )
                         if result.returncode == 0:
                             stdout = (result.stdout or "").strip()
-                            url_line = next((line for line in stdout.splitlines() if line.startswith("https://github.com/")), "")
+                            url_line = next((output_line for output_line in stdout.splitlines() if output_line.startswith("https://github.com/")), "")
                             return True, (url_line or stdout or "PR created")
                         else:
                             # Fall through to REST API with token

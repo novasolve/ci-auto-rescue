@@ -1,30 +1,138 @@
-from http import HTTPStatus
-import contextvars
+"""
+Test utilities for HTTP-related testing.
+This is a lightweight alternative to full Flask for test purposes.
+"""
+
+from typing import Dict, Any, Optional, Union
+import json
 import io
-import json as _json
-import urllib.parse
-import html
-
-__all__ = [
-    "Flask",
-    "request",
-    "g",
-    "Response",
-    "jsonify",
-    "make_response",
-    "abort",
-    "redirect",
-    "escape",
-    "__version__",
-]
-
-__version__ = "0.1-testshim"
 
 
-# -----------------------------
-# Utilities: Headers, MultiDict
-# -----------------------------
-class Headers:
+class TestRequest:
+    """Simple test request object."""
+    def __init__(self, method: str = "GET", path: str = "/", data: bytes = b"", headers: Dict[str, str] = None):
+        self.method = method.upper()
+        self.path = path
+        self.data = data
+        self.headers = headers or {}
+
+    def get_json(self) -> Optional[Dict[str, Any]]:
+        """Get JSON data from request."""
+        try:
+            return json.loads(self.data.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+
+
+class TestResponse:
+    """Simple test response object."""
+    def __init__(self, data: Union[str, bytes] = "", status: int = 200, headers: Dict[str, str] = None):
+        self.data = data.encode('utf-8') if isinstance(data, str) else data
+        self.status_code = status
+        self.headers = headers or {}
+
+    def get_json(self) -> Optional[Dict[str, Any]]:
+        """Get JSON data from response."""
+        try:
+            return json.loads(self.data.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+
+
+class TestClient:
+    """Simple test client for HTTP testing."""
+    def __init__(self, app):
+        self.app = app
+
+    def get(self, path: str, **kwargs) -> TestResponse:
+        """Make GET request."""
+        return self._make_request("GET", path, **kwargs)
+
+    def post(self, path: str, **kwargs) -> TestResponse:
+        """Make POST request."""
+        return self._make_request("POST", path, **kwargs)
+
+    def put(self, path: str, **kwargs) -> TestResponse:
+        """Make PUT request."""
+        return self._make_request("PUT", path, **kwargs)
+
+    def delete(self, path: str, **kwargs) -> TestResponse:
+        """Make DELETE request."""
+        return self._make_request("DELETE", path, **kwargs)
+
+    def _make_request(self, method: str, path: str, data: Union[str, bytes] = None,
+                     json: Dict[str, Any] = None, headers: Dict[str, str] = None) -> TestResponse:
+        """Make HTTP request."""
+        request_data = b""
+        request_headers = headers or {}
+
+        if json is not None:
+            request_data = json.dumps(json).encode('utf-8')
+            request_headers['Content-Type'] = 'application/json'
+        elif data is not None:
+            request_data = data.encode('utf-8') if isinstance(data, str) else data
+
+        request = TestRequest(method=method, path=path, data=request_data, headers=request_headers)
+
+        # Call the test app
+        if hasattr(self.app, '__call__'):
+            return self.app(request)
+        else:
+            # Fallback for simple callable
+            return TestResponse("Not Found", 404)
+
+
+# Lightweight Flask-like app for testing
+class TestApp:
+    """Lightweight test app similar to Flask."""
+    def __init__(self):
+        self.routes = {}
+
+    def route(self, path: str, methods: list = None):
+        """Decorator to add routes."""
+        methods = methods or ["GET"]
+
+        def decorator(func):
+            for method in methods:
+                self.routes.setdefault(path, {})[method.upper()] = func
+            return func
+        return decorator
+
+    def test_client(self):
+        """Return test client."""
+        return TestClient(self)
+
+    def __call__(self, request: TestRequest) -> TestResponse:
+        """Handle test request."""
+        route = self.routes.get(request.path)
+        if not route:
+            return TestResponse("Not Found", 404)
+
+        handler = route.get(request.method)
+        if not handler:
+            return TestResponse("Method Not Allowed", 405)
+
+        try:
+            result = handler(request)
+            if isinstance(result, TestResponse):
+                return result
+            elif isinstance(result, dict):
+                return TestResponse(json.dumps(result), headers={'Content-Type': 'application/json'})
+            elif isinstance(result, str):
+                return TestResponse(result)
+            else:
+                return TestResponse(str(result))
+        except Exception as e:
+            return TestResponse(f"Error: {str(e)}", 500)
+
+
+# Backward compatibility aliases
+Flask = TestApp
+Response = TestResponse
+request = TestRequest
+jsonify = lambda data: TestResponse(json.dumps(data), headers={'Content-Type': 'application/json'})
+
+__all__ = ["Flask", "Response", "request", "jsonify", "TestApp", "TestRequest", "TestResponse", "TestClient"]
     def __init__(self, headers=None):
         self._list = []
         if headers:

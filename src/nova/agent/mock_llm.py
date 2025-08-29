@@ -4,7 +4,6 @@ This is a simple implementation for the E2E demo that analyzes
 test failures and generates appropriate patches.
 """
 
-import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -40,8 +39,6 @@ class MockLLMAgent:
         test_path = self.repo_path / test_file
         if not test_path.exists():
             return None
-        
-        content = test_path.read_text()
         
         # Analyze the error and generate appropriate fix
         if "test_simple_assertion_failure" in test_name:

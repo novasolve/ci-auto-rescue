@@ -1,5 +1,5 @@
 """
-Unified LLM client for Nova CI-Rescue supporting OpenAI and Anthropic.
+Unified LLM client for Nova CI-Rescue supporting OpenAI, Grok, and Anthropic.
 """
 
 import json
@@ -18,13 +18,14 @@ try:
 except ImportError:
     anthropic = None
 
+# Grok uses OpenAI compatible API, so we'll use OpenAI client for Grok models
+
 from nova.config import get_settings
 from nova.logger import get_logger
-import time
 
 
 class LLMClient:
-    """Unified LLM client that supports OpenAI and Anthropic models."""
+    """Unified LLM client that supports OpenAI, Grok, and Anthropic models."""
 
     def __init__(self):
         self.settings = get_settings()
@@ -58,6 +59,18 @@ class LLMClient:
             self.client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
             self.provider = "anthropic"
             self.model = self._get_anthropic_model_name()
+        elif "grok" in model_name and self.settings.openai_api_key:
+            # Use Grok (via OpenAI compatible API)
+            if OpenAI is None:
+                raise ImportError(
+                    "openai package not installed. Run: pip install openai"
+                )
+            # For Grok, we'll use a different base URL or API key
+            grok_api_key = os.environ.get("GROK_API_KEY") or self.settings.openai_api_key
+            grok_base_url = os.environ.get("GROK_BASE_URL", "https://api.x.ai/v1")
+            self.client = OpenAI(api_key=grok_api_key, base_url=grok_base_url)
+            self.provider = "grok"
+            self.model = self._get_grok_model_name()
         elif self.settings.openai_api_key:
             # Use OpenAI
             if OpenAI is None:
@@ -69,7 +82,7 @@ class LLMClient:
             self.model = self._get_openai_model_name()
         else:
             raise ValueError(
-                "No valid API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY."
+                "No valid API key found. Please set OPENAI_API_KEY (for OpenAI/Grok) or ANTHROPIC_API_KEY (for Claude)."
             )
 
     def _get_openai_model_name(self) -> str:
@@ -117,6 +130,21 @@ class LLMClient:
         else:
             # Default to Claude 3.5 Sonnet
             return "claude-3-5-sonnet-20241022"
+
+    def _get_grok_model_name(self) -> str:
+        """Get the Grok model name to use."""
+        model = self.settings.default_llm_model.lower()
+
+        # Map to actual Grok models
+        if "grok-code-fast-1" in model:
+            return "grok-code-fast-1"
+        elif "grok-2" in model:
+            return "grok-2-1212"
+        elif "grok-1" in model:
+            return "grok-1"
+        else:
+            # Default to Grok Code Fast 1
+            return "grok-code-fast-1"
 
     def complete(
         self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 40000
@@ -174,6 +202,15 @@ class LLMClient:
         try:
             if self.provider == "openai":
                 # Force OpenAI params, respecting env MAX_TOKENS
+                try:
+                    max_tok = int(os.environ.get("MAX_TOKENS", "40000"))
+                except Exception:
+                    max_tok = 40000
+                return self._complete_openai(
+                    system, user, temperature=1.0, max_tokens=max_tok
+                )
+            elif self.provider == "grok":
+                # Grok uses OpenAI compatible API
                 try:
                     max_tok = int(os.environ.get("MAX_TOKENS", "40000"))
                 except Exception:

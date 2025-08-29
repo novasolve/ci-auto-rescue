@@ -233,13 +233,13 @@ def fix(
     from nova.tools.lock import nova_lock
     
     try:
-        branch_name = git_manager.create_fix_branch()
-        console.print(f"[dim]Working on branch: {branch_name}[/dim]")
-
+            branch_name = git_manager.create_fix_branch()
+            console.print(f"[dim]Working on branch: {branch_name}[/dim]")
+            
         # Set up Ctrl+C signal handler for clean abort
-        git_manager.setup_signal_handler()
-
-        # Initialize settings and telemetry
+            git_manager.setup_signal_handler()
+            
+            # Initialize settings and telemetry
         settings = NovaSettings()
         if config_data and config_data.model:
             settings.default_llm_model = config_data.model
@@ -251,9 +251,9 @@ def fix(
             "timeout": final_timeout
         })
         
-        # Initialize agent state
-        state = AgentState(
-            repo_path=repo_path,
+            # Initialize agent state
+            state = AgentState(
+                repo_path=repo_path,
             max_iterations=final_max_iters,
             timeout_seconds=final_timeout,
         )
@@ -413,7 +413,7 @@ def fix(
             if success:
                 console.print("\n[green bold]✅ SUCCESS - All tests fixed![/green bold]")
                 state.final_status = "success"
-            else:
+                else:
                 console.print("\n[red bold]❌ FAILED - Some tests could not be fixed.[/red bold]")
                 if state.final_status == "max_iters":
                     console.print(f"[yellow]Reached maximum iterations ({state.max_iterations}) without full success.[/yellow]")
@@ -422,7 +422,7 @@ def fix(
         else:
             # === Legacy Agent Path (deprecated v1.0 approach) ===
             console.print("\n[bold]⚠️ Running legacy LLM-based agent (deprecated)...[/bold]")
-            from nova.agent.llm_agent import LLMAgent
+                    from nova.agent.llm_agent import LLMAgent
             from nova.nodes.planner import planner_node
             from nova.nodes.actor import actor_node
             from nova.nodes.critic import critic_node
@@ -494,7 +494,7 @@ def fix(
             # If loop ended without setting final_status, it means max iterations reached
             if state.final_status is None or (state.final_status not in {"success", "patch_error", "patch_rejected", "no_patch"}):
                 # Reached max iterations without full success
-                state.final_status = "max_iters"
+                    state.final_status = "max_iters"
                 console.print(f"\n[red bold]❌ FAILED - Reached max iterations ({state.max_iterations}) with tests still failing.[/red bold]")
 
         # Log completion status
@@ -636,7 +636,8 @@ def fix(
 
         # If no failures, nothing to fix
         if not failing_tests:
-            console.print("[green]✅ No failing tests found! Repository is already green.[/green]")
+            if verbose:
+                console.print("[green]✅ Repository is already green - no failing tests found.[/green]")
             state.final_status = "success"
             telemetry.log_event("completion", {"status": "no_failures"})
             telemetry.end_run(success=True)

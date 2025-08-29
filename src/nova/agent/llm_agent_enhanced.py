@@ -468,7 +468,7 @@ class EnhancedLLMAgent:
                     if hasattr(self, "verbose") and self.verbose and stash_result.stderr:
                         console.print(f"[dim]Stash stderr: {stash_result.stderr}[/dim]")
                     console.print(
-                        "[cyan]🧪 Critic running tests with patch applied...[/cyan]"
+                        "[cyan]🧪 Testing patch application...[/cyan]"
                     )
 
                     # Debug: Show patch format

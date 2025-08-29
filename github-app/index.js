@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default (app) => {
+export default (app, { getRouter }) => {
   app.log.info('Nova CI-Rescue GitHub App loaded');
 
   // Track active installations with persistent storage
@@ -72,116 +72,118 @@ export default (app) => {
     return true;
   }
 
-  // Health endpoint for GitHub Marketplace and Fly.io health checks
-  const router = app.route('/');
-  
-  // Basic health check endpoint
-  router.get('/health', (req, res) => {
-    const memoryUsage = process.memoryUsage();
-    res.status(200).json({
-      status: 'healthy',
-      service: 'nova-ci-rescue',
-      timestamp: new Date().toISOString(),
-      version: process.env.APP_VERSION || '1.0.0',
-      installations_count: installations.size,
-      memory: {
-        used_mb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
-        total_mb: Math.round(memoryUsage.heapTotal / 1024 / 1024)
-      },
-      uptime_seconds: Math.floor(process.uptime())
-    });
-  });
+  // Add custom routes using getRouter
+  if (getRouter) {
+    const router = getRouter('/');
 
-  // Root endpoint for basic checks
-  router.get('/', (req, res) => {
-    res.status(200).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Nova CI-Rescue</title>
-        <style>
-          body {
-            font-family: -apple-system, system-ui, sans-serif;
-            max-width: 600px;
-            margin: 100px auto;
-            padding: 20px;
-            text-align: center;
-          }
-          h1 { font-size: 48px; margin: 0; }
-          .logo { font-size: 72px; margin-bottom: 20px; }
-          .links { margin-top: 30px; }
-          a { 
-            color: #0366d6;
-            text-decoration: none;
-            margin: 0 10px;
-          }
-          a:hover { text-decoration: underline; }
-          .status { 
-            background: #d1f5d3;
-            padding: 10px 20px;
-            border-radius: 6px;
-            display: inline-block;
-            margin-top: 20px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="logo">🤖</div>
-        <h1>Nova CI-Rescue</h1>
-        <p>GitHub App is running! 🚀</p>
-        <div class="status">✅ Healthy - ${installations.size} active installations</div>
-        <div class="links">
-          <a href="/setup">Setup Guide</a> •
-          <a href="/health">Health Status</a> •
-          <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
-        </div>
-      </body>
-      </html>
-    `);
-  });
-  
-  // Setup guide endpoint
-  router.get('/setup', (req, res) => {
-    const setupPath = path.join(__dirname, 'templates', 'setup.html');
-    
-    fs.readFile(setupPath, 'utf8', (err, data) => {
-      if (err) {
-        app.log.error('Failed to read setup guide', err);
-        res.status(500).send('Setup guide not found');
-        return;
-      }
-      res.status(200).send(data);
-    });
-  });
-
-  // Detailed probe endpoint for monitoring
-  router.get('/probe', async (req, res) => {
-    try {
-      // Check if we can authenticate with GitHub
-      const authenticated = app.state.id ? true : false;
-      
+    // Health endpoint for GitHub Marketplace and Fly.io health checks
+    router.get('/health', (req, res) => {
+      const memoryUsage = process.memoryUsage();
       res.status(200).json({
         status: 'healthy',
         service: 'nova-ci-rescue',
         timestamp: new Date().toISOString(),
         version: process.env.APP_VERSION || '1.0.0',
-        checks: {
-          github_auth: authenticated ? 'connected' : 'pending',
-          app_id: process.env.APP_ID ? 'configured' : 'missing',
-          webhook_secret: process.env.WEBHOOK_SECRET ? 'configured' : 'missing'
+        installations_count: installations.size,
+        memory: {
+          used_mb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+          total_mb: Math.round(memoryUsage.heapTotal / 1024 / 1024)
         },
-        stats: {
-          active_installations: installations.size,
-          uptime: process.uptime()
+        uptime_seconds: Math.floor(process.uptime())
+      });
+    });
+
+    // Root endpoint for basic checks
+    router.get('/', (req, res) => {
+      res.status(200).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Nova CI-Rescue</title>
+          <style>
+            body {
+              font-family: -apple-system, system-ui, sans-serif;
+              max-width: 600px;
+              margin: 100px auto;
+              padding: 20px;
+              text-align: center;
+            }
+            h1 { font-size: 48px; margin: 0; }
+            .logo { font-size: 72px; margin-bottom: 20px; }
+            .links { margin-top: 30px; }
+            a { 
+              color: #0366d6;
+              text-decoration: none;
+              margin: 0 10px;
+            }
+            a:hover { text-decoration: underline; }
+            .status { 
+              background: #d1f5d3;
+              padding: 10px 20px;
+              border-radius: 6px;
+              display: inline-block;
+              margin-top: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="logo">🤖</div>
+          <h1>Nova CI-Rescue</h1>
+          <p>GitHub App is running! 🚀</p>
+          <div class="status">✅ Healthy - ${installations.size} active installations</div>
+          <div class="links">
+            <a href="/setup">Setup Guide</a> •
+            <a href="/health">Health Status</a> •
+            <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
+          </div>
+        </body>
+        </html>
+      `);
+    });
+    
+    // Setup guide endpoint
+    router.get('/setup', (req, res) => {
+      const setupPath = path.join(__dirname, 'templates', 'setup.html');
+      
+      fs.readFile(setupPath, 'utf8', (err, data) => {
+        if (err) {
+          app.log.error('Failed to read setup guide', err);
+          res.status(500).send('Setup guide not found');
+          return;
         }
+        res.status(200).send(data);
       });
-    } catch (error) {
-      res.status(503).json({
-        status: 'unhealthy',
-        error: error.message
-      });
-    }
-  });
+    });
+
+    // Detailed probe endpoint for monitoring
+    router.get('/probe', async (req, res) => {
+      try {
+        // Check if we can authenticate with GitHub
+        const authenticated = app.state?.id ? true : false;
+        
+        res.status(200).json({
+          status: 'healthy',
+          service: 'nova-ci-rescue',
+          timestamp: new Date().toISOString(),
+          version: process.env.APP_VERSION || '1.0.0',
+          checks: {
+            github_auth: authenticated ? 'connected' : 'pending',
+            app_id: process.env.APP_ID ? 'configured' : 'missing',
+            webhook_secret: process.env.WEBHOOK_SECRET ? 'configured' : 'missing'
+          },
+          stats: {
+            active_installations: installations.size,
+            uptime: process.uptime()
+          }
+        });
+      } catch (error) {
+        res.status(503).json({
+          status: 'unhealthy',
+          error: error.message
+        });
+      }
+    });
+  }
 
   // Handle new installations
   app.on('installation.created', async (context) => {

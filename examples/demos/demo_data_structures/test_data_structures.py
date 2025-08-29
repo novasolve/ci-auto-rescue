@@ -2,8 +2,14 @@
 
 import pytest
 from data_structures import (
-    Stack, Queue, LinkedList, binary_search, merge_sort, find_duplicates
+    Stack,
+    Queue,
+    LinkedList,
+    binary_search,
+    merge_sort,
+    find_duplicates,
 )
+
 
 class TestStack:
     """Test Stack implementation."""
@@ -29,15 +35,16 @@ class TestStack:
     def test_is_empty(self):
         """Test empty check."""
         stack = Stack()
-        assert stack.is_empty() == True
+        assert stack.is_empty()
         stack.push(1)
-        assert stack.is_empty() == False
+        assert not stack.is_empty()
 
     def test_pop_empty(self):
         """Test pop on empty stack."""
         stack = Stack()
         with pytest.raises(IndexError):
             stack.pop()
+
 
 class TestQueue:
     """Test Queue implementation."""
@@ -61,6 +68,7 @@ class TestQueue:
         queue.enqueue(2)
         assert queue.size() == 2
 
+
 class TestLinkedList:
     """Test LinkedList implementation."""
 
@@ -70,9 +78,9 @@ class TestLinkedList:
         ll.append(1)
         ll.append(2)
         ll.append(3)
-        assert ll.find(1) == True
-        assert ll.find(2) == True
-        assert ll.find(3) == True
+        assert ll.find(1)
+        assert ll.find(2)
+        assert ll.find(3)
 
     def test_prepend(self):
         """Test prepend operation."""
@@ -87,9 +95,10 @@ class TestLinkedList:
         ll = LinkedList()
         ll.append(1)
         ll.append(2)
-        assert ll.find(1) == True
-        assert ll.find(2) == True
-        assert ll.find(3) == False
+        assert ll.find(1)
+        assert ll.find(2)
+        assert not ll.find(3)
+
 
 def test_binary_search():
     """Test binary search."""
@@ -99,12 +108,14 @@ def test_binary_search():
     assert binary_search(arr, 13) == 6
     assert binary_search(arr, 4) == -1
 
+
 def test_merge_sort():
     """Test merge sort."""
     assert merge_sort([3, 1, 4, 1, 5, 9]) == [1, 1, 3, 4, 5, 9]
     assert merge_sort([5, 4, 3, 2, 1]) == [1, 2, 3, 4, 5]
     assert merge_sort([1]) == [1]
     assert merge_sort([]) == []
+
 
 def test_find_duplicates():
     """Test finding duplicates."""

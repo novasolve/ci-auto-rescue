@@ -15,11 +15,7 @@ def run_command(cmd: List[str], cwd: Path = None) -> Tuple[bool, str]:
     """Run a command and return success status and output."""
     try:
         result = subprocess.run(
-            cmd,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=False
+            cmd, cwd=cwd, capture_output=True, text=True, check=False
         )
         return result.returncode == 0, result.stdout + result.stderr
     except Exception as e:
@@ -33,7 +29,7 @@ def find_submodules(repo_path: Path) -> List[Path]:
     # Check .gitmodules file
     gitmodules = repo_path / ".gitmodules"
     if gitmodules.exists():
-        print(f"Found .gitmodules file")
+        print("Found .gitmodules file")
         # Parse it to find submodule paths
         with open(gitmodules) as f:
             lines = f.readlines()
@@ -88,7 +84,7 @@ def clean_submodule(submodule_path: Path, force: bool = False) -> bool:
             print(f"  Modified files: {'Yes' if has_modified else 'No'}")
             print(f"  Untracked files: {'Yes' if has_untracked else 'No'}")
             response = input("  Discard all changes? (y/N): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 print("  Skipped.")
                 return False
 

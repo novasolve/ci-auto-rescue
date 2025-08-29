@@ -15,13 +15,17 @@ import time
 
 console = Console()
 
+
 def run_command(cmd, cwd=None, capture=True):
     """Run a shell command and return the result."""
     if capture:
-        result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, shell=True, cwd=cwd, capture_output=True, text=True
+        )
         return result.returncode, result.stdout, result.stderr
     else:
         return subprocess.run(cmd, shell=True, cwd=cwd).returncode, "", ""
+
 
 def setup_demo_repo():
     """Create a demo repository with failing tests."""
@@ -79,7 +83,7 @@ def test_division():
 '''
 
     test_file.write_text(test_content)
-    console.print(f"✅ Created test file with 4 failing tests")
+    console.print("✅ Created test file with 4 failing tests")
 
     # Initialize git repo
     run_command("git init", cwd=demo_dir)
@@ -89,27 +93,27 @@ def test_division():
 
     return demo_dir
 
+
 def show_test_status(demo_dir):
     """Show current test status."""
     console.print("\n[bold cyan]🧪 Current Test Status[/bold cyan]")
     console.print("=" * 60)
 
     code, stdout, stderr = run_command(
-        "python -m pytest test_failures.py -v --tb=no",
-        cwd=demo_dir
+        "python -m pytest test_failures.py -v --tb=no", cwd=demo_dir
     )
 
     # Parse results
     output = stdout + stderr
     passed = failed = 0
-    for line in output.split('\n'):
-        if 'passed' in line and 'failed' in line:
+    for line in output.split("\n"):
+        if "passed" in line and "failed" in line:
             parts = line.split()
             for i, part in enumerate(parts):
-                if 'failed' in part and i > 0:
-                    failed = int(parts[i-1])
-                if 'passed' in part and i > 0:
-                    passed = int(parts[i-1])
+                if "failed" in part and i > 0:
+                    failed = int(parts[i - 1])
+                if "passed" in part and i > 0:
+                    passed = int(parts[i - 1])
 
     # Create status table
     table = Table(title="Test Results")
@@ -121,6 +125,7 @@ def show_test_status(demo_dir):
 
     console.print(table)
     return failed > 0
+
 
 def run_nova_fix_with_llm(demo_dir):
     """Run nova fix with real LLM integration."""
@@ -136,11 +141,11 @@ def run_nova_fix_with_llm(demo_dir):
     # Run nova fix (this will use real LLM if available)
     code, stdout, stderr = run_command(
         f"cd {demo_dir} && python -m nova.cli fix . --max-iters 3 --timeout 300",
-        capture=True
+        capture=True,
     )
 
     # Parse and display output
-    lines = stdout.split('\n')
+    lines = stdout.split("\n")
     for line in lines:
         if "Planning fix" in line:
             console.print(f"[cyan]{line}[/cyan]")
@@ -157,41 +162,42 @@ def run_nova_fix_with_llm(demo_dir):
 
     return code == 0
 
+
 def show_git_history(demo_dir):
     """Show what changes were made."""
     console.print("\n[bold cyan]📝 Git History - Changes Made by Nova[/bold cyan]")
     console.print("=" * 60)
 
-    code, stdout, stderr = run_command(
-        "git log --oneline --graph -5",
-        cwd=demo_dir
-    )
+    code, stdout, stderr = run_command("git log --oneline --graph -5", cwd=demo_dir)
 
     console.print(stdout)
 
     # Show the actual patch
     console.print("\n[bold]Last Patch Applied:[/bold]")
     code, stdout, stderr = run_command(
-        "git diff HEAD~1 test_failures.py | head -30",
-        cwd=demo_dir
+        "git diff HEAD~1 test_failures.py | head -30", cwd=demo_dir
     )
 
-    for line in stdout.split('\n'):
-        if line.startswith('+') and not line.startswith('+++'):
+    for line in stdout.split("\n"):
+        if line.startswith("+") and not line.startswith("+++"):
             console.print(f"[green]{line}[/green]")
-        elif line.startswith('-') and not line.startswith('---'):
+        elif line.startswith("-") and not line.startswith("---"):
             console.print(f"[red]{line}[/red]")
         else:
             console.print(f"[dim]{line}[/dim]")
 
+
 def main():
     """Main demo flow."""
     console.print("\n" + "=" * 60)
-    console.print("[bold green]🚀 Nova CI-Rescue with Real LLM - Complete Demo[/bold green]")
+    console.print(
+        "[bold green]🚀 Nova CI-Rescue with Real LLM - Complete Demo[/bold green]"
+    )
     console.print("=" * 60)
 
     # Check OpenAI configuration
     from nova.config import get_settings
+
     settings = get_settings()
 
     if not settings.openai_api_key:
@@ -199,7 +205,9 @@ def main():
         console.print("Please set OPENAI_API_KEY in your .env file")
         return 1
 
-    console.print(f"✅ Using OpenAI GPT Model: [bold]{settings.default_llm_model}[/bold]")
+    console.print(
+        f"✅ Using OpenAI GPT Model: [bold]{settings.default_llm_model}[/bold]"
+    )
     console.print()
 
     try:
@@ -226,7 +234,9 @@ def main():
             show_git_history(demo_dir)
 
             console.print("\n" + "=" * 60)
-            console.print("[bold green]✅ SUCCESS![/bold green] Nova CI-Rescue with LLM fixed all tests!")
+            console.print(
+                "[bold green]✅ SUCCESS![/bold green] Nova CI-Rescue with LLM fixed all tests!"
+            )
             console.print("=" * 60)
             console.print()
             console.print("[bold]Key Achievements:[/bold]")
@@ -243,10 +253,12 @@ def main():
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         return 1
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

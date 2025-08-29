@@ -68,7 +68,10 @@ class JSONLLogger:
         return self._run_dir
 
     def start_run(self, repo_path: Path | str) -> str:
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + f"-{uuid.uuid4().hex[:8]}"
+        run_id = (
+            datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            + f"-{uuid.uuid4().hex[:8]}"
+        )
         base_dir = Path(self.settings.telemetry_dir)
         run_dir = base_dir / run_id
         trace_file = run_dir / "trace.jsonl"
@@ -79,25 +82,29 @@ class JSONLLogger:
 
         if self.enabled:
             run_dir.mkdir(parents=True, exist_ok=True)
-            self._append_record({
-                "ts": _utc_now_iso(),
-                "event": "start",
-                "repo_path": str(repo_path),
-                "run_id": run_id,
-                "telemetry_dir": str(run_dir),
-                "pid": os.getpid(),
-            })
+            self._append_record(
+                {
+                    "ts": _utc_now_iso(),
+                    "event": "start",
+                    "repo_path": str(repo_path),
+                    "run_id": run_id,
+                    "telemetry_dir": str(run_dir),
+                    "pid": os.getpid(),
+                }
+            )
         return run_id
 
     def log_event(self, event_type: str, payload: Dict[str, Any]) -> None:
         if not self.enabled or not self._trace_file:
             return
         safe_payload = redact_secrets(payload, self._secrets)
-        self._append_record({
-            "ts": _utc_now_iso(),
-            "event": event_type,
-            "data": safe_payload,
-        })
+        self._append_record(
+            {
+                "ts": _utc_now_iso(),
+                "event": event_type,
+                "data": safe_payload,
+            }
+        )
 
     def save_artifact(self, name: str, data: bytes | str) -> Optional[Path]:
         if not self.enabled or not self._run_dir:
@@ -110,13 +117,15 @@ class JSONLLogger:
             dest.write_bytes(data)
         else:
             dest.write_text(data)
-        self._append_record({
-            "ts": _utc_now_iso(),
-            "event": "artifact",
-            "name": name,
-            "path": str(dest),
-            "size": dest.stat().st_size,
-        })
+        self._append_record(
+            {
+                "ts": _utc_now_iso(),
+                "event": "artifact",
+                "name": name,
+                "path": str(dest),
+                "size": dest.stat().st_size,
+            }
+        )
         return dest
 
     def save_patch(self, step_number: int, patch_content: str) -> Optional[Path]:
@@ -124,7 +133,9 @@ class JSONLLogger:
         filename = f"patches/step-{step_number}.patch"
         return self.save_artifact(filename, patch_content)
 
-    def save_test_report(self, step_number: int, report_content: str, report_type: str = "junit") -> Optional[Path]:
+    def save_test_report(
+        self, step_number: int, report_content: str, report_type: str = "junit"
+    ) -> Optional[Path]:
         """Save a test report as step-N.xml artifact."""
         ext = "xml" if report_type == "junit" else "json"
         filename = f"reports/step-{step_number}.{ext}"
@@ -133,12 +144,14 @@ class JSONLLogger:
     def end_run(self, success: bool, summary: Dict[str, Any] | None = None) -> None:
         if not self.enabled or not self._trace_file:
             return
-        self._append_record({
-            "ts": _utc_now_iso(),
-            "event": "end",
-            "success": bool(success),
-            "summary": redact_secrets(summary or {}, self._secrets),
-        })
+        self._append_record(
+            {
+                "ts": _utc_now_iso(),
+                "event": "end",
+                "success": bool(success),
+                "summary": redact_secrets(summary or {}, self._secrets),
+            }
+        )
 
     def _append_record(self, record: Dict[str, Any]) -> None:
         if not self._trace_file:

@@ -29,7 +29,7 @@ primary_region = "sjc"
     path = "/health"
     protocol = "http"
     timeout = "5s"
-    
+
     [http_service.checks.headers]
       Accept = "application/json"
 
@@ -55,7 +55,7 @@ primary_region = "sjc"
     path = "/health"
     protocol = "http"
     timeout = "5s"
-    
+
     [http_service.checks.headers]
       Accept = "application/json"
 
@@ -81,7 +81,7 @@ primary_region = "sjc"
     path = "/health"
     protocol = "http"
     timeout = "5s"
-    
+
     [http_service.checks.headers]
       Accept = "application/json"
 

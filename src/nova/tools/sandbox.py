@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 
-def _limits_preexec(cpu_seconds: Optional[int] = None, max_address_space_bytes: Optional[int] = None):
+def _limits_preexec(
+    cpu_seconds: Optional[int] = None, max_address_space_bytes: Optional[int] = None
+):
     try:
         import resource  # type: ignore
     except Exception:
@@ -28,7 +30,10 @@ def _limits_preexec(cpu_seconds: Optional[int] = None, max_address_space_bytes: 
             pass
         try:
             if max_address_space_bytes and max_address_space_bytes > 0:
-                resource.setrlimit(resource.RLIMIT_AS, (max_address_space_bytes, max_address_space_bytes))
+                resource.setrlimit(
+                    resource.RLIMIT_AS,
+                    (max_address_space_bytes, max_address_space_bytes),
+                )
         except Exception:
             pass
 
@@ -75,9 +80,11 @@ def run_command(
             stdout=stdout_pipe,
             stderr=stderr_pipe,
             text=False,
-            preexec_fn=_limits_preexec(cpu_seconds=cpu_limit, max_address_space_bytes=two_gib)
-            if os.name == "posix"
-            else None,
+            preexec_fn=(
+                _limits_preexec(cpu_seconds=cpu_limit, max_address_space_bytes=two_gib)
+                if os.name == "posix"
+                else None
+            ),
         )
 
         try:

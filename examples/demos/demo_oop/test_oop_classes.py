@@ -2,9 +2,17 @@
 
 import pytest
 from oop_classes import (
-    BankAccount, Rectangle, Employee, Animal, Dog, Cat,
-    ShoppingCart, EmailValidator, Temperature
+    BankAccount,
+    Rectangle,
+    Employee,
+    Animal,
+    Dog,
+    Cat,
+    ShoppingCart,
+    EmailValidator,
+    Temperature,
 )
+
 
 class TestBankAccount:
     """Test BankAccount class."""
@@ -30,6 +38,7 @@ class TestBankAccount:
         result = account.withdraw(150)
         assert result == 0  # Should not allow
         assert account.get_balance() == 100  # Balance unchanged
+
 
 class TestRectangle:
     """Test Rectangle class."""
@@ -58,6 +67,7 @@ class TestRectangle:
         square = Rectangle(3, 3)
         assert square.is_square() == True
 
+
 class TestEmployee:
     """Test Employee class."""
 
@@ -76,6 +86,7 @@ class TestEmployee:
         emp.give_raise(10)  # 10% raise
         assert emp.salary == 66000
 
+
 class TestAnimalInheritance:
     """Test Animal inheritance."""
 
@@ -90,7 +101,7 @@ class TestAnimalInheritance:
         """Test Cat class."""
         cat = Cat("Whiskers")
         assert cat.name == "Whiskers"
-        assert hasattr(cat, 'color')
+        assert hasattr(cat, "color")
         assert cat.speak() == "Meow"
 
     def test_animal_abstract(self):
@@ -98,6 +109,7 @@ class TestAnimalInheritance:
         animal = Animal("Generic")
         with pytest.raises(NotImplementedError):
             animal.speak()
+
 
 class TestShoppingCart:
     """Test ShoppingCart class."""
@@ -123,6 +135,7 @@ class TestShoppingCart:
         # Should handle non-existent item gracefully
         cart.remove_item("banana")  # Should not raise exception
 
+
 class TestEmailValidator:
     """Test EmailValidator class."""
 
@@ -137,7 +150,10 @@ class TestEmailValidator:
     def test_normalize(self):
         """Test email normalization."""
         assert EmailValidator.normalize("USER@EXAMPLE.COM") == "user@example.com"
-        assert EmailValidator.normalize("User.Name@Example.Com") == "user.name@example.com"
+        assert (
+            EmailValidator.normalize("User.Name@Example.Com") == "user.name@example.com"
+        )
+
 
 class TestTemperature:
     """Test Temperature class."""

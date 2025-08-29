@@ -27,7 +27,7 @@ class Calculator:
 
     def power(self, base: float, exponent: float) -> float:
         """Raise base to the power of exponent."""
-        return base ** exponent
+        return base**exponent
 
     def square_root(self, n: float) -> float:
         """Calculate square root of n."""

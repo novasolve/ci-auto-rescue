@@ -45,7 +45,7 @@ jobs:
           pip install bandit[toml]
 
       - name: Run Bandit
-        run: bandit -r src/ -f github
+        run: bandit -r src/ -f json
 
   codeql:
     runs-on: ubuntu-latest

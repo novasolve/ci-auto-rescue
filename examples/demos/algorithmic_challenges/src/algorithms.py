@@ -42,13 +42,14 @@ class AlgorithmicChallenges:
 
         return max(dp)
 
-    def dijkstra_shortest_path(self, graph: Dict[int, List[Tuple[int, int]]],
-                              start: int, end: int) -> Tuple[int, List[int]]:
+    def dijkstra_shortest_path(
+        self, graph: Dict[int, List[Tuple[int, int]]], start: int, end: int
+    ) -> Tuple[int, List[int]]:
         """
         Dijkstra's algorithm for shortest path.
         BUG: Doesn't handle negative weights properly and has path reconstruction bug.
         """
-        distances = defaultdict(lambda: float('inf'))
+        distances = defaultdict(lambda: float("inf"))
         distances[start] = 0
         heap = [(0, start)]
         visited = set()
@@ -77,7 +78,7 @@ class AlgorithmicChallenges:
                         parent[neighbor] = node
                         heapq.heappush(heap, (new_dist, neighbor))
 
-        return float('inf'), []
+        return float("inf"), []
 
     def merge_intervals(self, intervals: List[List[int]]) -> List[List[int]]:
         """
@@ -148,13 +149,15 @@ class AlgorithmicChallenges:
             for w in range(capacity):  # Should start from 1
                 if weights[i] <= w:
                     # BUG: Wrong indices in the recurrence relation
-                    dp[i][w] = max(dp[i-1][w], values[i] + dp[i-1][w-weights[i]])
+                    dp[i][w] = max(dp[i - 1][w], values[i] + dp[i - 1][w - weights[i]])
                 else:
-                    dp[i][w] = dp[i-1][w]
+                    dp[i][w] = dp[i - 1][w]
 
-        return dp[n-1][capacity-1]  # BUG: Wrong indices
+        return dp[n - 1][capacity - 1]  # BUG: Wrong indices
 
-    def topological_sort(self, num_courses: int, prerequisites: List[List[int]]) -> List[int]:
+    def topological_sort(
+        self, num_courses: int, prerequisites: List[List[int]]
+    ) -> List[int]:
         """
         Topological sort using Kahn's algorithm.
         BUG: Cycle detection and edge case handling.
@@ -205,4 +208,6 @@ class AlgorithmicChallenges:
                     # BUG: Not checking if dp[i-coin] is valid
                     dp[i] = min(dp[i], 1 + dp[i - coin])
 
-        return dp[amount - 1] if dp[amount - 1] != amount + 1 else -1  # BUG: Wrong index
+        return (
+            dp[amount - 1] if dp[amount - 1] != amount + 1 else -1
+        )  # BUG: Wrong index

@@ -23,11 +23,14 @@ def load_yaml_config(config_path: Path) -> Dict[str, Any]:
     """Load configuration from a YAML file."""
     try:
         import yaml
-        with open(config_path, 'r', encoding='utf-8') as f:
+
+        with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except ImportError:
         # Fallback if PyYAML is not available
-        raise ImportError("PyYAML is required for YAML config loading. Install with: pip install PyYAML")
+        raise ImportError(
+            "PyYAML is required for YAML config loading. Install with: pip install PyYAML"
+        )
 
 
 class NovaSettings(BaseModel):
@@ -84,7 +87,9 @@ class NovaSettings(BaseModel):
             if raw.startswith("[") and raw.endswith("]"):
                 # tolerate simple JSON lists without importing json
                 raw = raw.strip("[]")
-            allowed = [d.strip().strip('"').strip("'") for d in raw.split(",") if d.strip()]
+            allowed = [
+                d.strip().strip('"').strip("'") for d in raw.split(",") if d.strip()
+            ]
         else:
             allowed = _default_allowed_domains()
 
@@ -100,13 +105,17 @@ class NovaSettings(BaseModel):
             llm_call_timeout_sec=_get_int("NOVA_LLM_TIMEOUT_SEC", 60),
             min_repo_run_interval_sec=_get_int("NOVA_MIN_REPO_RUN_INTERVAL_SEC", 600),
             max_daily_llm_calls=_get_int("NOVA_MAX_DAILY_LLM_CALLS", 200),
-            warn_daily_llm_calls_pct=float(os.environ.get("NOVA_WARN_DAILY_LLM_CALLS_PCT", 0.8)),
+            warn_daily_llm_calls_pct=float(
+                os.environ.get("NOVA_WARN_DAILY_LLM_CALLS_PCT", 0.8)
+            ),
             telemetry_dir=os.environ.get("NOVA_TELEMETRY_DIR", "telemetry"),
-            enable_telemetry=os.environ.get("NOVA_ENABLE_TELEMETRY", "false").lower() == "true",
+            enable_telemetry=os.environ.get("NOVA_ENABLE_TELEMETRY", "false").lower()
+            == "true",
             default_llm_model=os.environ.get("NOVA_DEFAULT_LLM_MODEL", "gpt-5"),
             pr_llm_model=os.environ.get("NOVA_PR_LLM_MODEL", "gpt-4o"),
             reasoning_effort=os.environ.get("NOVA_REASONING_EFFORT", "high"),
-            whole_file_mode=os.environ.get("NOVA_WHOLE_FILE_MODE", "true").lower() == "true",
+            whole_file_mode=os.environ.get("NOVA_WHOLE_FILE_MODE", "true").lower()
+            == "true",
         )
 
 
@@ -137,7 +146,13 @@ def _reset_settings_cache() -> None:
     settings = get_settings()
 
 
-__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+__all__ = [
+    "NovaSettings",
+    "get_settings",
+    "settings",
+    "_reset_settings_cache",
+    "load_yaml_config",
+]
 
 settings: NovaSettings = get_settings()
 
@@ -149,7 +164,13 @@ def _reset_settings_cache() -> None:
     settings = get_settings()
 
 
-__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+__all__ = [
+    "NovaSettings",
+    "get_settings",
+    "settings",
+    "_reset_settings_cache",
+    "load_yaml_config",
+]
 
 settings: NovaSettings = get_settings()
 
@@ -161,7 +182,13 @@ def _reset_settings_cache() -> None:
     settings = get_settings()
 
 
-__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+__all__ = [
+    "NovaSettings",
+    "get_settings",
+    "settings",
+    "_reset_settings_cache",
+    "load_yaml_config",
+]
 
 settings: NovaSettings = get_settings()
 
@@ -173,7 +200,13 @@ def _reset_settings_cache() -> None:
     settings = get_settings()
 
 
-__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+__all__ = [
+    "NovaSettings",
+    "get_settings",
+    "settings",
+    "_reset_settings_cache",
+    "load_yaml_config",
+]
 
 settings: NovaSettings = get_settings()
 
@@ -185,7 +218,13 @@ def _reset_settings_cache() -> None:
     settings = get_settings()
 
 
-__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+__all__ = [
+    "NovaSettings",
+    "get_settings",
+    "settings",
+    "_reset_settings_cache",
+    "load_yaml_config",
+]
 
 settings: NovaSettings = get_settings()
 
@@ -197,4 +236,10 @@ def _reset_settings_cache() -> None:
     settings = get_settings()
 
 
-__all__ = ["NovaSettings", "get_settings", "settings", "_reset_settings_cache", "load_yaml_config"]
+__all__ = [
+    "NovaSettings",
+    "get_settings",
+    "settings",
+    "_reset_settings_cache",
+    "load_yaml_config",
+]

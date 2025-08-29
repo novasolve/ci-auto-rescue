@@ -192,4 +192,3 @@ Start with NOV-693. The clock is ticking! 🕐
 ---
 
 *Remember: You already have OpenAI and Anthropic keys configured. The foundation (config, telemetry, tools) is solid. You just need to build the agent on top!*
-

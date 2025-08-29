@@ -28,34 +28,42 @@ from pathlib import Path
 # Try to load .env file if it exists
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     # If python-dotenv is not installed, try manual loading
-    env_path = Path('.env')
+    env_path = Path(".env")
     if env_path.exists():
         with open(env_path) as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
                     os.environ[key] = value
 
 # Regex to strip ANSI escape sequences from output (for parsing)
-ANSI_ESCAPE_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
 
 def run_command(cmd, cwd=None):
     """Run a shell command and return (exit_code, stdout, stderr)."""
-    result = subprocess.run(cmd, cwd=cwd, shell=isinstance(cmd, str),
-                             capture_output=True, text=True)
+    result = subprocess.run(
+        cmd, cwd=cwd, shell=isinstance(cmd, str), capture_output=True, text=True
+    )
     return result.returncode, result.stdout, result.stderr
+
 
 def main():
     # 1. Environment checks
     if not shutil.which("nova"):
-        print("Error: 'nova' CLI not found. Ensure Nova CI-Rescue is installed and activated.")
+        print(
+            "Error: 'nova' CLI not found. Ensure Nova CI-Rescue is installed and activated."
+        )
         return 1
     if not os.getenv("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY is not set. Please export your OpenAI API key for Nova.")
+        print(
+            "Error: OPENAI_API_KEY is not set. Please export your OpenAI API key for Nova."
+        )
         return 1
     repo_path = Path("demo_test_repo")
     if not repo_path.is_dir():
@@ -70,25 +78,25 @@ def main():
     code, out, err = run_command(["pytest"], cwd=repo_path)
     initial_output = out + err
     # Strip ANSI codes for parsing
-    initial_output_clean = ANSI_ESCAPE_RE.sub('', initial_output)
+    initial_output_clean = ANSI_ESCAPE_RE.sub("", initial_output)
     initial_fail_count = 0
     initial_pass_count = 0
     for line in initial_output_clean.splitlines():
         if "failed" in line or "passed" in line:
             # Look for "X failed, Y passed" or variations
-            match = re.search(r'(\d+)\s+failed,?\s+(\d+)\s+passed', line)
+            match = re.search(r"(\d+)\s+failed,?\s+(\d+)\s+passed", line)
             if match:
                 initial_fail_count = int(match.group(1))
                 initial_pass_count = int(match.group(2))
                 break
             if "failed" in line and "passed" not in line:
-                m2 = re.search(r'(\d+)\s+failed', line)
+                m2 = re.search(r"(\d+)\s+failed", line)
                 if m2:
                     initial_fail_count = int(m2.group(1))
                     initial_pass_count = 0
                     break
             if "passed" in line and "failed" not in line:
-                m3 = re.search(r'(\d+)\s+passed', line)
+                m3 = re.search(r"(\d+)\s+passed", line)
                 if m3:
                     initial_pass_count = int(m3.group(1))
                     initial_fail_count = 0
@@ -99,10 +107,14 @@ def main():
     # If no failures, abort (nothing to fix)
     total_tests = initial_pass_count + initial_fail_count
     if initial_fail_count == 0:
-        print(f"✅ All tests passed ({initial_pass_count} passed, 0 failed) – nothing to fix. Aborting test.")
+        print(
+            f"✅ All tests passed ({initial_pass_count} passed, 0 failed) – nothing to fix. Aborting test."
+        )
         return 0  # or return 1 since it's an unexpected scenario for smoke test
     else:
-        print(f"   Initial tests: {initial_pass_count} passed, {initial_fail_count} failed (out of {total_tests})")
+        print(
+            f"   Initial tests: {initial_pass_count} passed, {initial_fail_count} failed (out of {total_tests})"
+        )
 
     # 3. Run Nova fix on the repository
     print("\n🤖 Invoking Nova CI-Rescue (nova fix) on the repository...")
@@ -120,11 +132,11 @@ def main():
         print(f"📄 Nova output logged to: {log_path}")
 
     # Determine if Nova reported success (exit code 0 typically means all tests fixed)
-    success = (code == 0)
+    success = code == 0
 
     # Extract the name of the fix branch Nova created (if any), from Nova's output
     branch_name = None
-    logs_clean = ANSI_ESCAPE_RE.sub('', nova_logs)
+    logs_clean = ANSI_ESCAPE_RE.sub("", nova_logs)
     for line in logs_clean.splitlines():
         if "Changes saved to branch" in line:
             # e.g. "Success! Changes saved to branch: nova-fix/20250814_072910"
@@ -137,9 +149,15 @@ def main():
             continue
 
     if success:
-        print("✅ Nova fix run completed **successfully** – now running tests to verify fixes...")
+        print(
+            "✅ Nova fix run completed **successfully** – now running tests to verify fixes..."
+        )
     else:
-        print("❌ Nova fix run **failed** or did not fix all issues (exit code {}).".format(code))
+        print(
+            "❌ Nova fix run **failed** or did not fix all issues (exit code {}).".format(
+                code
+            )
+        )
         print("   (Check the log file for detailed Nova output.)")
 
     # 4. Run tests again after Nova to see if failures remain
@@ -148,24 +166,24 @@ def main():
     if success:
         code2, out2, err2 = run_command(["pytest"], cwd=repo_path)
         after_output = out2 + err2
-        after_clean = ANSI_ESCAPE_RE.sub('', after_output)
+        after_clean = ANSI_ESCAPE_RE.sub("", after_output)
         final_fail_count = 0
         final_pass_count = 0
         for line in after_clean.splitlines():
             if "failed" in line or "passed" in line:
-                match = re.search(r'(\d+)\s+failed,?\s+(\d+)\s+passed', line)
+                match = re.search(r"(\d+)\s+failed,?\s+(\d+)\s+passed", line)
                 if match:
                     final_fail_count = int(match.group(1))
                     final_pass_count = int(match.group(2))
                     break
                 if "failed" in line and "passed" not in line:
-                    m2 = re.search(r'(\d+)\s+failed', line)
+                    m2 = re.search(r"(\d+)\s+failed", line)
                     if m2:
                         final_fail_count = int(m2.group(1))
                         final_pass_count = 0
                         break
                 if "passed" in line and "failed" not in line:
-                    m3 = re.search(r'(\d+)\s+passed', line)
+                    m3 = re.search(r"(\d+)\s+passed", line)
                     if m3:
                         final_pass_count = int(m3.group(1))
                         final_fail_count = 0
@@ -177,7 +195,9 @@ def main():
                 final_pass_count = initial_pass_count + initial_fail_count
         # Print verification result
         if final_fail_count == 0:
-            print(f"🎉 After Nova fix: ALL tests are passing ({final_pass_count} passed, 0 failed).")
+            print(
+                f"🎉 After Nova fix: ALL tests are passing ({final_pass_count} passed, 0 failed)."
+            )
         else:
             print(f"⚠️  After Nova fix: {final_fail_count} tests are still failing.")
             success = False  # mark as overall failure if any tests still failing
@@ -186,11 +206,11 @@ def main():
         # We can re-run tests to confirm the failures are as before.
         code2, out2, err2 = run_command(["pytest"], cwd=repo_path)
         final_output = out2 + err2
-        final_clean = ANSI_ESCAPE_RE.sub('', final_output)
+        final_clean = ANSI_ESCAPE_RE.sub("", final_output)
         final_fail_count = 0
         for line in final_clean.splitlines():
             if "failed" in line:
-                m2 = re.search(r'(\d+)\s+failed', line)
+                m2 = re.search(r"(\d+)\s+failed", line)
                 if m2:
                     final_fail_count = int(m2.group(1))
                     break
@@ -209,28 +229,41 @@ def main():
                     checked_out = True
                     break
             if not checked_out:
-                print("   ⚠️  Warning: Could not checkout 'main' or 'master'. Branch not deleted.")
+                print(
+                    "   ⚠️  Warning: Could not checkout 'main' or 'master'. Branch not deleted."
+                )
             else:
-                del_code, _, del_err = run_command(["git", "branch", "-D", branch_name], cwd=repo_path)
+                del_code, _, del_err = run_command(
+                    ["git", "branch", "-D", branch_name], cwd=repo_path
+                )
                 if del_code != 0:
-                    print(f"   ⚠️  Warning: Failed to delete branch {branch_name}: {del_err.strip()}")
+                    print(
+                        f"   ⚠️  Warning: Failed to delete branch {branch_name}: {del_err.strip()}"
+                    )
                 else:
                     print(f"   ✅ Deleted branch '{branch_name}'.")
         else:
-            print(f"ℹ️  Fixes were applied on branch '{branch_name}'. (Branch not deleted for inspection.)")
+            print(
+                f"ℹ️  Fixes were applied on branch '{branch_name}'. (Branch not deleted for inspection.)"
+            )
 
     # 6. Print a final summary of the smoke test
     print("\n====== Smoke Test Summary ======")
     print(f"Initial Failures : {initial_fail_count}")
-    print(f"Final Failures   : {0 if success and final_fail_count == 0 else final_fail_count}")
+    print(
+        f"Final Failures   : {0 if success and final_fail_count == 0 else final_fail_count}"
+    )
     if success:
         print("Result           : ✅ SUCCESS - Nova fixed all failing tests.")
         if branch_name and not CLEANUP_BRANCH:
             print(f"Fix Branch       : {branch_name} (contains the applied fixes)")
     else:
-        print("Result           : ❌ FAILURE - Some tests remain failing or an error occurred.")
+        print(
+            "Result           : ❌ FAILURE - Some tests remain failing or an error occurred."
+        )
         print(f"Please check the log file ({log_path.name}) for details on Nova's run.")
     return 0 if success else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

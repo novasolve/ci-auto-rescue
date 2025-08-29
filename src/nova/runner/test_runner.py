@@ -66,34 +66,34 @@ class FailingTest:
 
 class TestRunner:
     """Runs pytest and captures failing tests."""
-    
+
     def __init__(
         self, repo_path: Path, verbose: bool = False, pytest_args: Optional[str] = None
     ):
         self.repo_path = repo_path
         self.verbose = verbose
         self.pytest_args = pytest_args
-        
+
     # ---- Public API -----------------------------------------------------
 
     def run_tests(self) -> Tuple[List[FailingTest], Optional[str]]:
         """
         Run pytest and capture all failing tests.
-            
+
         Returns:
             Tuple of (List of FailingTest objects, JUnit XML report content)
         """
         logger = get_logger()
         logger.info("Running pytest to identify failing tests...", "🔍")
-        
+
         # Create temp files for reports
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             json_report_path = tmp.name
         with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as tmp:
             junit_report_path = tmp.name
-        
+
         junit_xml_content = None
-        
+
         try:
             # Build the pytest command, preferring a repo-local venv or pytest on PATH.
             cmd = self._build_pytest_cmd(json_report_path, junit_report_path)
@@ -104,10 +104,10 @@ class TestRunner:
                     cmd.extend(shlex.split(self.pytest_args))
                 except ValueError:
                     cmd.append(self.pytest_args)
-            
+
             logger = get_logger()
             logger.verbose(f"Command: {' '.join(cmd)}", component="Test Runner")
-            
+
             # Run pytest (it may exit non-zero when tests fail/collect fails)
             _start = time.time()
             result = subprocess.run(
@@ -182,7 +182,7 @@ class TestRunner:
 
             # Parse JSON report first (best fidelity)
             failing_tests = self._parse_json_report(json_report_path)
-            
+
             # Read the JUnit XML always, so callers can capture it
             junit_path = Path(junit_report_path)
             if junit_path.exists():
@@ -254,11 +254,11 @@ class TestRunner:
                 logger = get_logger()
                 logger.success("No failing tests found!")
                 return [], junit_xml_content
-            
+
             logger = get_logger()
             # logger.info(f"Found {len(failing_tests)} failing test(s)", "⚠️")
             return failing_tests, junit_xml_content
-            
+
         except FileNotFoundError as e:
             logger = get_logger()
             logger.error(
@@ -333,10 +333,10 @@ class TestRunner:
         """Format failing tests as a markdown table suitable for planner/LLM prompts."""
         if not failures:
             return "No failing tests found."
-        
+
         table = "| Test Name | File:Line | Error |\n"
         table += "|-----------|-----------|-------|\n"
-        
+
         for test in failures:
             location = (
                 f"{test.file}:{test.line}"
@@ -366,9 +366,9 @@ class TestRunner:
             if len(error) > 120:
                 error = error[:117] + "..."
             table += f"| {test.name} | {location} | {error} |\n"
-        
+
         return table
-    
+
     # ---- Internals ------------------------------------------------------
 
     def _parse_json_report(self, report_path: str) -> List[FailingTest]:

@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from nova.tools.pr_generator import PRGenerator
 
+
 def test_pr_generation():
     """Test the PR generation flow."""
     print("Testing PR Generation...")
@@ -20,7 +21,7 @@ def test_pr_generation():
     fixed_tests = [
         {"name": "test_addition", "file": "tests/test_calculator.py"},
         {"name": "test_multiplication", "file": "tests/test_calculator.py"},
-        {"name": "test_division_by_zero", "file": "tests/test_calculator.py"}
+        {"name": "test_division_by_zero", "file": "tests/test_calculator.py"},
     ]
 
     patches_applied = ["Fixed calculator operations"]
@@ -33,7 +34,7 @@ def test_pr_generation():
         fixed_tests=fixed_tests,
         patches_applied=patches_applied,
         changed_files=changed_files,
-        execution_time=execution_time
+        execution_time=execution_time,
     )
 
     print(f"\nPR Title: {title}")
@@ -45,13 +46,14 @@ def test_pr_generation():
         branch_name="test-branch",
         title=title,
         description=description,
-        draft=True  # Create as draft to avoid actual PR
+        draft=True,  # Create as draft to avoid actual PR
     )
 
     if not success:
         print(f"Cannot create PR: {message}")
     else:
         print(f"PR could be created: {message}")
+
 
 if __name__ == "__main__":
     test_pr_generation()

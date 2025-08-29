@@ -1,6 +1,5 @@
 """Tests for algorithmic challenges - designed to fail initially."""
 
-import pytest
 from src.algorithms import AlgorithmicChallenges
 
 
@@ -53,25 +52,16 @@ class TestDijkstraAlgorithm:
 
     def test_simple_path(self):
         algo = AlgorithmicChallenges()
-        graph = {
-            0: [(1, 4), (2, 1)],
-            1: [(3, 1)],
-            2: [(1, 2), (3, 5)],
-            3: []
-        }
+        graph = {0: [(1, 4), (2, 1)], 1: [(3, 1)], 2: [(1, 2), (3, 5)], 3: []}
         distance, path = algo.dijkstra_shortest_path(graph, 0, 3)
         assert distance == 4
         assert path == [0, 2, 1, 3]  # This will fail due to reversed path bug
 
     def test_no_path(self):
         algo = AlgorithmicChallenges()
-        graph = {
-            0: [(1, 1)],
-            1: [],
-            2: []
-        }
+        graph = {0: [(1, 1)], 1: [], 2: []}
         distance, path = algo.dijkstra_shortest_path(graph, 0, 2)
-        assert distance == float('inf')
+        assert distance == float("inf")
         assert path == []
 
 
@@ -81,7 +71,11 @@ class TestMergeIntervals:
     def test_overlapping_intervals(self):
         algo = AlgorithmicChallenges()
         # This will fail due to not sorting first!
-        assert algo.merge_intervals([[1, 3], [2, 6], [8, 10], [15, 18]]) == [[1, 6], [8, 10], [15, 18]]
+        assert algo.merge_intervals([[1, 3], [2, 6], [8, 10], [15, 18]]) == [
+            [1, 6],
+            [8, 10],
+            [15, 18],
+        ]
 
     def test_touching_intervals(self):
         algo = AlgorithmicChallenges()

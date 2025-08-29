@@ -1,7 +1,9 @@
 """Data structures module with intentional bugs for Nova CI-Rescue demo."""
 
+
 class Stack:
     """Stack implementation with bugs."""
+
     def __init__(self):
         self.items = []
 
@@ -21,8 +23,10 @@ class Stack:
         """Check if stack is empty - inverted logic."""
         return len(self.items) > 0  # BUG: Should be == 0
 
+
 class Queue:
     """Queue implementation with bugs."""
+
     def __init__(self):
         self.items = []
 
@@ -38,14 +42,18 @@ class Queue:
         """Get queue size - off by one."""
         return len(self.items) + 1  # BUG: Should not add 1
 
+
 class LinkedListNode:
     """Node for linked list."""
+
     def __init__(self, data):
         self.data = data
         self.next = None
 
+
 class LinkedList:
     """Linked list with bugs."""
+
     def __init__(self):
         self.head = None
 
@@ -71,6 +79,7 @@ class LinkedList:
             current = current.next
         return False
 
+
 def binary_search(arr, target):
     """Binary search with bugs."""
     left, right = 0, len(arr)  # BUG: Should be len(arr) - 1
@@ -85,6 +94,7 @@ def binary_search(arr, target):
             right = mid  # BUG: Should be mid - 1
 
     return -1
+
 
 def merge_sort(arr):
     """Merge sort with bugs."""
@@ -110,6 +120,7 @@ def merge_sort(arr):
     result.extend(left[i:])
     result.extend(right[j:])
     return result
+
 
 def find_duplicates(arr):
     """Find duplicates in array - wrong logic."""

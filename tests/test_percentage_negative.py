@@ -11,6 +11,3 @@ def test_percentage_negative_percent_raises_value_error():
     calc = Calculator()
     with pytest.raises(ValueError, match="percent must be non-negative"):
         calc.percentage(100, -10)
-
-
-

@@ -5,7 +5,6 @@ Visual demo of the Nova CI-Rescue agent loop.
 
 import sys
 import time
-from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -18,11 +17,13 @@ def show_agent_loop():
     """Demonstrate the agent loop visually."""
 
     console.print("\n")
-    console.print(Panel.fit(
-        "[bold cyan]Nova CI-Rescue - Agent Loop Demonstration[/bold cyan]\n"
-        "[dim]Showing the complete workflow in action[/dim]",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Nova CI-Rescue - Agent Loop Demonstration[/bold cyan]\n"
+            "[dim]Showing the complete workflow in action[/dim]",
+            border_style="cyan",
+        )
+    )
 
     # Show initial state
     console.print("\n[bold]📊 Initial State:[/bold]")
@@ -46,7 +47,7 @@ def show_agent_loop():
             SpinnerColumn(),
             TextColumn("[cyan]🧠 PLANNER:[/cyan] Analyzing failing tests..."),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
             task = progress.add_task("planning", total=None)
             time.sleep(1)
@@ -57,7 +58,7 @@ def show_agent_loop():
             SpinnerColumn(),
             TextColumn("[cyan]🎭 ACTOR:[/cyan] Generating patch diff..."),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
             task = progress.add_task("acting", total=None)
             time.sleep(1)
@@ -68,7 +69,7 @@ def show_agent_loop():
             SpinnerColumn(),
             TextColumn("[cyan]🔍 CRITIC:[/cyan] Reviewing patch safety..."),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
             task = progress.add_task("reviewing", total=None)
             time.sleep(1)
@@ -79,18 +80,20 @@ def show_agent_loop():
             SpinnerColumn(),
             TextColumn("[cyan]📝 APPLY:[/cyan] Applying patch to files..."),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
             task = progress.add_task("applying", total=None)
             time.sleep(1)
-        console.print(f"   [green]✓[/green] Committed as: [bold]nova: step {iteration}[/bold]")
+        console.print(
+            f"   [green]✓[/green] Committed as: [bold]nova: step {iteration}[/bold]"
+        )
 
         # 5. TEST
         with Progress(
             SpinnerColumn(),
             TextColumn("[cyan]🧪 TEST:[/cyan] Running test suite..."),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
             task = progress.add_task("testing", total=None)
             time.sleep(1)
@@ -105,7 +108,7 @@ def show_agent_loop():
             SpinnerColumn(),
             TextColumn("[cyan]🤔 REFLECT:[/cyan] Evaluating progress..."),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
             task = progress.add_task("reflecting", total=None)
             time.sleep(0.5)
@@ -142,15 +145,18 @@ def show_agent_loop():
     summary.add_row("Branch:", "nova-fix/20250813_150000")
     console.print(summary)
 
-    console.print("\n" + Panel(
-        "[bold]Key Features Demonstrated:[/bold]\n\n"
-        "• Each iteration follows: Plan → Act → Critique → Apply → Test → Reflect\n"
-        "• Patches are committed as 'nova: step N' for traceability\n"
-        "• Tests are re-run after each patch to verify progress\n"
-        "• The loop continues until all tests pass or limits are reached\n"
-        "• Full telemetry logging captures every decision and action",
-        border_style="dim"
-    ))
+    console.print(
+        "\n"
+        + Panel(
+            "[bold]Key Features Demonstrated:[/bold]\n\n"
+            "• Each iteration follows: Plan → Act → Critique → Apply → Test → Reflect\n"
+            "• Patches are committed as 'nova: step N' for traceability\n"
+            "• Tests are re-run after each patch to verify progress\n"
+            "• The loop continues until all tests pass or limits are reached\n"
+            "• Full telemetry logging captures every decision and action",
+            border_style="dim",
+        )
+    )
 
 
 if __name__ == "__main__":

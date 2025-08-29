@@ -5,9 +5,10 @@ import sys
 import os
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from calculator import Calculator
+
 
 class TestCalculator:
     """Test the Calculator class."""
@@ -53,7 +54,7 @@ class TestCalculator:
         assert calc.power(2, 3) == 8
         assert calc.power(5, 0) == 1
         assert calc.power(10, 2) == 100
-        assert calc.power(3, -1) == 1/3
+        assert calc.power(3, -1) == 1 / 3
 
     def test_square_root(self, calc):
         """Test square root."""
@@ -88,11 +89,11 @@ class TestCalculator:
 
     def test_is_even(self, calc):
         """Test even number check."""
-        assert calc.is_even(2) == True
-        assert calc.is_even(3) == False
-        assert calc.is_even(0) == True
-        assert calc.is_even(-4) == True
-        assert calc.is_even(-3) == False
+        assert calc.is_even(2)
+        assert not calc.is_even(3)
+        assert calc.is_even(0)
+        assert calc.is_even(-4)
+        assert not calc.is_even(-3)
 
     def test_absolute(self, calc):
         """Test absolute value."""

@@ -33,7 +33,7 @@ class NovaLock:
             return None
 
         try:
-            with open(self.lock_file, 'r') as f:
+            with open(self.lock_file, "r") as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             # Corrupted lock file
@@ -42,19 +42,20 @@ class NovaLock:
     def _write_lock_info(self) -> None:
         """Write lock file with current process info."""
         lock_info = {
-            'pid': os.getpid(),
-            'timestamp': datetime.now().isoformat(),
-            'hostname': os.environ.get('HOSTNAME', 'unknown')
+            "pid": os.getpid(),
+            "timestamp": datetime.now().isoformat(),
+            "hostname": os.environ.get("HOSTNAME", "unknown"),
         }
 
-        with open(self.lock_file, 'w') as f:
+        with open(self.lock_file, "w") as f:
             json.dump(lock_info, f)
 
     def _is_lock_stale(self, lock_info: dict) -> bool:
         """Check if a lock is stale based on timeout."""
         from nova.tools.datetime_utils import seconds_between, now_utc, to_datetime
+
         try:
-            lock_time = to_datetime(lock_info['timestamp'])
+            lock_time = to_datetime(lock_info["timestamp"])
             elapsed = seconds_between(now_utc(), lock_time)
             return elapsed > self.timeout
         except (KeyError, ValueError):
@@ -99,7 +100,7 @@ class NovaLock:
                 return True
 
             # Check if process is still alive (only works on same machine)
-            pid = lock_info.get('pid', 0)
+            pid = lock_info.get("pid", 0)
             if pid and not self._is_process_alive(pid):
                 # Process is dead, remove and acquire
                 self.lock_file.unlink(missing_ok=True)
@@ -120,7 +121,7 @@ class NovaLock:
     def release(self) -> None:
         """Release the lock if we own it."""
         lock_info = self._read_lock_info()
-        if lock_info and lock_info.get('pid') == os.getpid():
+        if lock_info and lock_info.get("pid") == os.getpid():
             self.lock_file.unlink(missing_ok=True)
 
 
@@ -146,9 +147,9 @@ def nova_lock(repo_path: Path, timeout: int = 3600, wait: bool = False):
         if not lock.acquire(wait=wait):
             lock_info = lock._read_lock_info()
             if lock_info:
-                pid = lock_info.get('pid', 'unknown')
-                timestamp = lock_info.get('timestamp', 'unknown')
-                hostname = lock_info.get('hostname', 'unknown')
+                pid = lock_info.get("pid", "unknown")
+                timestamp = lock_info.get("timestamp", "unknown")
+                hostname = lock_info.get("hostname", "unknown")
                 raise RuntimeError(
                     f"Another Nova process is already running on this repository.\n"
                     f"Process ID: {pid} on {hostname}\n"

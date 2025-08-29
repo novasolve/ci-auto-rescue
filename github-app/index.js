@@ -51,23 +51,23 @@ export default (app, { getRouter }) => {
   function checkRateLimit(installationId) {
     const now = Date.now();
     const key = `install-${installationId}`;
-    
+
     if (!rateLimits.has(key)) {
       rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
       return true;
     }
-    
+
     const limit = rateLimits.get(key);
     if (now > limit.resetAt) {
       limit.count = 1;
       limit.resetAt = now + RATE_LIMIT_WINDOW;
       return true;
     }
-    
+
     if (limit.count >= RATE_LIMIT_MAX_REQUESTS) {
       return false;
     }
-    
+
     limit.count++;
     return true;
   }
@@ -204,13 +204,13 @@ export default (app, { getRouter }) => {
             h1 { font-size: 48px; margin: 0; }
             .logo { font-size: 72px; margin-bottom: 20px; }
             .links { margin-top: 30px; }
-            a { 
+            a {
               color: #0366d6;
               text-decoration: none;
               margin: 0 10px;
             }
             a:hover { text-decoration: underline; }
-            .status { 
+            .status {
               background: #d1f5d3;
               padding: 10px 20px;
               border-radius: 6px;
@@ -233,11 +233,11 @@ export default (app, { getRouter }) => {
         </html>
       `);
     });
-    
+
     // Setup guide endpoint
     router.get('/setup', (req, res) => {
       const setupPath = path.join(__dirname, 'templates', 'setup.html');
-      
+
       fs.readFile(setupPath, 'utf8', (err, data) => {
         if (err) {
           app.log.error('Failed to read setup guide', err);
@@ -253,7 +253,7 @@ export default (app, { getRouter }) => {
       try {
         // Check if we can authenticate with GitHub
         const authenticated = app.state?.id ? true : false;
-        
+
         res.status(200).json({
           status: 'healthy',
           service: 'nova-ci-rescue',
@@ -283,7 +283,7 @@ export default (app, { getRouter }) => {
     const { installation, sender } = context.payload;
     const installationId = installation.id;
     const account = installation.account;
-    
+
     // Track installation
     installations.set(installationId, {
       id: installationId,
@@ -322,12 +322,12 @@ export default (app, { getRouter }) => {
   app.on('installation.deleted', async (context) => {
     const { installation } = context.payload;
     const installationId = installation.id;
-    
+
     installations.delete(installationId);
-    
+
     // Persist to storage
     saveInstallations();
-    
+
     context.log.info('Installation deleted', {
       installation_id: installationId,
       account: installation.account.login
@@ -337,7 +337,7 @@ export default (app, { getRouter }) => {
   // Handle repository additions to installation
   app.on('installation_repositories.added', async (context) => {
     const { installation, repositories_added, sender } = context.payload;
-    
+
     context.log.info('Repositories added to installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -360,7 +360,7 @@ export default (app, { getRouter }) => {
   // Handle repository removals from installation
   app.on('installation_repositories.removed', async (context) => {
     const { installation, repositories_removed } = context.payload;
-    
+
     context.log.info('Repositories removed from installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -395,7 +395,7 @@ export default (app, { getRouter }) => {
       context.payload.pull_request?.head?.sha ||
       context.payload.workflow_run?.head_sha ||
       context.payload.check_suite?.head_sha;
-    
+
     if (!headSha) {
       context.log.warn('No head SHA found for event', { event: context.name });
       return;
@@ -443,7 +443,7 @@ export default (app, { getRouter }) => {
           // Check if Nova workflow exists
           const { data } = await context.octokit.actions.listRepoWorkflows({ owner, repo });
           const novaWf = data.workflows.find(
-            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' || 
+            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yml') ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yaml')
           );
@@ -455,7 +455,7 @@ export default (app, { getRouter }) => {
               repo,
               workflow_id: novaWf.id,
               ref: headBranch || 'main',
-              inputs: { 
+              inputs: {
                 pr_number: String(pr.number),
                 triggered_by: 'github-app'
               },
@@ -470,7 +470,7 @@ export default (app, { getRouter }) => {
                           `**Failed Workflow:** ${workflowRun.name}\n` +
                           `**Nova Progress:** [View in Actions](${actionsLink})\n\n` +
                           `I'll analyze the failures and try to fix them automatically. This may take a few minutes.`;
-            
+
             checkConclusion = 'success';
 
             // Leave a comment on the PR
@@ -499,7 +499,7 @@ export default (app, { getRouter }) => {
                           `2. Configure the workflow with your Nova API key\n` +
                           `3. Push the changes\n\n` +
                           `[Learn more about Nova CI-Rescue](https://github.com/nova-ci-rescue/docs)`;
-            
+
             checkConclusion = 'neutral';
 
             // Provide setup instructions
@@ -526,7 +526,7 @@ export default (app, { getRouter }) => {
           const message = err?.message || 'unknown error';
           checkSummary = `❌ Error: Failed to trigger Nova CI-Rescue: ${message}`;
           checkConclusion = 'failure';
-          
+
           context.log.error('Failed to handle CI failure', {
             error: message,
             pr_number: pr?.number
@@ -730,13 +730,13 @@ export default (app, { getRouter }) => {
             h1 { font-size: 48px; margin: 0; }
             .logo { font-size: 72px; margin-bottom: 20px; }
             .links { margin-top: 30px; }
-            a { 
+            a {
               color: #0366d6;
               text-decoration: none;
               margin: 0 10px;
             }
             a:hover { text-decoration: underline; }
-            .status { 
+            .status {
               background: #d1f5d3;
               padding: 10px 20px;
               border-radius: 6px;
@@ -759,11 +759,11 @@ export default (app, { getRouter }) => {
         </html>
       `);
     });
-    
+
     // Setup guide endpoint
     router.get('/setup', (req, res) => {
       const setupPath = path.join(__dirname, 'templates', 'setup.html');
-      
+
       fs.readFile(setupPath, 'utf8', (err, data) => {
         if (err) {
           app.log.error('Failed to read setup guide', err);
@@ -779,7 +779,7 @@ export default (app, { getRouter }) => {
       try {
         // Check if we can authenticate with GitHub
         const authenticated = app.state?.id ? true : false;
-        
+
         res.status(200).json({
           status: 'healthy',
           service: 'nova-ci-rescue',
@@ -809,7 +809,7 @@ export default (app, { getRouter }) => {
     const { installation, sender } = context.payload;
     const installationId = installation.id;
     const account = installation.account;
-    
+
     // Track installation
     installations.set(installationId, {
       id: installationId,
@@ -848,12 +848,12 @@ export default (app, { getRouter }) => {
   app.on('installation.deleted', async (context) => {
     const { installation } = context.payload;
     const installationId = installation.id;
-    
+
     installations.delete(installationId);
-    
+
     // Persist to storage
     saveInstallations();
-    
+
     context.log.info('Installation deleted', {
       installation_id: installationId,
       account: installation.account.login
@@ -863,7 +863,7 @@ export default (app, { getRouter }) => {
   // Handle repository additions to installation
   app.on('installation_repositories.added', async (context) => {
     const { installation, repositories_added, sender } = context.payload;
-    
+
     context.log.info('Repositories added to installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -886,7 +886,7 @@ export default (app, { getRouter }) => {
   // Handle repository removals from installation
   app.on('installation_repositories.removed', async (context) => {
     const { installation, repositories_removed } = context.payload;
-    
+
     context.log.info('Repositories removed from installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -921,7 +921,7 @@ export default (app, { getRouter }) => {
       context.payload.pull_request?.head?.sha ||
       context.payload.workflow_run?.head_sha ||
       context.payload.check_suite?.head_sha;
-    
+
     if (!headSha) {
       context.log.warn('No head SHA found for event', { event: context.name });
       return;
@@ -969,7 +969,7 @@ export default (app, { getRouter }) => {
           // Check if Nova workflow exists
           const { data } = await context.octokit.actions.listRepoWorkflows({ owner, repo });
           const novaWf = data.workflows.find(
-            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' || 
+            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yml') ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yaml')
           );
@@ -981,7 +981,7 @@ export default (app, { getRouter }) => {
               repo,
               workflow_id: novaWf.id,
               ref: headBranch || 'main',
-              inputs: { 
+              inputs: {
                 pr_number: String(pr.number),
                 triggered_by: 'github-app'
               },
@@ -996,7 +996,7 @@ export default (app, { getRouter }) => {
                           `**Failed Workflow:** ${workflowRun.name}\n` +
                           `**Nova Progress:** [View in Actions](${actionsLink})\n\n` +
                           `I'll analyze the failures and try to fix them automatically. This may take a few minutes.`;
-            
+
             checkConclusion = 'success';
 
             // Leave a comment on the PR
@@ -1025,7 +1025,7 @@ export default (app, { getRouter }) => {
                           `2. Configure the workflow with your Nova API key\n` +
                           `3. Push the changes\n\n` +
                           `[Learn more about Nova CI-Rescue](https://github.com/nova-ci-rescue/docs)`;
-            
+
             checkConclusion = 'neutral';
 
             // Provide setup instructions
@@ -1052,7 +1052,7 @@ export default (app, { getRouter }) => {
           const message = err?.message || 'unknown error';
           checkSummary = `❌ Error: Failed to trigger Nova CI-Rescue: ${message}`;
           checkConclusion = 'failure';
-          
+
           context.log.error('Failed to handle CI failure', {
             error: message,
             pr_number: pr?.number
@@ -1256,13 +1256,13 @@ export default (app, { getRouter }) => {
             h1 { font-size: 48px; margin: 0; }
             .logo { font-size: 72px; margin-bottom: 20px; }
             .links { margin-top: 30px; }
-            a { 
+            a {
               color: #0366d6;
               text-decoration: none;
               margin: 0 10px;
             }
             a:hover { text-decoration: underline; }
-            .status { 
+            .status {
               background: #d1f5d3;
               padding: 10px 20px;
               border-radius: 6px;
@@ -1285,11 +1285,11 @@ export default (app, { getRouter }) => {
         </html>
       `);
     });
-    
+
     // Setup guide endpoint
     router.get('/setup', (req, res) => {
       const setupPath = path.join(__dirname, 'templates', 'setup.html');
-      
+
       fs.readFile(setupPath, 'utf8', (err, data) => {
         if (err) {
           app.log.error('Failed to read setup guide', err);
@@ -1305,7 +1305,7 @@ export default (app, { getRouter }) => {
       try {
         // Check if we can authenticate with GitHub
         const authenticated = app.state?.id ? true : false;
-        
+
         res.status(200).json({
           status: 'healthy',
           service: 'nova-ci-rescue',
@@ -1335,7 +1335,7 @@ export default (app, { getRouter }) => {
     const { installation, sender } = context.payload;
     const installationId = installation.id;
     const account = installation.account;
-    
+
     // Track installation
     installations.set(installationId, {
       id: installationId,
@@ -1374,12 +1374,12 @@ export default (app, { getRouter }) => {
   app.on('installation.deleted', async (context) => {
     const { installation } = context.payload;
     const installationId = installation.id;
-    
+
     installations.delete(installationId);
-    
+
     // Persist to storage
     saveInstallations();
-    
+
     context.log.info('Installation deleted', {
       installation_id: installationId,
       account: installation.account.login
@@ -1389,7 +1389,7 @@ export default (app, { getRouter }) => {
   // Handle repository additions to installation
   app.on('installation_repositories.added', async (context) => {
     const { installation, repositories_added, sender } = context.payload;
-    
+
     context.log.info('Repositories added to installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -1412,7 +1412,7 @@ export default (app, { getRouter }) => {
   // Handle repository removals from installation
   app.on('installation_repositories.removed', async (context) => {
     const { installation, repositories_removed } = context.payload;
-    
+
     context.log.info('Repositories removed from installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -1447,7 +1447,7 @@ export default (app, { getRouter }) => {
       context.payload.pull_request?.head?.sha ||
       context.payload.workflow_run?.head_sha ||
       context.payload.check_suite?.head_sha;
-    
+
     if (!headSha) {
       context.log.warn('No head SHA found for event', { event: context.name });
       return;
@@ -1495,7 +1495,7 @@ export default (app, { getRouter }) => {
           // Check if Nova workflow exists
           const { data } = await context.octokit.actions.listRepoWorkflows({ owner, repo });
           const novaWf = data.workflows.find(
-            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' || 
+            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yml') ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yaml')
           );
@@ -1507,7 +1507,7 @@ export default (app, { getRouter }) => {
               repo,
               workflow_id: novaWf.id,
               ref: headBranch || 'main',
-              inputs: { 
+              inputs: {
                 pr_number: String(pr.number),
                 triggered_by: 'github-app'
               },
@@ -1522,7 +1522,7 @@ export default (app, { getRouter }) => {
                           `**Failed Workflow:** ${workflowRun.name}\n` +
                           `**Nova Progress:** [View in Actions](${actionsLink})\n\n` +
                           `I'll analyze the failures and try to fix them automatically. This may take a few minutes.`;
-            
+
             checkConclusion = 'success';
 
             // Leave a comment on the PR
@@ -1551,7 +1551,7 @@ export default (app, { getRouter }) => {
                           `2. Configure the workflow with your Nova API key\n` +
                           `3. Push the changes\n\n` +
                           `[Learn more about Nova CI-Rescue](https://github.com/nova-ci-rescue/docs)`;
-            
+
             checkConclusion = 'neutral';
 
             // Provide setup instructions
@@ -1578,7 +1578,7 @@ export default (app, { getRouter }) => {
           const message = err?.message || 'unknown error';
           checkSummary = `❌ Error: Failed to trigger Nova CI-Rescue: ${message}`;
           checkConclusion = 'failure';
-          
+
           context.log.error('Failed to handle CI failure', {
             error: message,
             pr_number: pr?.number
@@ -1782,13 +1782,13 @@ export default (app, { getRouter }) => {
             h1 { font-size: 48px; margin: 0; }
             .logo { font-size: 72px; margin-bottom: 20px; }
             .links { margin-top: 30px; }
-            a { 
+            a {
               color: #0366d6;
               text-decoration: none;
               margin: 0 10px;
             }
             a:hover { text-decoration: underline; }
-            .status { 
+            .status {
               background: #d1f5d3;
               padding: 10px 20px;
               border-radius: 6px;
@@ -1811,11 +1811,11 @@ export default (app, { getRouter }) => {
         </html>
       `);
     });
-    
+
     // Setup guide endpoint
     router.get('/setup', (req, res) => {
       const setupPath = path.join(__dirname, 'templates', 'setup.html');
-      
+
       fs.readFile(setupPath, 'utf8', (err, data) => {
         if (err) {
           app.log.error('Failed to read setup guide', err);
@@ -1831,7 +1831,7 @@ export default (app, { getRouter }) => {
       try {
         // Check if we can authenticate with GitHub
         const authenticated = app.state?.id ? true : false;
-        
+
         res.status(200).json({
           status: 'healthy',
           service: 'nova-ci-rescue',
@@ -1861,7 +1861,7 @@ export default (app, { getRouter }) => {
     const { installation, sender } = context.payload;
     const installationId = installation.id;
     const account = installation.account;
-    
+
     // Track installation
     installations.set(installationId, {
       id: installationId,
@@ -1900,12 +1900,12 @@ export default (app, { getRouter }) => {
   app.on('installation.deleted', async (context) => {
     const { installation } = context.payload;
     const installationId = installation.id;
-    
+
     installations.delete(installationId);
-    
+
     // Persist to storage
     saveInstallations();
-    
+
     context.log.info('Installation deleted', {
       installation_id: installationId,
       account: installation.account.login
@@ -1915,7 +1915,7 @@ export default (app, { getRouter }) => {
   // Handle repository additions to installation
   app.on('installation_repositories.added', async (context) => {
     const { installation, repositories_added, sender } = context.payload;
-    
+
     context.log.info('Repositories added to installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -1938,7 +1938,7 @@ export default (app, { getRouter }) => {
   // Handle repository removals from installation
   app.on('installation_repositories.removed', async (context) => {
     const { installation, repositories_removed } = context.payload;
-    
+
     context.log.info('Repositories removed from installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -1973,7 +1973,7 @@ export default (app, { getRouter }) => {
       context.payload.pull_request?.head?.sha ||
       context.payload.workflow_run?.head_sha ||
       context.payload.check_suite?.head_sha;
-    
+
     if (!headSha) {
       context.log.warn('No head SHA found for event', { event: context.name });
       return;
@@ -2021,7 +2021,7 @@ export default (app, { getRouter }) => {
           // Check if Nova workflow exists
           const { data } = await context.octokit.actions.listRepoWorkflows({ owner, repo });
           const novaWf = data.workflows.find(
-            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' || 
+            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yml') ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yaml')
           );
@@ -2033,7 +2033,7 @@ export default (app, { getRouter }) => {
               repo,
               workflow_id: novaWf.id,
               ref: headBranch || 'main',
-              inputs: { 
+              inputs: {
                 pr_number: String(pr.number),
                 triggered_by: 'github-app'
               },
@@ -2048,7 +2048,7 @@ export default (app, { getRouter }) => {
                           `**Failed Workflow:** ${workflowRun.name}\n` +
                           `**Nova Progress:** [View in Actions](${actionsLink})\n\n` +
                           `I'll analyze the failures and try to fix them automatically. This may take a few minutes.`;
-            
+
             checkConclusion = 'success';
 
             // Leave a comment on the PR
@@ -2077,7 +2077,7 @@ export default (app, { getRouter }) => {
                           `2. Configure the workflow with your Nova API key\n` +
                           `3. Push the changes\n\n` +
                           `[Learn more about Nova CI-Rescue](https://github.com/nova-ci-rescue/docs)`;
-            
+
             checkConclusion = 'neutral';
 
             // Provide setup instructions
@@ -2104,7 +2104,7 @@ export default (app, { getRouter }) => {
           const message = err?.message || 'unknown error';
           checkSummary = `❌ Error: Failed to trigger Nova CI-Rescue: ${message}`;
           checkConclusion = 'failure';
-          
+
           context.log.error('Failed to handle CI failure', {
             error: message,
             pr_number: pr?.number
@@ -2308,13 +2308,13 @@ export default (app, { getRouter }) => {
             h1 { font-size: 48px; margin: 0; }
             .logo { font-size: 72px; margin-bottom: 20px; }
             .links { margin-top: 30px; }
-            a { 
+            a {
               color: #0366d6;
               text-decoration: none;
               margin: 0 10px;
             }
             a:hover { text-decoration: underline; }
-            .status { 
+            .status {
               background: #d1f5d3;
               padding: 10px 20px;
               border-radius: 6px;
@@ -2337,11 +2337,11 @@ export default (app, { getRouter }) => {
         </html>
       `);
     });
-    
+
     // Setup guide endpoint
     router.get('/setup', (req, res) => {
       const setupPath = path.join(__dirname, 'templates', 'setup.html');
-      
+
       fs.readFile(setupPath, 'utf8', (err, data) => {
         if (err) {
           app.log.error('Failed to read setup guide', err);
@@ -2357,7 +2357,7 @@ export default (app, { getRouter }) => {
       try {
         // Check if we can authenticate with GitHub
         const authenticated = app.state?.id ? true : false;
-        
+
         res.status(200).json({
           status: 'healthy',
           service: 'nova-ci-rescue',
@@ -2387,7 +2387,7 @@ export default (app, { getRouter }) => {
     const { installation, sender } = context.payload;
     const installationId = installation.id;
     const account = installation.account;
-    
+
     // Track installation
     installations.set(installationId, {
       id: installationId,
@@ -2426,12 +2426,12 @@ export default (app, { getRouter }) => {
   app.on('installation.deleted', async (context) => {
     const { installation } = context.payload;
     const installationId = installation.id;
-    
+
     installations.delete(installationId);
-    
+
     // Persist to storage
     saveInstallations();
-    
+
     context.log.info('Installation deleted', {
       installation_id: installationId,
       account: installation.account.login
@@ -2441,7 +2441,7 @@ export default (app, { getRouter }) => {
   // Handle repository additions to installation
   app.on('installation_repositories.added', async (context) => {
     const { installation, repositories_added, sender } = context.payload;
-    
+
     context.log.info('Repositories added to installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -2464,7 +2464,7 @@ export default (app, { getRouter }) => {
   // Handle repository removals from installation
   app.on('installation_repositories.removed', async (context) => {
     const { installation, repositories_removed } = context.payload;
-    
+
     context.log.info('Repositories removed from installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -2499,7 +2499,7 @@ export default (app, { getRouter }) => {
       context.payload.pull_request?.head?.sha ||
       context.payload.workflow_run?.head_sha ||
       context.payload.check_suite?.head_sha;
-    
+
     if (!headSha) {
       context.log.warn('No head SHA found for event', { event: context.name });
       return;
@@ -2547,7 +2547,7 @@ export default (app, { getRouter }) => {
           // Check if Nova workflow exists
           const { data } = await context.octokit.actions.listRepoWorkflows({ owner, repo });
           const novaWf = data.workflows.find(
-            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' || 
+            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yml') ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yaml')
           );
@@ -2559,7 +2559,7 @@ export default (app, { getRouter }) => {
               repo,
               workflow_id: novaWf.id,
               ref: headBranch || 'main',
-              inputs: { 
+              inputs: {
                 pr_number: String(pr.number),
                 triggered_by: 'github-app'
               },
@@ -2574,7 +2574,7 @@ export default (app, { getRouter }) => {
                           `**Failed Workflow:** ${workflowRun.name}\n` +
                           `**Nova Progress:** [View in Actions](${actionsLink})\n\n` +
                           `I'll analyze the failures and try to fix them automatically. This may take a few minutes.`;
-            
+
             checkConclusion = 'success';
 
             // Leave a comment on the PR
@@ -2603,7 +2603,7 @@ export default (app, { getRouter }) => {
                           `2. Configure the workflow with your Nova API key\n` +
                           `3. Push the changes\n\n` +
                           `[Learn more about Nova CI-Rescue](https://github.com/nova-ci-rescue/docs)`;
-            
+
             checkConclusion = 'neutral';
 
             // Provide setup instructions
@@ -2630,7 +2630,7 @@ export default (app, { getRouter }) => {
           const message = err?.message || 'unknown error';
           checkSummary = `❌ Error: Failed to trigger Nova CI-Rescue: ${message}`;
           checkConclusion = 'failure';
-          
+
           context.log.error('Failed to handle CI failure', {
             error: message,
             pr_number: pr?.number
@@ -2834,13 +2834,13 @@ export default (app, { getRouter }) => {
             h1 { font-size: 48px; margin: 0; }
             .logo { font-size: 72px; margin-bottom: 20px; }
             .links { margin-top: 30px; }
-            a { 
+            a {
               color: #0366d6;
               text-decoration: none;
               margin: 0 10px;
             }
             a:hover { text-decoration: underline; }
-            .status { 
+            .status {
               background: #d1f5d3;
               padding: 10px 20px;
               border-radius: 6px;
@@ -2863,11 +2863,11 @@ export default (app, { getRouter }) => {
         </html>
       `);
     });
-    
+
     // Setup guide endpoint
     router.get('/setup', (req, res) => {
       const setupPath = path.join(__dirname, 'templates', 'setup.html');
-      
+
       fs.readFile(setupPath, 'utf8', (err, data) => {
         if (err) {
           app.log.error('Failed to read setup guide', err);
@@ -2883,7 +2883,7 @@ export default (app, { getRouter }) => {
       try {
         // Check if we can authenticate with GitHub
         const authenticated = app.state?.id ? true : false;
-        
+
         res.status(200).json({
           status: 'healthy',
           service: 'nova-ci-rescue',
@@ -2913,7 +2913,7 @@ export default (app, { getRouter }) => {
     const { installation, sender } = context.payload;
     const installationId = installation.id;
     const account = installation.account;
-    
+
     // Track installation
     installations.set(installationId, {
       id: installationId,
@@ -2952,12 +2952,12 @@ export default (app, { getRouter }) => {
   app.on('installation.deleted', async (context) => {
     const { installation } = context.payload;
     const installationId = installation.id;
-    
+
     installations.delete(installationId);
-    
+
     // Persist to storage
     saveInstallations();
-    
+
     context.log.info('Installation deleted', {
       installation_id: installationId,
       account: installation.account.login
@@ -2967,7 +2967,7 @@ export default (app, { getRouter }) => {
   // Handle repository additions to installation
   app.on('installation_repositories.added', async (context) => {
     const { installation, repositories_added, sender } = context.payload;
-    
+
     context.log.info('Repositories added to installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -2990,7 +2990,7 @@ export default (app, { getRouter }) => {
   // Handle repository removals from installation
   app.on('installation_repositories.removed', async (context) => {
     const { installation, repositories_removed } = context.payload;
-    
+
     context.log.info('Repositories removed from installation', {
       installation_id: installation.id,
       account: installation.account.login,
@@ -3025,7 +3025,7 @@ export default (app, { getRouter }) => {
       context.payload.pull_request?.head?.sha ||
       context.payload.workflow_run?.head_sha ||
       context.payload.check_suite?.head_sha;
-    
+
     if (!headSha) {
       context.log.warn('No head SHA found for event', { event: context.name });
       return;
@@ -3073,7 +3073,7 @@ export default (app, { getRouter }) => {
           // Check if Nova workflow exists
           const { data } = await context.octokit.actions.listRepoWorkflows({ owner, repo });
           const novaWf = data.workflows.find(
-            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' || 
+            (wf) => wf?.name === 'Nova CI-Rescue Auto-Fix' ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yml') ||
                     (wf?.path || '').endsWith('/nova-ci-rescue.yaml')
           );
@@ -3085,7 +3085,7 @@ export default (app, { getRouter }) => {
               repo,
               workflow_id: novaWf.id,
               ref: headBranch || 'main',
-              inputs: { 
+              inputs: {
                 pr_number: String(pr.number),
                 triggered_by: 'github-app'
               },
@@ -3100,7 +3100,7 @@ export default (app, { getRouter }) => {
                           `**Failed Workflow:** ${workflowRun.name}\n` +
                           `**Nova Progress:** [View in Actions](${actionsLink})\n\n` +
                           `I'll analyze the failures and try to fix them automatically. This may take a few minutes.`;
-            
+
             checkConclusion = 'success';
 
             // Leave a comment on the PR
@@ -3129,7 +3129,7 @@ export default (app, { getRouter }) => {
                           `2. Configure the workflow with your Nova API key\n` +
                           `3. Push the changes\n\n` +
                           `[Learn more about Nova CI-Rescue](https://github.com/nova-ci-rescue/docs)`;
-            
+
             checkConclusion = 'neutral';
 
             // Provide setup instructions
@@ -3156,7 +3156,7 @@ export default (app, { getRouter }) => {
           const message = err?.message || 'unknown error';
           checkSummary = `❌ Error: Failed to trigger Nova CI-Rescue: ${message}`;
           checkConclusion = 'failure';
-          
+
           context.log.error('Failed to handle CI failure', {
             error: message,
             pr_number: pr?.number

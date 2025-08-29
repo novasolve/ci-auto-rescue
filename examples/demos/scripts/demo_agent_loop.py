@@ -20,12 +20,17 @@ def create_test_repo():
 
     # Initialize git
     subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Nova Demo"], cwd=repo_path, check=True)
-    subprocess.run(["git", "config", "user.email", "demo@nova.ai"], cwd=repo_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Nova Demo"], cwd=repo_path, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "demo@nova.ai"], cwd=repo_path, check=True
+    )
 
     # Create a failing test file
     test_file = repo_path / "test_example.py"
-    test_file.write_text("""import pytest
+    test_file.write_text(
+        """import pytest
 
 def test_math():
     # This test is failing
@@ -38,18 +43,26 @@ def test_string():
 def test_list():
     # This one too
     assert len([1, 2, 3]) == 5  # Wrong!
-""")
+"""
+    )
 
     # Create a simple pytest.ini
     pytest_ini = repo_path / "pytest.ini"
-    pytest_ini.write_text("""[pytest]
+    pytest_ini.write_text(
+        """[pytest]
 testpaths = .
 python_files = test_*.py
-""")
+"""
+    )
 
     # Commit initial state
     subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "Initial failing tests"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial failing tests"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
 
     return repo_path
 
@@ -57,12 +70,20 @@ python_files = test_*.py
 def demo():
     """Run the demo showing the complete agent loop."""
 
-    console.print("\n[bold cyan]═══════════════════════════════════════════════════════════════[/bold cyan]")
-    console.print("[bold cyan]       Nova CI-Rescue - Complete Agent Loop Demo              [/bold cyan]")
-    console.print("[bold cyan]═══════════════════════════════════════════════════════════════[/bold cyan]\n")
+    console.print(
+        "\n[bold cyan]═══════════════════════════════════════════════════════════════[/bold cyan]"
+    )
+    console.print(
+        "[bold cyan]       Nova CI-Rescue - Complete Agent Loop Demo              [/bold cyan]"
+    )
+    console.print(
+        "[bold cyan]═══════════════════════════════════════════════════════════════[/bold cyan]\n"
+    )
 
     console.print("[bold]This demo shows:[/bold]")
-    console.print("• The complete agent loop: Planner → Actor → Critic → Apply → Test → Reflect")
+    console.print(
+        "• The complete agent loop: Planner → Actor → Critic → Apply → Test → Reflect"
+    )
     console.print("• Each patch being applied and committed as 'nova: step <n>'")
     console.print("• Tests being re-run after each patch to check progress")
     console.print("• The final branch showing all commits\n")
@@ -79,6 +100,7 @@ def demo():
 
     # Change to repo directory and run nova
     import os
+
     original_dir = os.getcwd()
     try:
         os.chdir(repo_path)
@@ -91,10 +113,14 @@ def demo():
         from typer.testing import CliRunner
 
         runner = CliRunner()
-        result = runner.invoke(app, ["fix", str(repo_path), "--max-iters", "3", "--verbose"])
+        result = runner.invoke(
+            app, ["fix", str(repo_path), "--max-iters", "3", "--verbose"]
+        )
 
         if result.exit_code != 0:
-            console.print(f"\n[yellow]Note: Exit code {result.exit_code} (expected for mock implementation)[/yellow]")
+            console.print(
+                f"\n[yellow]Note: Exit code {result.exit_code} (expected for mock implementation)[/yellow]"
+            )
 
     finally:
         os.chdir(original_dir)
@@ -110,12 +136,12 @@ def demo():
         cwd=repo_path,
         capture_output=True,
         text=True,
-        check=False
+        check=False,
     ).stdout
 
     if log_output:
         console.print("[bold]Git History:[/bold]")
-        for line in log_output.strip().split('\n'):
+        for line in log_output.strip().split("\n"):
             if "nova: step" in line:
                 console.print(f"   [green]{line}[/green]")
             else:
@@ -127,7 +153,7 @@ def demo():
         cwd=repo_path,
         capture_output=True,
         text=True,
-        check=False
+        check=False,
     ).stdout.strip()
 
     if branch_output and "nova-fix" in branch_output:
@@ -143,11 +169,13 @@ def demo():
             if diffs_dir.exists():
                 diff_files = list(diffs_dir.glob("*.diff"))
                 if diff_files:
-                    console.print(f"\n[bold]Saved Patches:[/bold]")
+                    console.print("\n[bold]Saved Patches:[/bold]")
                     for diff_file in sorted(diff_files):
                         console.print(f"   [cyan]{diff_file.name}[/cyan]")
 
-    console.print("\n[bold cyan]═══════════════════════════════════════════════════════════════[/bold cyan]")
+    console.print(
+        "\n[bold cyan]═══════════════════════════════════════════════════════════════[/bold cyan]"
+    )
     console.print("[bold green]✅ Demo Complete![/bold green]")
     console.print("\nThe agent loop implementation:")
     console.print("• ✓ Detected failing tests")
@@ -155,8 +183,12 @@ def demo():
     console.print("• ✓ Applied patches and committed with 'nova: step <n>'")
     console.print("• ✓ Re-ran tests after each patch")
     console.print("• ✓ Created nova-fix branch with commit history")
-    console.print("\n[dim]Note: LLM integration (Planner/Actor/Critic) uses mock data in this demo.[/dim]")
-    console.print("[dim]Real implementation would use OpenAI/Anthropic APIs for patch generation.[/dim]\n")
+    console.print(
+        "\n[dim]Note: LLM integration (Planner/Actor/Critic) uses mock data in this demo.[/dim]"
+    )
+    console.print(
+        "[dim]Real implementation would use OpenAI/Anthropic APIs for patch generation.[/dim]\n"
+    )
 
     return True
 
@@ -168,5 +200,6 @@ if __name__ == "__main__":
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

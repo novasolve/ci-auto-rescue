@@ -1,5 +1,6 @@
 """Calculator module for demo_broken_project."""
 
+
 class Calculator:
     """A broken calculator with various bugs."""
 
@@ -28,13 +29,13 @@ class Calculator:
 
     def power(self, base, exp):
         """Raise base to power."""
-        return base ** exp
+        return base**exp
 
     def square_root(self, n):
         """Calculate square root."""
         if n < 0:
             raise ValueError("Cannot calculate square root of negative number")
-        return n ** 0.5
+        return n**0.5
 
     def percentage(self, value, percent):
         """Calculate percentage."""

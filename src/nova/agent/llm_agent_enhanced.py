@@ -465,11 +465,13 @@ class EnhancedLLMAgent:
 
                     console = Console()
 
-                    if hasattr(self, "verbose") and self.verbose and stash_result.stderr:
+                    if (
+                        hasattr(self, "verbose")
+                        and self.verbose
+                        and stash_result.stderr
+                    ):
                         console.print(f"[dim]Stash stderr: {stash_result.stderr}[/dim]")
-                    console.print(
-                        "[cyan]🧪 Testing patch application...[/cyan]"
-                    )
+                    console.print("[cyan]🧪 Testing patch application...[/cyan]")
 
                     # Debug: Show patch format
                     if self.verbose:
@@ -601,7 +603,9 @@ class EnhancedLLMAgent:
                 # Debug log removed for demo
                 # Fallback: approve small/safe patches when critic is silent
                 patch_lines = patch.split("\n")
-                files_touched = sum(1 for line in patch_lines if line.startswith("+++ b/"))
+                files_touched = sum(
+                    1 for line in patch_lines if line.startswith("+++ b/")
+                )
                 if files_touched == 0:
                     files_touched = sum(
                         1 for line in patch_lines if line.startswith("FILE_REPLACE:")

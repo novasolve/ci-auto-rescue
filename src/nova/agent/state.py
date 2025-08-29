@@ -23,7 +23,9 @@ class AgentState:
 
     # Test failure information
     failing_tests: List[Dict[str, Any]] = field(default_factory=list)
-    initial_failing_tests: List[Dict[str, Any]] = field(default_factory=list)  # Store original failures for PR
+    initial_failing_tests: List[Dict[str, Any]] = field(
+        default_factory=list
+    )  # Store original failures for PR
     total_failures: int = 0
     initial_failures: int = 0  # Store original count for PR
 
@@ -40,7 +42,9 @@ class AgentState:
     whole_file_mode: bool = False  # Use whole file replacement instead of patches
 
     # Loop prevention
-    used_actions: set = field(default_factory=set)  # Track (tool_name, args, modification_count)
+    used_actions: set = field(
+        default_factory=set
+    )  # Track (tool_name, args, modification_count)
     modifications_count: int = 0  # Increment when files are modified
     file_cache: Dict[str, str] = field(default_factory=dict)  # Cache file contents
 
@@ -52,8 +56,7 @@ class AgentState:
     def add_failing_tests(self, tests: List[Any]) -> None:
         """Add failing tests to the state."""
         self.failing_tests = [
-            test.to_dict() if hasattr(test, 'to_dict') else test
-            for test in tests
+            test.to_dict() if hasattr(test, "to_dict") else test for test in tests
         ]
         self.total_failures = len(self.failing_tests)
 
@@ -91,6 +94,7 @@ class AgentState:
     def check_timeout(self) -> bool:
         """Check if we've exceeded the timeout."""
         from nova.tools.datetime_utils import seconds_between, now_utc
+
         if isinstance(self.start_time, float):
             elapsed = time.time() - self.start_time
         else:
@@ -108,7 +112,11 @@ class AgentState:
             "current_iteration": self.current_iteration,
             "max_iterations": self.max_iterations,
             "timeout_seconds": self.timeout_seconds,
-            "start_time": self.start_time if isinstance(self.start_time, float) else self.start_time.isoformat(),
+            "start_time": (
+                self.start_time
+                if isinstance(self.start_time, float)
+                else self.start_time.isoformat()
+            ),
             "patches_applied": self.patches_applied,
             "test_results": self.test_results,
             "final_status": self.final_status,

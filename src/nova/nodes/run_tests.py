@@ -2,7 +2,7 @@
 Run Tests node for Nova CI-Rescue agent workflow.
 """
 
-from typing import Tuple, List, Optional, Any
+from typing import Tuple, List, Optional
 from rich.console import Console
 
 from nova.agent.state import AgentState
@@ -23,7 +23,7 @@ class RunTestsNode:
         state: AgentState,
         runner: TestRunner,
         telemetry: Optional[JSONLLogger] = None,
-        step_number: Optional[int] = None
+        step_number: Optional[int] = None,
     ) -> Tuple[List[FailingTest], Optional[str]]:
         """
         Run tests after applying a patch.
@@ -41,14 +41,17 @@ class RunTestsNode:
 
         # Log test run start
         if telemetry:
-            telemetry.log_event("run_tests_start", {
-                "iteration": iteration,
-                "step": step_number,
-                "previous_failures": state.total_failures
-            })
+            telemetry.log_event(
+                "run_tests_start",
+                {
+                    "iteration": iteration,
+                    "step": step_number,
+                    "previous_failures": state.total_failures,
+                },
+            )
 
         if self.verbose:
-            console.print(f"[cyan]🧪 Running tests after patch...[/cyan]")
+            console.print("[cyan]🧪 Running tests after patch...[/cyan]")
 
         # Run tests
         new_failures, junit_xml = runner.run_tests()
@@ -60,34 +63,43 @@ class RunTestsNode:
         # Update state with new test results
         previous_failures = state.total_failures
         state.add_failing_tests(new_failures)
-        state.test_results.append({
-            "iteration": iteration,
-            "step": step_number,
-            "failures_before": previous_failures,
-            "failures_after": state.total_failures
-        })
+        state.test_results.append(
+            {
+                "iteration": iteration,
+                "step": step_number,
+                "failures_before": previous_failures,
+                "failures_after": state.total_failures,
+            }
+        )
 
         # Calculate progress
         fixed_count = previous_failures - state.total_failures
 
         # Display results
         if state.total_failures == 0:
-            console.print(f"[bold green]✅ All tests passing![/bold green]")
+            console.print("[bold green]✅ All tests passing![/bold green]")
         elif fixed_count > 0:
-            console.print(f"[green]✓ Progress: Fixed {fixed_count} test(s), {state.total_failures} remaining[/green]")
+            console.print(
+                f"[green]✓ Progress: Fixed {fixed_count} test(s), {state.total_failures} remaining[/green]"
+            )
         else:
-            console.print(f"[yellow]⚠ No progress: {state.total_failures} test(s) still failing[/yellow]")
+            console.print(
+                f"[yellow]⚠ No progress: {state.total_failures} test(s) still failing[/yellow]"
+            )
 
         # Log test results
         if telemetry:
-            telemetry.log_event("run_tests_complete", {
-                "iteration": iteration,
-                "step": step_number,
-                "failures_before": previous_failures,
-                "failures_after": state.total_failures,
-                "fixed": fixed_count,
-                "report_saved": junit_xml is not None
-            })
+            telemetry.log_event(
+                "run_tests_complete",
+                {
+                    "iteration": iteration,
+                    "step": step_number,
+                    "failures_before": previous_failures,
+                    "failures_after": state.total_failures,
+                    "fixed": fixed_count,
+                    "report_saved": junit_xml is not None,
+                },
+            )
 
         return new_failures, junit_xml
 
@@ -97,7 +109,7 @@ def run_tests_node(
     runner: TestRunner,
     telemetry: Optional[JSONLLogger] = None,
     step_number: Optional[int] = None,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> Tuple[List[FailingTest], Optional[str]]:
     """
     Convenience function to execute the run tests node.

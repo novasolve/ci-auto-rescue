@@ -4,7 +4,6 @@ Reflect node for Nova CI-Rescue agent workflow.
 
 from typing import Dict, Any, Optional
 import time
-from datetime import datetime
 from nova.tools.datetime_utils import now_utc, seconds_between
 from rich.console import Console
 
@@ -21,9 +20,7 @@ class ReflectNode:
         self.verbose = verbose
 
     def execute(
-        self,
-        state: AgentState,
-        telemetry: Optional[JSONLLogger] = None
+        self, state: AgentState, telemetry: Optional[JSONLLogger] = None
     ) -> Dict[str, Any]:
         """
         Analyze current state and decide next action.
@@ -48,19 +45,27 @@ class ReflectNode:
 
         # Log reflect start
         if telemetry:
-            telemetry.log_event("reflect_start", {
-                "iteration": iteration,
-                "failures_before": failures_before,
-                "failures_after": failures_after,
-                "timeout_remaining": state.timeout_seconds - (
-                    (time.time() - state.start_time) if isinstance(state.start_time, float)
-                    else seconds_between(now_utc(), state.start_time) if state.start_time
-                    else 0
-                )
-            })
+            telemetry.log_event(
+                "reflect_start",
+                {
+                    "iteration": iteration,
+                    "failures_before": failures_before,
+                    "failures_after": failures_after,
+                    "timeout_remaining": state.timeout_seconds
+                    - (
+                        (time.time() - state.start_time)
+                        if isinstance(state.start_time, float)
+                        else (
+                            seconds_between(now_utc(), state.start_time)
+                            if state.start_time
+                            else 0
+                        )
+                    ),
+                },
+            )
 
         if self.verbose:
-            console.print(f"[cyan]🤔 Reflecting on progress...[/cyan]")
+            console.print("[cyan]🤔 Reflecting on progress...[/cyan]")
 
         # Decision logic
         decision = {"action": "continue", "reason": "unknown"}
@@ -70,7 +75,7 @@ class ReflectNode:
             decision = {
                 "action": "success",
                 "reason": "all_tests_passing",
-                "message": f"All tests passing! Fixed in {iteration} iteration(s)."
+                "message": f"All tests passing! Fixed in {iteration} iteration(s).",
             }
             state.final_status = "success"
             if self.verbose:
@@ -81,7 +86,7 @@ class ReflectNode:
             decision = {
                 "action": "stop",
                 "reason": "timeout",
-                "message": f"Timeout reached ({state.timeout_seconds}s)"
+                "message": f"Timeout reached ({state.timeout_seconds}s)",
             }
             state.final_status = "timeout"
             console.print(f"[red]⏰ {decision['message']}[/red]")
@@ -91,7 +96,7 @@ class ReflectNode:
             decision = {
                 "action": "stop",
                 "reason": "max_iterations",
-                "message": f"Maximum iterations reached ({state.max_iterations})"
+                "message": f"Maximum iterations reached ({state.max_iterations})",
             }
             state.final_status = "max_iters"
             console.print(f"[red]🔄 {decision['message']}[/red]")
@@ -102,7 +107,7 @@ class ReflectNode:
             decision = {
                 "action": "continue",
                 "reason": "progress_made",
-                "message": f"Fixed {fixed_count} test(s), {failures_after} remaining"
+                "message": f"Fixed {fixed_count} test(s), {failures_after} remaining",
             }
             if self.verbose:
                 console.print(f"[green]✓ {decision['message']}[/green]")
@@ -113,29 +118,32 @@ class ReflectNode:
             decision = {
                 "action": "continue",
                 "reason": "no_progress",
-                "message": f"No progress: {failures_after} test(s) still failing"
+                "message": f"No progress: {failures_after} test(s) still failing",
             }
             if self.verbose:
                 console.print(f"[yellow]⚠ {decision['message']}[/yellow]")
-                console.print(f"[dim]Trying different approach in iteration {iteration + 1}...[/dim]")
+                console.print(
+                    f"[dim]Trying different approach in iteration {iteration + 1}...[/dim]"
+                )
 
         # Log reflect completion
         if telemetry:
-            telemetry.log_event("reflect_complete", {
-                "iteration": iteration,
-                "decision": decision["action"],
-                "reason": decision["reason"],
-                "failures_remaining": state.total_failures,
-                "patches_applied": len(state.patches_applied)
-            })
+            telemetry.log_event(
+                "reflect_complete",
+                {
+                    "iteration": iteration,
+                    "decision": decision["action"],
+                    "reason": decision["reason"],
+                    "failures_remaining": state.total_failures,
+                    "patches_applied": len(state.patches_applied),
+                },
+            )
 
         return decision
 
 
 def reflect_node(
-    state: AgentState,
-    telemetry: Optional[JSONLLogger] = None,
-    verbose: bool = False
+    state: AgentState, telemetry: Optional[JSONLLogger] = None, verbose: bool = False
 ) -> Dict[str, Any]:
     """
     Convenience function to execute the reflect node.

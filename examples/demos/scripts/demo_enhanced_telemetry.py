@@ -6,7 +6,6 @@ Demo script showing the enhanced telemetry with your improved planner node.
 import json
 import tempfile
 from pathlib import Path
-from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -18,6 +17,7 @@ from src.nova.agent.state import AgentState
 from src.nova.nodes.planner import PlannerNode
 
 console = Console()
+
 
 class MockLLMAgent:
     """Mock LLM agent for demonstration."""
@@ -32,10 +32,10 @@ class MockLLMAgent:
                     "Re-analyze the issue from feedback",
                     "Generate more conservative fix",
                     "Add additional validation",
-                    "Test thoroughly"
+                    "Test thoroughly",
                 ],
                 "target_tests": failing_tests[:1],  # Focus on one test
-                "strategy": "Conservative incremental fix"
+                "strategy": "Conservative incremental fix",
             }
         else:
             return {
@@ -43,21 +43,23 @@ class MockLLMAgent:
                 "steps": [
                     "Fix missing imports in module.py",
                     "Correct assertion logic in calculate function",
-                    "Update expected values in tests"
+                    "Update expected values in tests",
                 ],
                 "target_tests": failing_tests[:2],
-                "strategy": "Direct fixes to source code"
+                "strategy": "Direct fixes to source code",
             }
 
 
 def demo_enhanced_telemetry():
     """Demonstrate the enhanced telemetry system with detailed logging."""
 
-    console.print(Panel.fit(
-        "[bold cyan]Nova CI-Rescue Enhanced Telemetry Demo[/bold cyan]\n"
-        "Showing improved planner node with detailed event logging",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Nova CI-Rescue Enhanced Telemetry Demo[/bold cyan]\n"
+            "Showing improved planner node with detailed event logging",
+            border_style="cyan",
+        )
+    )
 
     # Create temporary telemetry directory
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -79,20 +81,20 @@ def demo_enhanced_telemetry():
                 "name": "test_calculate_sum",
                 "file": "tests/test_calculator.py",
                 "line": 42,
-                "short_traceback": "AssertionError: assert 15 == 10\n  where 15 = calculate_sum([1, 2, 3, 4, 5])\n  and   10 = expected"
+                "short_traceback": "AssertionError: assert 15 == 10\n  where 15 = calculate_sum([1, 2, 3, 4, 5])\n  and   10 = expected",
             },
             {
                 "name": "test_import_module",
                 "file": "tests/test_imports.py",
                 "line": 5,
-                "short_traceback": "ImportError: cannot import name 'helper' from 'utils'\n  (module 'utils' has no attribute 'helper')"
+                "short_traceback": "ImportError: cannot import name 'helper' from 'utils'\n  (module 'utils' has no attribute 'helper')",
             },
             {
                 "name": "test_edge_cases",
                 "file": "tests/test_edge.py",
                 "line": 78,
-                "short_traceback": "ValueError: invalid literal for int() with base 10: 'abc'\n  in process_input('abc')"
-            }
+                "short_traceback": "ValueError: invalid literal for int() with base 10: 'abc'\n  in process_input('abc')",
+            },
         ]
 
         # Create mock LLM agent
@@ -104,9 +106,14 @@ def demo_enhanced_telemetry():
         planner = PlannerNode(verbose=True)
         plan1 = planner.execute(state, llm_agent, logger, critic_feedback=None)
 
-        console.print(f"\n[dim]Plan generated:[/dim]")
-        console.print(Panel(json.dumps(plan1, indent=2, default=str),
-                           title="Initial Plan", border_style="blue"))
+        console.print("\n[dim]Plan generated:[/dim]")
+        console.print(
+            Panel(
+                json.dumps(plan1, indent=2, default=str),
+                title="Initial Plan",
+                border_style="blue",
+            )
+        )
 
         # Simulate critic feedback
         critic_feedback = (
@@ -115,32 +122,41 @@ def demo_enhanced_telemetry():
             "The import error should be addressed first as it blocks other tests."
         )
 
-        console.print("\n[bold]═══ Iteration 2: Planning with Critic Feedback ═══[/bold]\n")
+        console.print(
+            "\n[bold]═══ Iteration 2: Planning with Critic Feedback ═══[/bold]\n"
+        )
 
         # Update state for next iteration
         state.current_iteration = 2
-        state.patches_applied = ["--- a/utils.py\n+++ b/utils.py\n@@ -1,0 +1,1 @@\n+def helper(): pass"]
+        state.patches_applied = [
+            "--- a/utils.py\n+++ b/utils.py\n@@ -1,0 +1,1 @@\n+def helper(): pass"
+        ]
 
         # Execute planner with critic feedback
-        plan2 = planner.execute(state, llm_agent, logger, critic_feedback=critic_feedback)
+        plan2 = planner.execute(
+            state, llm_agent, logger, critic_feedback=critic_feedback
+        )
 
-        console.print(f"\n[dim]Revised plan generated:[/dim]")
-        console.print(Panel(json.dumps(plan2, indent=2, default=str),
-                           title="Revised Plan", border_style="green"))
+        console.print("\n[dim]Revised plan generated:[/dim]")
+        console.print(
+            Panel(
+                json.dumps(plan2, indent=2, default=str),
+                title="Revised Plan",
+                border_style="green",
+            )
+        )
 
         # End the run
-        logger.end_run(success=False, summary={
-            "demo": True,
-            "iterations": 2,
-            "plans_generated": 2
-        })
+        logger.end_run(
+            success=False, summary={"demo": True, "iterations": 2, "plans_generated": 2}
+        )
 
         # Display the trace.jsonl contents
         console.print("\n[bold]═══ Telemetry Trace Log ═══[/bold]\n")
 
         trace_file = logger.run_dir / "trace.jsonl"
         events = []
-        with open(trace_file, 'r') as f:
+        with open(trace_file, "r") as f:
             for line in f:
                 events.append(json.loads(line))
 
@@ -150,29 +166,43 @@ def demo_enhanced_telemetry():
 
             if event_type == "planner_start":
                 data = event.get("data", {})
-                console.print(f"[cyan]📋 PLANNER START[/cyan] (Iteration {data.get('iteration')})")
+                console.print(
+                    f"[cyan]📋 PLANNER START[/cyan] (Iteration {data.get('iteration')})"
+                )
                 console.print(f"  • Failing tests: {data.get('failing_tests_count')}")
-                console.print(f"  • Has critic feedback: {data.get('has_critic_feedback')}")
-                if data.get('critic_feedback'):
-                    console.print(f"  • Feedback: [yellow]{data['critic_feedback'][:100]}...[/yellow]")
-                console.print(f"  • Patches applied: {data.get('patches_applied_count')}")
+                console.print(
+                    f"  • Has critic feedback: {data.get('has_critic_feedback')}"
+                )
+                if data.get("critic_feedback"):
+                    console.print(
+                        f"  • Feedback: [yellow]{data['critic_feedback'][:100]}...[/yellow]"
+                    )
+                console.print(
+                    f"  • Patches applied: {data.get('patches_applied_count')}"
+                )
 
                 # Show failing test details
-                for i, test in enumerate(data.get('failing_tests', [])[:2], 1):
+                for i, test in enumerate(data.get("failing_tests", [])[:2], 1):
                     console.print(f"\n  Test {i}: [red]{test['name']}[/red]")
                     console.print(f"    File: {test['file']}:{test['line']}")
-                    console.print(f"    Error: [dim]{test['error_preview'][:80]}...[/dim]")
+                    console.print(
+                        f"    Error: [dim]{test['error_preview'][:80]}...[/dim]"
+                    )
                 console.print()
 
             elif event_type == "planner_complete":
                 data = event.get("data", {})
                 plan_info = data.get("plan", {})
-                console.print(f"[green]✅ PLANNER COMPLETE[/green] (Iteration {data.get('iteration')})")
+                console.print(
+                    f"[green]✅ PLANNER COMPLETE[/green] (Iteration {data.get('iteration')})"
+                )
                 console.print(f"  • Approach: {plan_info.get('approach')}")
                 console.print(f"  • Strategy: {plan_info.get('strategy')}")
-                console.print(f"  • Target tests: {plan_info.get('target_tests_count')}")
+                console.print(
+                    f"  • Target tests: {plan_info.get('target_tests_count')}"
+                )
                 console.print(f"  • Steps: {len(plan_info.get('steps', []))}")
-                for i, step in enumerate(plan_info.get('steps', [])[:3], 1):
+                for i, step in enumerate(plan_info.get("steps", [])[:3], 1):
                     console.print(f"    {i}. {step}")
                 console.print()
 
@@ -202,7 +232,7 @@ def demo_enhanced_telemetry():
             syntax = Syntax(json_str, "json", theme="monokai", line_numbers=False)
             console.print(syntax)
 
-        console.print(f"\n✅ [green]Enhanced telemetry demo complete![/green]")
+        console.print("\n✅ [green]Enhanced telemetry demo complete![/green]")
         console.print(f"📁 Full trace saved to: {trace_file}")
 
 

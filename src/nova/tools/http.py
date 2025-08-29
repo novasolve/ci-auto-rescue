@@ -84,7 +84,7 @@ class AllowedHTTPClient:
                 last_exc = e
                 if attempt >= retries:
                     raise
-                delay = backoff_base * (2 ** attempt)
+                delay = backoff_base * (2**attempt)
                 time.sleep(delay)
         # Should not reach here; raise last exception if present
         if last_exc:

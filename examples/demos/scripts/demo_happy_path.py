@@ -5,7 +5,6 @@ This demonstrates the full Planner → Actor → Critic → Apply → RunTests �
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add the src directory to Python path
@@ -61,7 +60,7 @@ def main():
             repo_path=repo_path,
             max_iterations=max_iterations,
             timeout_seconds=timeout_seconds,
-            branch_name=branch_name
+            branch_name=branch_name,
         )
 
         # Run initial tests
@@ -86,30 +85,39 @@ def main():
             console.print(f"\n[bold blue]Iteration {iteration}[/bold blue]")
 
             # 1. PLANNER
-            console.print("\n[cyan]1. PLANNER - Analyzing failures and creating plan...[/cyan]")
+            console.print(
+                "\n[cyan]1. PLANNER - Analyzing failures and creating plan...[/cyan]"
+            )
             plan = llm_agent.create_plan(state.failing_tests, iteration)
             state.plan = plan
 
             console.print(f"   Plan: {plan.get('approach', 'Unknown')}")
-            if plan.get('steps'):
-                for i, step in enumerate(plan['steps'][:3], 1):
+            if plan.get("steps"):
+                for i, step in enumerate(plan["steps"][:3], 1):
                     console.print(f"   Step {i}: {step}")
 
-            telemetry.log_event("planner_complete", {"iteration": iteration, "plan": plan})
+            telemetry.log_event(
+                "planner_complete", {"iteration": iteration, "plan": plan}
+            )
 
             # 2. ACTOR
             console.print("\n[cyan]2. ACTOR - Generating patch...[/cyan]")
-            patch_diff = llm_agent.generate_patch(state.failing_tests, iteration, plan=plan)
+            patch_diff = llm_agent.generate_patch(
+                state.failing_tests, iteration, plan=plan
+            )
 
             if not patch_diff:
                 console.print("[red]   ✗ Failed to generate patch[/red]")
                 state.final_status = "no_patch"
                 break
 
-            patch_lines = patch_diff.split('\n')
+            patch_lines = patch_diff.split("\n")
             console.print(f"   ✓ Generated {len(patch_lines)} line patch")
 
-            telemetry.log_event("actor_complete", {"iteration": iteration, "patch_size": len(patch_lines)})
+            telemetry.log_event(
+                "actor_complete",
+                {"iteration": iteration, "patch_size": len(patch_lines)},
+            )
 
             # 3. CRITIC
             console.print("\n[cyan]3. CRITIC - Reviewing patch...[/cyan]")
@@ -120,7 +128,9 @@ def main():
             if not approved:
                 console.print("[red]   ✗ Patch rejected[/red]")
                 state.final_status = "patch_rejected"
-                telemetry.log_event("critic_rejected", {"iteration": iteration, "reason": reason})
+                telemetry.log_event(
+                    "critic_rejected", {"iteration": iteration, "reason": reason}
+                )
                 break
 
             console.print("[green]   ✓ Patch approved[/green]")
@@ -138,11 +148,14 @@ def main():
             console.print(f"   ✓ Applied patch (step {result['step_number']})")
             console.print(f"   Changed files: {', '.join(result['changed_files'])}")
 
-            telemetry.log_event("patch_applied", {
-                "iteration": iteration,
-                "step": result["step_number"],
-                "files": result["changed_files"]
-            })
+            telemetry.log_event(
+                "patch_applied",
+                {
+                    "iteration": iteration,
+                    "step": result["step_number"],
+                    "files": result["changed_files"],
+                },
+            )
 
             # 5. RUN TESTS
             console.print("\n[cyan]5. RUN TESTS - Testing changes...[/cyan]")
@@ -156,17 +169,22 @@ def main():
             if fixed_count > 0:
                 console.print(f"   [green]✓ Fixed {fixed_count} test(s)[/green]")
 
-            telemetry.log_event("test_results", {
-                "iteration": iteration,
-                "fixed": fixed_count,
-                "remaining": state.total_failures
-            })
+            telemetry.log_event(
+                "test_results",
+                {
+                    "iteration": iteration,
+                    "fixed": fixed_count,
+                    "remaining": state.total_failures,
+                },
+            )
 
             # 6. REFLECT
             console.print("\n[cyan]6. REFLECT - Evaluating progress...[/cyan]")
 
             if state.total_failures == 0:
-                console.print("[bold green]   ✅ All tests passing! Success![/bold green]")
+                console.print(
+                    "[bold green]   ✅ All tests passing! Success![/bold green]"
+                )
                 state.final_status = "success"
                 success = True
                 break
@@ -181,7 +199,9 @@ def main():
                 state.final_status = "max_iters"
                 break
 
-            console.print(f"   Continuing with {state.total_failures} failures remaining...")
+            console.print(
+                f"   Continuing with {state.total_failures} failures remaining..."
+            )
 
         # Summary
         console.print("\n" + "=" * 60)
@@ -192,12 +212,16 @@ def main():
         console.print(f"Final Failures: {state.total_failures}")
 
         if success:
-            console.print("\n[bold green]✅ HAPPY PATH COMPLETE - All tests fixed![/bold green]")
+            console.print(
+                "\n[bold green]✅ HAPPY PATH COMPLETE - All tests fixed![/bold green]"
+            )
         else:
             console.print(f"\n[yellow]⚠️ Process ended: {state.final_status}[/yellow]")
 
         # Cleanup
-        telemetry.log_event("completion", {"status": state.final_status, "success": success})
+        telemetry.log_event(
+            "completion", {"status": state.final_status, "success": success}
+        )
         telemetry.end_run(success=success)
 
         if git_manager:
@@ -206,6 +230,7 @@ def main():
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
         import traceback
+
         if verbose:
             traceback.print_exc()
         return 1

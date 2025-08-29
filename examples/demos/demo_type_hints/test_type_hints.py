@@ -1,13 +1,23 @@
 """Tests for type hints - all will fail due to bugs."""
 
-import pytest
-from typing import get_type_hints
 from type_hints import (
-    add_numbers, concatenate_strings, get_first_item, process_data,
-    find_max, create_user, parse_config, split_name, filter_positive,
-    safe_divide, get_value, validate_email, process_items,
-    calculate_average, DataProcessor
+    add_numbers,
+    concatenate_strings,
+    get_first_item,
+    process_data,
+    find_max,
+    create_user,
+    parse_config,
+    split_name,
+    filter_positive,
+    safe_divide,
+    get_value,
+    validate_email,
+    process_items,
+    calculate_average,
+    DataProcessor,
 )
+
 
 def test_add_numbers_type():
     """Test add_numbers return type."""
@@ -15,17 +25,20 @@ def test_add_numbers_type():
     assert isinstance(result, int)
     assert result == 5
 
+
 def test_concatenate_strings():
     """Test string concatenation."""
     result = concatenate_strings("Hello, ", "World!")
     assert isinstance(result, str)
     assert result == "Hello, World!"
 
+
 def test_get_first_item():
     """Test getting first item with proper handling."""
     assert get_first_item(["a", "b", "c"]) == "a"
     # Should return None for empty list
     assert get_first_item([]) is None
+
 
 def test_process_data():
     """Test data processing return type."""
@@ -34,11 +47,13 @@ def test_process_data():
     assert isinstance(result, list)
     assert result == [1, 2, 3]  # Values as list
 
+
 def test_find_max():
     """Test finding maximum."""
     assert find_max([1.5, 2.7, 0.3]) == 2.7
     assert find_max([]) is None
     assert find_max([-1, -5, -3]) == -1
+
 
 def test_create_user():
     """Test user creation with correct types."""
@@ -49,6 +64,7 @@ def test_create_user():
     assert isinstance(user["age"], int)
     assert user["active"] == True
     assert isinstance(user["active"], bool)
+
 
 def test_parse_config():
     """Test config parsing for both types."""
@@ -61,6 +77,7 @@ def test_parse_config():
     result = parse_config(config)
     assert result == config
 
+
 def test_split_name():
     """Test name splitting."""
     first, last = split_name("John Doe")
@@ -72,11 +89,13 @@ def test_split_name():
     assert first == "Madonna"
     assert last == ""
 
+
 def test_filter_positive():
     """Test filtering positive numbers."""
     numbers = [-2, -1, 0, 1, 2, 3]
     result = filter_positive(numbers)
     assert result == [1, 2, 3]
+
 
 def test_safe_divide():
     """Test safe division."""
@@ -84,11 +103,13 @@ def test_safe_divide():
     assert safe_divide(7, 2) == 3.5
     assert safe_divide(10, 0) is None
 
+
 def test_get_value():
     """Test getting value with default."""
     data = {"name": "John", "age": 30}
     assert get_value(data, "name") == "John"
     assert get_value(data, "email", "none@example.com") == "none@example.com"
+
 
 def test_validate_email():
     """Test email validation return type."""
@@ -97,11 +118,13 @@ def test_validate_email():
     # Check return type is always bool
     assert isinstance(validate_email("test"), bool)
 
+
 def test_process_items():
     """Test processing optional items."""
     assert process_items(["hello", "world"]) == ["HELLO", "WORLD"]
     assert process_items(None) == []
     assert process_items([]) == []
+
 
 def test_calculate_average():
     """Test average calculation returns float."""
@@ -112,6 +135,7 @@ def test_calculate_average():
     result = calculate_average([])
     assert isinstance(result, float)
     assert result == 0.0
+
 
 class TestDataProcessor:
     """Test DataProcessor class."""

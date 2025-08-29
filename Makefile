@@ -15,5 +15,3 @@ venv:
 	@if [ -f pyproject.toml ]; then \
 		. .venv/bin/activate && pip install -e .; \
 	fi
-
-

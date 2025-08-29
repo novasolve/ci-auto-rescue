@@ -16,10 +16,10 @@ console = Console()
 
 class ReflectNode:
     """Node responsible for deciding whether to continue or stop the loop."""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-    
+
     def execute(
         self,
         state: AgentState,
@@ -27,16 +27,16 @@ class ReflectNode:
     ) -> Dict[str, Any]:
         """
         Analyze current state and decide next action.
-        
+
         Args:
             state: Current agent state
             telemetry: Optional telemetry logger
-            
+
         Returns:
             Decision dictionary with action and reason
         """
         iteration = state.current_iteration
-        
+
         # Get test results from last run
         if state.test_results:
             last_result = state.test_results[-1]
@@ -45,7 +45,7 @@ class ReflectNode:
         else:
             failures_before = state.total_failures
             failures_after = state.total_failures
-        
+
         # Log reflect start
         if telemetry:
             telemetry.log_event("reflect_start", {
@@ -53,18 +53,18 @@ class ReflectNode:
                 "failures_before": failures_before,
                 "failures_after": failures_after,
                 "timeout_remaining": state.timeout_seconds - (
-                    (time.time() - state.start_time) if isinstance(state.start_time, float) 
-                    else seconds_between(now_utc(), state.start_time) if state.start_time 
+                    (time.time() - state.start_time) if isinstance(state.start_time, float)
+                    else seconds_between(now_utc(), state.start_time) if state.start_time
                     else 0
                 )
             })
-        
+
         if self.verbose:
             console.print(f"[cyan]🤔 Reflecting on progress...[/cyan]")
-        
+
         # Decision logic
         decision = {"action": "continue", "reason": "unknown"}
-        
+
         # Check if all tests are passing
         if state.total_failures == 0:
             decision = {
@@ -75,7 +75,7 @@ class ReflectNode:
             state.final_status = "success"
             if self.verbose:
                 console.print(f"[bold green]✅ {decision['message']}[/bold green]")
-        
+
         # Check timeout
         elif state.check_timeout():
             decision = {
@@ -85,7 +85,7 @@ class ReflectNode:
             }
             state.final_status = "timeout"
             console.print(f"[red]⏰ {decision['message']}[/red]")
-        
+
         # Check max iterations
         elif iteration >= state.max_iterations:
             decision = {
@@ -95,7 +95,7 @@ class ReflectNode:
             }
             state.final_status = "max_iters"
             console.print(f"[red]🔄 {decision['message']}[/red]")
-        
+
         # Check if we made progress
         elif failures_after < failures_before:
             fixed_count = failures_before - failures_after
@@ -107,7 +107,7 @@ class ReflectNode:
             if self.verbose:
                 console.print(f"[green]✓ {decision['message']}[/green]")
                 console.print(f"[dim]Continuing to iteration {iteration + 1}...[/dim]")
-        
+
         # No progress made
         else:
             decision = {
@@ -118,7 +118,7 @@ class ReflectNode:
             if self.verbose:
                 console.print(f"[yellow]⚠ {decision['message']}[/yellow]")
                 console.print(f"[dim]Trying different approach in iteration {iteration + 1}...[/dim]")
-        
+
         # Log reflect completion
         if telemetry:
             telemetry.log_event("reflect_complete", {
@@ -128,7 +128,7 @@ class ReflectNode:
                 "failures_remaining": state.total_failures,
                 "patches_applied": len(state.patches_applied)
             })
-        
+
         return decision
 
 
@@ -139,12 +139,12 @@ def reflect_node(
 ) -> Dict[str, Any]:
     """
     Convenience function to execute the reflect node.
-    
+
     Args:
         state: Current agent state
         telemetry: Optional telemetry logger
         verbose: Enable verbose output
-        
+
     Returns:
         Decision dictionary
     """

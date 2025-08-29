@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova CI-Rescue Setup</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            padding: 40px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 36px;
+            font-weight: bold;
+        }
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .btn {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 10px 5px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #5a67d8;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-left: 4px solid #d69e2e;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">N</div>
+        <h1>Nova CI-Rescue Setup</h1>
+        <p>Automated CI test fixing powered by AI</p>
+    </div>
+
+    <div class="step">
+        <span class="step-number">1</span>
+        <h3>Install the GitHub App</h3>
+        <p>Click the button below to install Nova CI-Rescue on your GitHub account or organization:</p>
+        <a href="https://github.com/apps/nova-ci-rescue/installations/new" class="btn">Install Nova CI-Rescue</a>
+    </div>
+
+    <div class="step">
+        <span class="step-number">2</span>
+        <h3>Select Repositories</h3>
+        <p>Choose which repositories you want Nova CI-Rescue to monitor and fix:</p>
+        <ul>
+            <li>Select "All repositories" for organization-wide installation</li>
+            <li>Or choose specific repositories for individual installation</li>
+        </ul>
+    </div>
+
+    <div class="step">
+        <span class="step-number">3</span>
+        <h3>Add Configuration File</h3>
+        <p>Create a <code>.nova-ci-rescue.yml</code> file in your repository root:</p>
+        <div class="code-block">
+name: .nova-ci-rescue.yml
+<br>max_iters: 3
+<br>timeout: 300
+<br>paths:
+<br>  include:
+<br>    - "**/*.py"
+<br>    - "**/*.js"
+<br>    - "**/*.ts"
+<br>  exclude:
+<br>    - "**/node_modules/**"
+<br>    - "**/__pycache__/**"
+<br>triggers:
+<br>  - "ci-failure"
+<br>language: "python"
+<br>safety:
+<br>  max_file_size: 1000000
+<br>  allow_network: false
+        </div>
+    </div>
+
+    <div class="step">
+        <span class="step-number">4</span>
+        <h3>Add GitHub Actions Workflow</h3>
+        <p>Create <code>.github/workflows/nova-ci-rescue.yml</code> in your repository:</p>
+        <div class="code-block">
+name: Nova CI-Rescue Auto-Fix
+<br>
+<br>on:
+<br>  push:
+<br>    branches: [main]
+<br>  pull_request:
+<br>    types: [opened, synchronize]
+<br>
+<br>permissions:
+<br>  contents: write
+<br>  pull-requests: write
+<br>
+<br>jobs:
+<br>  test-and-fix:
+<br>    runs-on: ubuntu-latest
+<br>    steps:
+<br>      - uses: actions/checkout@v4
+<br>      - name: Run Nova CI-Rescue
+<br>        uses: nova-ci-rescue/action@v1
+<br>        with:
+<br>          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+        </div>
+    </div>
+
+    <div class="warning">
+        <h4>⚠️ Prerequisites</h4>
+        <ul>
+            <li>OpenAI API key stored as <code>OPENAI_API_KEY</code> secret</li>
+            <li>Python/Node.js project with test suite</li>
+            <li>Repository permissions granted to the app</li>
+        </ul>
+    </div>
+
+    <div class="step">
+        <span class="step-number">5</span>
+        <h3>Test the Setup</h3>
+        <p>Push a commit that breaks your tests to see Nova CI-Rescue in action:</p>
+        <ol>
+            <li>Make a small change that breaks a test</li>
+            <li>Push the change to trigger CI</li>
+            <li>Nova will automatically create a fix PR</li>
+        </ol>
+    </div>
+
+    <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+        <p>Need help? Check our <a href="https://nova-ci-rescue.fly.dev/docs">documentation</a> or <a href="https://github.com/ci-auto-rescue/ci-auto-rescue/issues">open an issue</a>.</p>
+    </div>
+</body>
+</html>

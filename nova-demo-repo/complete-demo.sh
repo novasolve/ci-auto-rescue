@@ -59,7 +59,11 @@ read -p "Press Enter to continue..."
 echo ""
 echo -e "${BOLD}Step 3: Create a Feature Branch${NC}"
 # Clean up any existing branches from previous runs
-git checkout main 2>/dev/null || true
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest 2>/dev/null || git switch demo/latest 2>/dev/null || true
+else
+  git checkout main 2>/dev/null || true
+fi
 git branch -D $BRANCH_NAME 2>/dev/null || true
 echo -e "${YELLOW}$ git checkout -b $BRANCH_NAME${NC}"
 git checkout -b $BRANCH_NAME
@@ -93,7 +97,7 @@ echo -e "${YELLOW}$ git commit -m 'feat: optimize calculator performance'${NC}"
 git commit -m "feat: optimize calculator performance
 
 - Improved addition algorithm
-- Simplified subtraction logic  
+- Simplified subtraction logic
 - Removed unnecessary error checks
 - Performance improvements"
 echo ""
@@ -120,7 +124,7 @@ This PR optimizes the calculator module for better performance.
 - 📈 Overall performance improvements
 
 All changes are backward compatible." \
-    --base main \
+    --base demo/latest \
     --head $BRANCH_NAME)
 
 echo ""
@@ -152,7 +156,7 @@ echo -e "${RED}❌ CI Failed! Tests are not passing.${NC}"
 echo ""
 echo "Failed tests:"
 echo "- test_subtraction"
-echo "- test_division_by_zero" 
+echo "- test_division_by_zero"
 echo "- test_square_root_negative"
 echo "- test_average_empty_list"
 echo ""
@@ -184,7 +188,7 @@ cat << 'EOF'
 [Nova] 🔧 Applying fixes:
        ✓ Fixed subtract() to use subtraction operator
        ✓ Added zero check in divide()
-       ✓ Added negative check in square_root()  
+       ✓ Added negative check in square_root()
        ✓ Added empty list check in average()
 
 [Nova] ✅ All tests now pass!

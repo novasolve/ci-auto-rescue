@@ -11,7 +11,7 @@ from .reflect import ReflectNode
 
 __all__ = [
     "ApplyPatchNode",
-    "PlannerNode", 
+    "PlannerNode",
     "ActorNode",
     "CriticNode",
     "RunTestsNode",

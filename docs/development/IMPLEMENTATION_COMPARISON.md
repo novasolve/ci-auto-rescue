@@ -82,7 +82,7 @@ def fix_assertion(self, expected, actual):
 ### Option 3: Better Error Recovery
 When patch application fails:
 1. Try to apply partial patches hunk by hunk
-2. Use fuzzy matching more aggressively  
+2. Use fuzzy matching more aggressively
 3. Regenerate patch with specific instructions
 
 ## Conclusion
@@ -96,7 +96,7 @@ When patch application fails:
 1. Patch corruption issue not fully resolved
 2. Removed safety net (SimpleFixer) without fixing underlying problem
 
-**Recommendation**: 
+**Recommendation**:
 1. Keep working on patch generation fixes
 2. Add better error recovery
 3. Consider a generic SimpleFixer as last resort (not hardcoded)

@@ -78,7 +78,7 @@ else
     for branch in "${ephemeral_branches[@]}"; do
         echo "  - $branch"
     done
-    
+
     echo
     read -p "Do you want to delete these branches? (y/N): " -n 1 -r
     echo
@@ -113,7 +113,7 @@ else
     for branch in "${merged_branches[@]}"; do
         echo "  - $branch"
     done
-    
+
     echo
     read -p "Do you want to delete these merged branches? (y/N): " -n 1 -r
     echo

@@ -55,7 +55,7 @@ def test_parse_config():
     # String input
     result = parse_config("value")
     assert result == {"value": "value"}
-    
+
     # Dict input
     config = {"key": "value", "num": 42}
     result = parse_config(config)
@@ -66,7 +66,7 @@ def test_split_name():
     first, last = split_name("John Doe")
     assert first == "John"
     assert last == "Doe"
-    
+
     # Single name should return tuple with empty last
     first, last = split_name("Madonna")
     assert first == "Madonna"
@@ -108,20 +108,20 @@ def test_calculate_average():
     result = calculate_average([1, 2, 3, 4])
     assert isinstance(result, float)
     assert result == 2.5
-    
+
     result = calculate_average([])
     assert isinstance(result, float)
     assert result == 0.0
 
 class TestDataProcessor:
     """Test DataProcessor class."""
-    
+
     def test_init_type(self):
         """Test initialization with correct type."""
         data = [{"id": 1}, {"id": 2}]
         processor = DataProcessor(data)
         assert isinstance(processor.data, list)
-    
+
     def test_process_return_type(self):
         """Test process method return type."""
         data = [{"name": "item1"}, {"name": "item2"}]
@@ -129,7 +129,7 @@ class TestDataProcessor:
         result = processor.process()
         assert isinstance(result, list)
         assert all(isinstance(item, str) for item in result)
-    
+
     def test_get_item_bounds(self):
         """Test get_item with bounds checking."""
         data = [{"id": 1}, {"id": 2}]

@@ -12,35 +12,35 @@ from nova.config import get_settings
 
 class LLMAgent:
     """LLM agent that generates patches using OpenAI/Anthropic."""
-    
+
     def __init__(self, repo_path: Path):
         self.repo_path = repo_path
         self.settings = get_settings()
-        
+
         # Initialize OpenAI client
         if not self.settings.openai_api_key:
             raise ValueError("OpenAI API key not found. Please set OPENAI_API_KEY environment variable.")
-        
+
         self.client = OpenAI(api_key=self.settings.openai_api_key)
         self.model = self.settings.default_llm_model
-    
+
     def generate_patch(self, failing_tests: List[Dict[str, Any]], iteration: int, plan: Dict[str, Any] = None, critic_feedback: Optional[str] = None, state=None) -> Optional[str]:
         """
         Generate a patch to fix failing tests using LLM.
-        
+
         Args:
             failing_tests: List of failing test details
             iteration: Current iteration number
             plan: Optional plan from the planner
             critic_feedback: Optional feedback from previous critic rejection
             state: Optional agent state (unused in this implementation)
-            
+
         Returns:
             Unified diff string or None if no patch can be generated
         """
         if not failing_tests:
             return None
-        
+
         # Read the test files
         test_contents = {}
         for test in failing_tests:
@@ -49,10 +49,10 @@ class LLMAgent:
                 test_path = self.repo_path / test_file
                 if test_path.exists():
                     test_contents[test_file] = test_path.read_text()
-        
+
         # Prepare the prompt for the LLM
         prompt = self._create_patch_prompt(failing_tests, test_contents, iteration)
-        
+
         try:
             # Call OpenAI API
             response = self.client.chat.completions.create(
@@ -64,9 +64,9 @@ class LLMAgent:
                 temperature=1.0,
                 max_tokens=40000  # Set to 40k as requested
             )
-            
+
             patch_diff = response.choices[0].message.content.strip()
-            
+
             # Extract the diff from the response (it might be wrapped in markdown)
             if "```diff" in patch_diff:
                 start = patch_diff.find("```diff") + 7
@@ -78,17 +78,17 @@ class LLMAgent:
                     start += 1
                 end = patch_diff.find("```", start)
                 patch_diff = patch_diff[start:end].strip()
-            
+
             return patch_diff
-            
+
         except Exception as e:
             print(f"Error calling LLM: {e}")
             return None
-    
+
     def _create_patch_prompt(self, failing_tests: List[Dict[str, Any]], test_contents: Dict[str, str], iteration: int) -> str:
         """Create a prompt for the LLM to generate a patch."""
         prompt = f"Fix the following failing tests (iteration {iteration}):\n\n"
-        
+
         # Add failure information
         prompt += "FAILING TESTS:\n"
         for i, test in enumerate(failing_tests[:3], 1):  # Limit to first 3 tests
@@ -96,34 +96,34 @@ class LLMAgent:
             prompt += f"   File: {test.get('file', 'unknown')}\n"
             prompt += f"   Line: {test.get('line', 0)}\n"
             prompt += f"   Error:\n{test.get('short_traceback', 'No traceback available')}\n"
-        
+
         # Add test file contents
         prompt += "\n\nTEST FILE CONTENTS:\n"
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
             prompt += content
-        
+
         prompt += "\n\nGenerate a unified diff patch that fixes these test failures. "
         prompt += "The patch should be in standard unified diff format (like 'git diff' output). "
         prompt += "Only fix the actual issues - don't change unrelated code.\n"
         prompt += "Return ONLY the diff, no explanations.\n"
-        
+
         return prompt
-    
+
     def review_patch(self, patch: str, failing_tests: List[Dict[str, Any]]) -> tuple[bool, str]:
         """
         Review a patch using LLM (critic).
-        
+
         Args:
             patch: The patch diff to review
             failing_tests: List of failing tests this patch should fix
-            
+
         Returns:
             Tuple of (approved: bool, reason: str)
         """
         if not patch:
             return False, "Empty patch"
-        
+
         prompt = f"""Review this patch that attempts to fix failing tests:
 
 PATCH:
@@ -143,7 +143,7 @@ Evaluate if this patch:
 Respond with JSON:
 {{"approved": true/false, "reason": "brief explanation"}}
 """
-        
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -154,38 +154,38 @@ Respond with JSON:
                 temperature=1.0,
                 max_tokens=40000  # Set to 40k as requested
             )
-            
+
             review = response.choices[0].message.content.strip()
-            
+
             # Parse the JSON response
             if "{" in review and "}" in review:
                 start = review.find("{")
                 end = review.rfind("}") + 1
                 review_json = json.loads(review[start:end])
                 return review_json.get("approved", False), review_json.get("reason", "No reason provided")
-            
+
             # Fallback to simple approval
             return True, "Patch looks reasonable"
-            
+
         except Exception as e:
             print(f"Error in patch review: {e}")
             # Default to rejecting if review fails
             return False, "Review failed due to error, patch not approved"
-    
+
     def create_plan(self, failing_tests: List[Dict[str, Any]], iteration: int, critic_feedback: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a plan for fixing the failing tests.
-        
+
         Args:
             failing_tests: List of failing test details
             iteration: Current iteration number
-            
+
         Returns:
             Plan dictionary with approach and target tests
         """
         if not failing_tests:
             return {"approach": "No failures to fix", "target_tests": []}
-        
+
         prompt = f"""Create a plan to fix these failing tests (iteration {iteration}):
 
 {json.dumps([{'name': t.get('name'), 'file': t.get('file'), 'error': t.get('short_traceback', '')} for t in failing_tests[:5]], indent=2)}
@@ -193,7 +193,7 @@ Respond with JSON:
 Respond with a JSON plan:
 {{"approach": "brief strategy", "priority_tests": ["test1", "test2"], "fix_strategy": "how to fix"}}
 """
-        
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -204,9 +204,9 @@ Respond with a JSON plan:
                 temperature=1.0,
                 max_tokens=40000  # Set to 40k as requested
             )
-            
+
             plan_text = response.choices[0].message.content.strip()
-            
+
             # Parse JSON from response
             if "{" in plan_text and "}" in plan_text:
                 start = plan_text.find("{")
@@ -219,7 +219,7 @@ Respond with a JSON plan:
                 }
         except Exception as e:
             print(f"Error creating plan: {e}")
-        
+
         # Fallback plan
         return {
             "approach": "Fix failing tests incrementally",

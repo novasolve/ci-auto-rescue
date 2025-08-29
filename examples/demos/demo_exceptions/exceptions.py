@@ -106,7 +106,7 @@ def custom_exception_handler():
     """Demonstrate custom exception - wrong usage."""
     class CustomError(Exception):
         pass
-    
+
     raise CustomError("Custom error occurred")  # BUG: No error message or context
 
 def cleanup_resources(resource):

@@ -5,7 +5,6 @@ PR Generator - Uses GPT-5 to create pull request descriptions and submit them vi
 import subprocess
 import os
 import requests
-import json
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import shutil
@@ -15,7 +14,7 @@ from nova.config import get_settings
 
 class PRGenerator:
     """Generates and creates pull requests using AI and GitHub CLI."""
-    
+
     def __init__(self, repo_path: Path):
         self.repo_path = Path(repo_path)
         # Create LLM client with PR-specific model
@@ -26,8 +25,8 @@ class PRGenerator:
         self.llm = LLMClient()
         # Restore original model
         settings.default_llm_model = original_model
-    
-    def generate_pr_content(self, 
+
+    def generate_pr_content(self,
                           fixed_tests: List[Dict],
                           patches_applied: List[str],
                           changed_files: List[str],
@@ -35,16 +34,16 @@ class PRGenerator:
                           reasoning_logs: Optional[List[Dict]] = None) -> Tuple[str, str]:
         """
         Use GPT-5 to generate PR title and description based on what was fixed.
-        
+
         Returns:
             Tuple of (title, description)
         """
         # Get the final diff
         final_diff = self._get_combined_diff()
-        
+
         # Extract reasoning summary from logs
         reasoning_summary = self._extract_reasoning_summary(reasoning_logs) if reasoning_logs else ""
-        
+
         # Build the comprehensive prompt based on the user's template
         prompt = f"""TASK: Write a concise pull request title and a detailed pull request description for the following code changes.
 
@@ -65,6 +64,8 @@ GUIDELINES for the PR description:
 - Use bullet points for multiple changes or steps, if it improves readability.
 - Use a professional, clear tone. (Imagine a developer writing the PR.)
 - Include sections: ## Summary, ## What was fixed, ## Changes made, ## Test results, ## Technical details (if relevant)
+
+IMPORTANT: Focus the title on the actual functionality being fixed (e.g., "Fix calculator operations" or "Correct mathematical computations"), NOT on comment removal or code cleanup. The title should describe what the code now does correctly.
 
 Do NOT include raw diff or implementation details that are obvious from the code – focus on intent and impact.
 
@@ -96,24 +97,24 @@ Additionally, emphasize these changes if present:
 - Per-repo run frequency cap (10 minutes between runs)
 - Per-test timeout (120s) and LLM call timeout warnings/daily usage thresholds
 """
-        
+
         try:
             # Model-specific params (e.g., GPT-5 temperature) are handled inside LLMClient.
             response = self.llm.complete(
-                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description.",
+                system="You are a helpful AI that writes excellent pull request descriptions. Be specific about what was fixed and professional in tone. Think through the changes carefully to provide an accurate and helpful description. When writing PR titles, focus on the functional changes (what now works correctly) rather than code cleanup or comment removal. For example, prefer 'Fix calculator arithmetic operations' over 'Remove BUG comments'.",
                 user=prompt,
                 max_tokens=40000  # Will be handled by LLMClient with reasoning_effort=high
             )
-            
+
             # Debug: log the response
             if not response:
                 print("[yellow]Warning: Empty response from LLM[/yellow]")
-            
+
             # Parse response based on new format
             lines = response.split('\n') if response else []
             title = ""
             description_lines = []
-            
+
             # Look for "Title: " prefix
             for i, line in enumerate(lines):
                 if line.startswith("Title: "):
@@ -128,9 +129,9 @@ Additionally, emphasize these changes if present:
                     if len(lines) > 2:
                         description_lines = lines[2:]
                     break
-            
+
             description = '\n'.join(description_lines).strip()
-            
+
             # If we couldn't parse properly, try alternative parsing
             if not title and response:
                 # Look for any line that looks like a title
@@ -142,25 +143,25 @@ Additionally, emphasize these changes if present:
                         if idx + 1 < len(lines):
                             description = '\n'.join(lines[idx + 1:]).strip()
                         break
-            
+
             # Final fallback
             if not title:
                 title = f"fix: Fix {len(fixed_tests)} failing test(s)"
-            
+
             if not description and response:
                 description = response
             elif not description:
                 description = "This PR fixes failing tests in the codebase."
-            
+
             # Clean up the title (remove quotes if present)
             title = title.strip('"\'`')
-            
+
             # Add automation footer if not present
             if "Nova CI-Rescue" not in description and "automatically generated" not in description:
                 description += "\n\n---\n*This PR was automatically generated by [Nova CI-Rescue](https://github.com/novasolve/ci-auto-rescue) 🤖*"
-            
+
             return title, description
-            
+
         except Exception as e:
             # Fallback to simple description
             print(f"Error generating PR with AI: {e}")
@@ -188,23 +189,23 @@ The following files were modified:
 *This PR was automatically generated by [Nova CI-Rescue](https://github.com/novasolve/ci-auto-rescue) 🤖*
 """
             return title, description
-    
-    def create_pr(self, 
+
+    def create_pr(self,
                   branch_name: str,
-                  title: str, 
+                  title: str,
                   description: str,
                   base_branch: str = "main",
                   draft: bool = False) -> Tuple[bool, str]:
         """
         Create a PR using GitHub API directly.
-        
+
         Args:
             branch_name: The branch with fixes
             title: PR title
             description: PR description
             base_branch: Target branch (default: main)
             draft: Create as draft PR
-            
+
         Returns:
             Tuple of (success, pr_url_or_error)
         """
@@ -239,15 +240,15 @@ The following files were modified:
                         )
                         if result.returncode == 0:
                             stdout = (result.stdout or "").strip()
-                            url_line = next((l for l in stdout.splitlines() if l.startswith("https://github.com/")), "")
+                            url_line = next((line for line in stdout.splitlines() if line.startswith("https://github.com/")), "")
                             return True, (url_line or stdout or "PR created")
                         else:
-                            cli_err = (result.stderr or result.stdout or "").strip()
                             # Fall through to REST API with token
+                            pass
                     except Exception:
                         # Fall through to REST API with token
                         pass
-            
+
             # REST API with token (GH_TOKEN/GITHUB_TOKEN)
             # Prioritize GH_TOKEN for better CI/local compatibility
             token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
@@ -262,7 +263,7 @@ The following files were modified:
                 "Authorization": f"token {token}",
                 "Accept": "application/vnd.github.v3+json"
             }
-            
+
             data = {
                 "title": title,
                 "body": description,
@@ -270,9 +271,9 @@ The following files were modified:
                 "base": base_branch,
                 "draft": draft
             }
-            
+
             response = requests.post(url, headers=headers, json=data)
-            
+
             if response.status_code == 201:
                 pr_data = response.json()
                 pr_url = pr_data.get('html_url', '')
@@ -280,10 +281,10 @@ The following files were modified:
             else:
                 error_msg = response.json().get('message', response.text)
                 return False, f"Failed to create PR: {error_msg}"
-                
+
         except Exception as e:
             return False, f"Error creating PR: {str(e)}"
-    
+
     def check_pr_exists(self, branch_name: str) -> bool:
         """Check if a PR already exists for this branch using GitHub API."""
         try:
@@ -291,13 +292,13 @@ The following files were modified:
             token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
             if not token:
                 return False
-            
+
             repo_info = self._get_repository_info()
             if not repo_info:
                 return False
-            
+
             owner, repo = repo_info
-            
+
             # Check existing PRs
             url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
             headers = {
@@ -308,15 +309,15 @@ The following files were modified:
                 "head": f"{owner}:{branch_name}",
                 "state": "open"
             }
-            
+
             response = requests.get(url, headers=headers, params=params)
             if response.status_code == 200:
                 prs = response.json()
                 return len(prs) > 0
             return False
-        except requests.RequestException as e:
+        except requests.RequestException:
             return False
-    
+
     def _get_repository_info(self) -> Optional[Tuple[str, str]]:
         """Get repository owner and name from git remote or environment."""
         # First try environment variable (for CI)
@@ -324,7 +325,7 @@ The following files were modified:
         if repo_env and '/' in repo_env:
             parts = repo_env.split('/')
             return parts[0], parts[1]
-        
+
         # Try to get from git remote
         try:
             result = subprocess.run(
@@ -333,7 +334,7 @@ The following files were modified:
                 text=True,
                 cwd=self.repo_path
             )
-            
+
             if result.returncode == 0:
                 url = result.stdout.strip()
                 # Parse GitHub URL
@@ -347,15 +348,15 @@ The following files were modified:
                         parts = url.replace("git@github.com:", "").replace(".git", "").split("/")
                     else:
                         return None
-                    
+
                     if len(parts) >= 2:
                         return parts[0], parts[1]
-        except Exception as e:
+        except Exception:
             # Failed to get repository info from git remote
             pass
-        
+
         return None
-    
+
     def _get_combined_diff(self) -> str:
         """Get the combined diff of all changes against the base branch."""
         try:
@@ -369,7 +370,7 @@ The following files were modified:
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     return result.stdout
-            
+
             # Fallback to diff of staged/unstaged changes
             result = subprocess.run(
                 ["git", "diff", "HEAD"],
@@ -381,12 +382,12 @@ The following files were modified:
         except Exception as e:
             print(f"Error getting diff: {e}")
             return "Error retrieving diff"
-    
+
     def _extract_reasoning_summary(self, reasoning_logs: List[Dict]) -> str:
         """Extract key reasoning points from Nova's logs."""
         if not reasoning_logs:
             return ""
-        
+
         summary_points = []
         for log in reasoning_logs:
             if log.get("event") == "planner_complete":
@@ -397,31 +398,31 @@ The following files were modified:
                 reason = log.get("data", {}).get("reason", "")
                 if reason:
                     summary_points.append(f"Fix rationale: {reason}")
-        
+
         return " ".join(summary_points[:3])  # Limit to avoid too much text
-    
+
     def _format_failing_tests(self, tests: List[Dict]) -> str:
         """Format failing tests for the prompt."""
         if not tests:
             return "No test details available"
-        
+
         formatted = []
         for test in tests[:10]:  # Limit to 10 for space
             name = test.get('name', 'Unknown')
             file = test.get('file', 'unknown')
             error = test.get('short_traceback', test.get('error', 'No error details'))
             formatted.append(f"- `{name}` in {file}: {error}")
-        
+
         if len(tests) > 10:
             formatted.append(f"- ... and {len(tests) - 10} more tests")
-        
+
         return "\n".join(formatted)
-    
+
     def _extract_fix_approach(self, patches: List[str]) -> str:
         """Extract fix approach from patches if no reasoning logs available."""
         if not patches:
             return "Automated fixes applied to resolve test failures"
-        
+
         # Try to summarize based on patch content
         changes = []
         for patch in patches[:2]:  # Look at first 2 patches
@@ -430,7 +431,7 @@ The following files were modified:
                 if line.startswith('--- a/'):
                     file = line[6:]
                     changes.append(f"Modified {file}")
-        
+
         if changes:
             return "Changes made to: " + ", ".join(changes[:3])
         return "Multiple fixes applied to resolve test failures"

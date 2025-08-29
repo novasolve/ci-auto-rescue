@@ -199,11 +199,11 @@ def _build_content_from_hunks(prev: Optional[bytes], pf: object) -> bytes:
         if idx < start_idx and lines_prev:
             out.extend(lines_prev[idx:start_idx])
             idx = start_idx
-        
+
         # Track if we successfully matched context
         context_matched = True
         hunk_lines = list(hunk)  # Convert to list for easier processing
-        
+
         # First pass: check if context lines match
         temp_idx = idx
         for line in hunk_lines:
@@ -215,7 +215,7 @@ def _build_content_from_hunks(prev: Optional[bytes], pf: object) -> bytes:
                         context_matched = False
                         break
                     temp_idx += 1
-                    
+
         # If context doesn't match, try to find where the hunk should apply
         if not context_matched and lines_prev:
             # Try to find matching context in the file
@@ -236,7 +236,7 @@ def _build_content_from_hunks(prev: Optional[bytes], pf: object) -> bytes:
                     idx = search_idx
                     context_matched = True
                     break
-        
+
         # Apply hunk lines
         for line in hunk_lines:
             # Skip special no-newline indicator
@@ -287,21 +287,21 @@ def _build_content_from_hunks(prev: Optional[bytes], pf: object) -> bytes:
 
 
 def apply_and_commit_patch(
-    repo_root: Path, 
-    diff_text: str, 
+    repo_root: Path,
+    diff_text: str,
     step_number: int,
     git_manager: Optional[object] = None,
     verbose: bool = False
 ) -> Tuple[bool, List[Path]]:
     """Apply a patch and commit it with a step message.
-    
+
     Args:
         repo_root: Repository root path
         diff_text: The unified diff text to apply
         step_number: The step number for the commit message
         git_manager: Optional GitBranchManager instance for committing
         verbose: Enable verbose output
-        
+
     Returns:
         Tuple of (success, list of changed files)
     """
@@ -311,7 +311,7 @@ def apply_and_commit_patch(
             if verbose:
                 print("Error: Empty patch provided")
             return False, []
-        
+
         # Check if this is a whole file replacement format
         if "FILE_REPLACE:" in diff_text:
             # Handle whole file replacements
@@ -327,7 +327,7 @@ def apply_and_commit_patch(
                     while i < len(lines) and lines[i] != "END_FILE_REPLACE":
                         content_lines.append(lines[i])
                         i += 1
-                    
+
                     # Write the file
                     full_path = repo_root / file_path
                     try:
@@ -343,7 +343,7 @@ def apply_and_commit_patch(
                             print(f"Error writing file {file_path}: {e}")
                         return False, []
                 i += 1
-            
+
             # Commit if we have a git manager
             if git_manager and changed_files:
                 from nova.tools.git import GitBranchManager
@@ -351,13 +351,13 @@ def apply_and_commit_patch(
                     commit_success = git_manager.commit_patch(step_number, changed_files)
                     if not commit_success and verbose:
                         print(f"Warning: Failed to commit step {step_number}")
-            
+
             return True, changed_files
-        
+
         # Fix patch format issues (trailing artifacts, hunk count mismatches) before applying
         try:
             from nova.tools.patch_fixer import fix_patch_format, validate_patch, attempt_patch_reconstruction
-            
+
             # Always apply formatting fixes to the patch text first
             diff_text_fixed = fix_patch_format(diff_text, verbose=verbose)
             is_valid, error_msg = validate_patch(diff_text_fixed)
@@ -388,16 +388,16 @@ def apply_and_commit_patch(
             if verbose:
                 print(f"Warning: patch_fixer module not available: {e}")
             pass
-        
+
         # Use git apply instead of custom patch application
         changed_files = apply_patch_with_git(repo_root, diff_text, git_manager, verbose, telemetry=None)
-        
+
         # If no files were changed, it might mean the patch was already applied
         if not changed_files:
             if verbose:
                 print("Warning: No files were changed by the patch (may already be applied)")
             return False, []
-        
+
         # If a git manager is provided, commit the changes
         if git_manager and changed_files:
             # Import here to avoid circular dependency
@@ -406,7 +406,7 @@ def apply_and_commit_patch(
                 commit_success = git_manager.commit_patch(step_number, changed_files)
                 if not commit_success and verbose:
                     print(f"Warning: Failed to commit step {step_number}")
-        
+
         return True, changed_files
     except ValueError as e:
         if verbose:
@@ -438,28 +438,28 @@ def apply_patch_with_git(
     telemetry: Optional[object] = None
 ) -> List[Path]:
     """Apply a patch using git apply.
-    
+
     Args:
         repo_root: Repository root path
         diff_text: The unified diff text to apply
         git_manager: Optional GitBranchManager instance for git operations
         verbose: Enable verbose output
         telemetry: Optional telemetry logger instance
-        
+
     Returns:
         List of changed files
     """
     from nova.tools.git import GitBranchManager
-    
+
     # Create .nova directory for temporary files if it doesn't exist
     nova_dir = Path(repo_root) / ".nova"
     nova_dir.mkdir(exist_ok=True, parents=True)
-    
+
     # Write patch to a temporary file in .nova directory
     with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False, dir=nova_dir) as f:
         patch_file = Path(f.name)
         f.write(diff_text)
-    
+
     try:
         # First, do a dry run with --check to validate the patch
         if git_manager and isinstance(git_manager, GitBranchManager):
@@ -474,14 +474,14 @@ def apply_patch_with_git(
             )
             success = result.returncode == 0
             output = result.stderr or result.stdout
-        
+
         if not success:
             # Patch cannot be applied
             error_msg = f"Patch validation failed: {output}"
             if verbose:
 
                 console.print(f"[red]✗ {error_msg}[/red]")
-                
+
                 # Try to provide more specific error information
                 if "hunk" in output.lower():
                     console.print("[yellow]Hint: The patch context doesn't match the current file content.[/yellow]")
@@ -489,20 +489,20 @@ def apply_patch_with_git(
                     console.print("[yellow]Hint: The file specified in the patch doesn't exist.[/yellow]")
                 elif "already exists" in output.lower():
                     console.print("[yellow]Hint: Trying to create a file that already exists.[/yellow]")
-            
+
             # Log to telemetry if available
             if telemetry and hasattr(telemetry, 'log_event'):
                 telemetry.log_event("patch_error", {
                     "error": output,
                     "type": "validation_failed"
                 })
-            
+
             # Save the failed patch for debugging
             if telemetry and hasattr(telemetry, 'save_artifact'):
                 import hashlib
                 patch_hash = hashlib.md5(diff_text.encode()).hexdigest()[:8]
                 telemetry.save_artifact(f"failed_patches/patch_{patch_hash}.diff", diff_text)
-            
+
             # Also try to fall back to the old method as a last resort
             if verbose:
                 print("Attempting fallback to Python-based patch application...")
@@ -515,9 +515,9 @@ def apply_patch_with_git(
             except Exception as fallback_error:
                 if verbose:
                     print(f"Fallback also failed: {fallback_error}")
-            
+
             return []
-        
+
         # Apply the patch for real
         if git_manager and isinstance(git_manager, GitBranchManager):
             success, output = git_manager._run_git_command("apply", "--whitespace=nowarn", str(patch_file))
@@ -530,21 +530,21 @@ def apply_patch_with_git(
             )
             success = result.returncode == 0
             output = result.stderr or result.stdout
-        
+
         if not success:
             # This shouldn't happen if --check passed, but handle it anyway
             error_msg = f"Patch application failed: {output}"
             if verbose:
 
                 console.print(f"[red]✗ {error_msg}[/red]")
-            
+
             if telemetry and hasattr(telemetry, 'log_event'):
                 telemetry.log_event("patch_error", {
                     "error": output,
                     "type": "application_failed"
                 })
             return []
-        
+
         # Get list of changed files (both staged and unstaged)
         if git_manager and isinstance(git_manager, GitBranchManager):
             # Get unstaged changes
@@ -577,32 +577,32 @@ def apply_patch_with_git(
             )
             success = result1.returncode == 0 and result2.returncode == 0 and result3.returncode == 0
             output = "\n".join([result1.stdout, result2.stdout, result3.stdout]).strip()
-        
+
         if success and output:
             # Filter out the temporary patch file and only include actual source files
             changed_files = [
-                repo_root / line.strip() 
-                for line in output.strip().split('\n') 
+                repo_root / line.strip()
+                for line in output.strip().split('\n')
                 if line.strip() and not line.endswith('.patch')
             ]
-            
+
             if verbose:
 
                 console.print(f"[green]✓ Patch applied successfully[/green]")
                 if changed_files:
                     console.print(f"[dim]Changed files: {', '.join([f.name for f in changed_files])}[/dim]")
-            
+
             # Save the patch as an artifact for debugging
             if telemetry and hasattr(telemetry, 'save_artifact'):
                 telemetry.save_artifact(f"patches/step-{len(changed_files)}.diff", diff_text)
-            
+
             return changed_files
         else:
             # No changes detected after applying patch
             if verbose:
                 print("Warning: Patch applied but no changes detected")
             return []
-    
+
     finally:
         # Clean up temporary patch file
         try:
@@ -610,7 +610,7 @@ def apply_patch_with_git(
         except Exception as e:
             if verbose:
                 print(f"Warning: Could not delete temporary patch file: {e}")
-        
+
         # Clean up old patch files in .nova directory (older than 1 hour)
         try:
             import time

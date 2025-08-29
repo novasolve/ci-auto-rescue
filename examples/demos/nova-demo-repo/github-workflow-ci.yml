@@ -49,7 +49,7 @@ jobs:
           else
             echo "❌ Some tests failed!"
             echo "tests_passed=false" >> $GITHUB_OUTPUT
-            
+
             # Extract failed test names for Nova
             grep "FAILED" test_output.txt || true
           fi
@@ -64,8 +64,8 @@ jobs:
         run: |
           echo "🤖 Nova CI-Rescue: Attempting to fix failing tests..."
 
-          # Install Nova (assuming it's available as a package)
-          pip install nova-ci-rescue || pip install -e ../src
+          # Install Nova from GitHub repository
+          pip install "git+https://github.com/novasolve/nova-ci-rescue.git@demo/latest" || pip install -e ../src
 
           # Run Nova fix
           nova fix . --max-iters 3 --timeout 300 || python -m nova.cli fix . --max-iters 3
@@ -73,11 +73,11 @@ jobs:
           # Check if Nova created a fix branch
           if git branch -r | grep -q "nova-fix"; then
             echo "✅ Nova created a fix branch!"
-            
+
             # Push the fix branch
             NOVA_BRANCH=$(git branch | grep "nova-fix" | tr -d ' *')
             git push origin $NOVA_BRANCH
-            
+
             echo "nova_branch=$NOVA_BRANCH" >> $GITHUB_OUTPUT
           fi
 
@@ -100,7 +100,7 @@ jobs:
           else
             echo "❌ **Initial tests failed**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
+
             if [ "${{ github.event_name }}" == "push" ]; then
               echo "🤖 **Nova CI-Rescue ran and fixed the issues!**" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY

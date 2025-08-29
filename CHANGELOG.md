@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎉 Milestone A Complete - Local E2E Happy Path
 
-This is the first alpha release of Nova CI-Rescue, marking the completion of Milestone A. 
+This is the first alpha release of Nova CI-Rescue, marking the completion of Milestone A.
 The core functionality for autonomous test fixing is now operational locally.
 
 ### Added

@@ -95,6 +95,22 @@ In this setup, whenever your primary CI workflow fails on a pull request, Nova w
 
 **GitHub App Alternative**: Nova is also available as a GitHub App that can be installed on your repo for a more turnkey setup (the App handles posting PR comments and opening fix PRs on your behalf). This uses the same underlying action and requires you to provide an API key via repo secrets. Refer to the [Quickstart guide](docs/QUICKSTART.md) for details.
 
+## Configuration
+
+### Base Branch Configuration
+
+By default, Nova will detect the repository's default branch (main/master) for creating pull requests. You can override this by setting the `NOVA_BASE_BRANCH` environment variable:
+
+```bash
+export NOVA_BASE_BRANCH="demo/latest"  # Use demo/latest as base branch
+nova fix .
+```
+
+This is useful when:
+- Working with non-standard default branches
+- Creating PRs against specific release branches
+- Working in demo environments with custom branch structures
+
 ## Configuration & Safety
 
 Nova is highly configurable to suit your project's needs, but comes with conservative defaults out of the box. Key runtime settings include timeouts, iteration limits, model selection, and telemetry, which can be set via CLI flags or environment variables (see [CONFIGURATION.md](docs/CONFIGURATION.md) for the full reference). For example, a minimal `.env` configuration might look like:

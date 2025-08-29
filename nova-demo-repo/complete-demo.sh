@@ -59,7 +59,11 @@ read -p "Press Enter to continue..."
 echo ""
 echo -e "${BOLD}Step 3: Create a Feature Branch${NC}"
 # Clean up any existing branches from previous runs
-git checkout main 2>/dev/null || true
+if git show-ref --verify --quiet refs/heads/demo/latest; then
+  git checkout demo/latest 2>/dev/null || git switch demo/latest 2>/dev/null || true
+else
+  git checkout main 2>/dev/null || true
+fi
 git branch -D $BRANCH_NAME 2>/dev/null || true
 echo -e "${YELLOW}$ git checkout -b $BRANCH_NAME${NC}"
 git checkout -b $BRANCH_NAME
@@ -120,7 +124,7 @@ This PR optimizes the calculator module for better performance.
 - 📈 Overall performance improvements
 
 All changes are backward compatible." \
-    --base main \
+    --base demo/latest \
     --head $BRANCH_NAME)
 
 echo ""

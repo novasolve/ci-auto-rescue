@@ -23,6 +23,7 @@ import sys
 from dataclasses import dataclass
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 import xml.etree.ElementTree as ET
@@ -108,6 +109,7 @@ class TestRunner:
             logger.verbose(f"Command: {' '.join(cmd)}", component="Test Runner")
 
             # Run pytest (it may exit non-zero when tests fail/collect fails)
+            _start = time.time()
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -115,7 +117,32 @@ class TestRunner:
                 cwd=str(self.repo_path),
                 timeout=300,
             )
+            _elapsed = time.time() - _start
             combined_output = (result.stderr or "") + "\n" + (result.stdout or "")
+            logger.debug(
+                "Pytest run completed",
+                data={
+                    "returncode": result.returncode,
+                    "elapsed_seconds": round(_elapsed, 1),
+                    "stdout_len": len(result.stdout or ""),
+                    "stderr_len": len(result.stderr or ""),
+                },
+                component="Test Runner",
+            )
+            # Show a small preview of output at trace level for quick diagnostics
+            try:
+                _lines = combined_output.splitlines()
+                _preview = "\n".join(_lines[:40])
+                if len(_lines) > 40:
+                    _preview += f"\n... (truncated, {len(_lines)} lines total)"
+                logger.trace(
+                    "Pytest combined output (first 40 lines)",
+                    raw_data=_preview,
+                    component="Test Runner",
+                )
+            except Exception:
+                # Best-effort preview; ignore errors in preview generation
+                pass
 
             # If JSON plugin is missing, pytest will complain about --json-report
             if "unrecognized arguments" in combined_output and (
@@ -132,6 +159,7 @@ class TestRunner:
                     f"Re-running without json-report: {' '.join(cmd_no_json)}",
                     component="Test Runner",
                 )
+                _start = time.time()
                 result = subprocess.run(
                     cmd_no_json,
                     capture_output=True,
@@ -139,7 +167,18 @@ class TestRunner:
                     cwd=str(self.repo_path),
                     timeout=300,
                 )
+                _elapsed = time.time() - _start
                 combined_output = (result.stderr or "") + "\n" + (result.stdout or "")
+                logger.debug(
+                    "Pytest rerun (without json-report) completed",
+                    data={
+                        "returncode": result.returncode,
+                        "elapsed_seconds": round(_elapsed, 1),
+                        "stdout_len": len(result.stdout or ""),
+                        "stderr_len": len(result.stderr or ""),
+                    },
+                    component="Test Runner",
+                )
 
             # Parse JSON report first (best fidelity)
             failing_tests = self._parse_json_report(json_report_path)
@@ -151,8 +190,23 @@ class TestRunner:
                     junit_xml_content = junit_path.read_text(
                         encoding="utf-8", errors="replace"
                     )
+                    logger.debug(
+                        "Read JUnit XML report",
+                        data={"bytes": len(junit_xml_content or "")},
+                        component="Test Runner",
+                    )
                 except Exception:
                     junit_xml_content = None
+                    logger.debug(
+                        "Failed to read JUnit XML report",
+                        component="Test Runner",
+                    )
+            else:
+                logger.debug(
+                    "JUnit XML report file not found",
+                    data={"path": str(junit_path)},
+                    component="Test Runner",
+                )
 
             # Fallback: parse JUnit if JSON yielded nothing
             if not failing_tests:
@@ -205,19 +259,26 @@ class TestRunner:
             # logger.info(f"Found {len(failing_tests)} failing test(s)", "⚠️")
             return failing_tests, junit_xml_content
 
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             logger = get_logger()
             logger.error(
-                "pytest not found in the current interpreter. Activate your venv and install pytest."
+                f"pytest not found in the current interpreter. Activate your venv and install pytest. ({type(e).__name__})"
             )
             return [], None
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             logger = get_logger()
-            logger.error("pytest timed out.")
+            try:
+                _to = getattr(e, "timeout", None)
+                if _to is not None:
+                    logger.error(f"pytest timed out after {_to}s.")
+                else:
+                    logger.error("pytest timed out.")
+            except Exception:
+                logger.error("pytest timed out.")
             return [], None
         except Exception as e:
             logger = get_logger()
-            logger.error(f"Error running tests: {e}")
+            logger.error(f"Error running tests: {type(e).__name__}: {e}")
             return [], None
         finally:
             # Best-effort cleanup

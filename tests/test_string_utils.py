@@ -72,13 +72,3 @@ class TestStringProcessor:
         """Test that truncate_string raises error for non-positive max_length."""
         with pytest.raises(ValueError, match="max_length must be positive"):
             processor.truncate_string("test", 0)
-
-            processor.truncate_string("test", 0)
-
-            processor.truncate_string("test", 0)
-
-            processor.truncate_string("test", 0)
-
-            processor.truncate_string("test", 0)
-
-            processor.truncate_string("test", 0)

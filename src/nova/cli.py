@@ -18,7 +18,7 @@ from rich.table import Table
 
 from nova.runner import TestRunner
 from nova.agent import AgentState
-from nova.config import NovaSettings, load_yaml_config, get_settings
+from nova.config import NovaSettings, get_settings
 from nova.tools.git import GitBranchManager
 from nova.telemetry.logger import JSONLLogger
 
@@ -1226,10 +1226,20 @@ def eval(
 
 
 @app.command()
-def validate_installation():
+def validate_installation(
+    base_url: str = typer.Option(
+        "http://localhost:3000",
+        "--url",
+        "-u",
+        help="Base URL where the GitHub App is running",
+    )
+):
     """
     Validate installation and test end-to-end functionality.
     This command performs comprehensive validation of the Nova CI-Rescue installation.
+
+    Args:
+        base_url: Base URL where the GitHub App is running (default: http://localhost:3000)
     """
     from rich.console import Console
 
@@ -1239,8 +1249,7 @@ def validate_installation():
     console.print("=" * 50)
 
     try:
-        # Get the health endpoint URL (assuming it's running locally for testing)
-        base_url = "http://localhost:3000"
+        # Get the health endpoint URL
         health_url = f"{base_url}/health/installation"
 
         console.print(f"[dim]Testing endpoint: {health_url}[/dim]")

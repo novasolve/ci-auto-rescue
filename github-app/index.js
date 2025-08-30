@@ -195,8 +195,20 @@ export default (app, { getRouter }) => {
 
       res.status(httpStatus).json(healthStatus);
     });
-    // Installation and end-to-end validation endpoint
-    router.get(/health/installation, async (req, res) => {
+
+    /**
+     * Installation and End-to-End Validation Endpoint
+     *
+     * This endpoint performs comprehensive validation of the Nova CI-Rescue installation:
+     * 1. Installation validation - checks app installations and permissions
+     * 2. One-click path validation - tests repository access capabilities
+     * 3. End-to-end capability test - validates webhook and event handling
+     *
+     * Returns detailed status information for deployment validation and monitoring.
+     *
+     * GET /health/installation
+     */
+    router.get('/health/installation', async (req, res) => {
       const startTime = Date.now();
 
       let installationValidation = 'unchecked';

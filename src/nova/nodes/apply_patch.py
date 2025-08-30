@@ -2,10 +2,11 @@
 Apply patch node for Nova CI-Rescue agent workflow.
 """
 
-from typing import Dict, Any, Optional
-from rich.console import Console
-import tempfile
 import subprocess
+import tempfile
+from typing import Any, Dict, Optional
+
+from rich.console import Console
 
 from nova.agent.state import AgentState
 from nova.tools.fs import apply_and_commit_patch

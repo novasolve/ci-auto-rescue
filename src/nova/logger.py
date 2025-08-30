@@ -4,12 +4,13 @@ Structured logging for Nova CI-Rescue
 Provides hierarchical, context-aware logging with multiple verbosity levels.
 """
 
-from typing import Optional, Dict, Any, List
-from enum import IntEnum
 from contextlib import contextmanager
+from enum import IntEnum
+from typing import Any, Dict, List, Optional
+
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 from rich.tree import Tree
 
 

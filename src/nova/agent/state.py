@@ -2,11 +2,11 @@
 Agent state management for Nova CI-Rescue.
 """
 
+import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pathlib import Path
-import time
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -93,7 +93,7 @@ class AgentState:
 
     def check_timeout(self) -> bool:
         """Check if we've exceeded the timeout."""
-        from nova.tools.datetime_utils import seconds_between, now_utc
+        from nova.tools.datetime_utils import now_utc, seconds_between
 
         if isinstance(self.start_time, float):
             elapsed = time.time() - self.start_time

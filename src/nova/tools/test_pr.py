@@ -5,10 +5,10 @@ This script creates a test branch, commits a dummy change, pushes it,
 and attempts to open a pull request using the `gh` CLI.
 """
 
-import subprocess
 import os
-import sys
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 

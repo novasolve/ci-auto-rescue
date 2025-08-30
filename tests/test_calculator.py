@@ -3,9 +3,10 @@ Comprehensive test suite for the calculator module.
 These tests will pass initially, fail after "bad PR", and be fixed by Nova.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))

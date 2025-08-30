@@ -18,11 +18,11 @@ This script will:
 
 Note: The Nova fix run is limited to 3 iterations and 5 minutes for this smoke test.
 """
-import subprocess
-import sys
 import os
 import re
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 # Try to load .env file if it exists

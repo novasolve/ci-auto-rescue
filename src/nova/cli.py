@@ -3,24 +3,30 @@
 Nova CI-Rescue CLI interface.
 """
 
+import json
 import os
 import re
-import json
-import time
 import subprocess
-import typer
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
-from nova.tools.datetime_utils import now_utc, seconds_between
+
+import typer
 from rich.console import Console
 from rich.table import Table
 
-from nova.runner import TestRunner
 from nova.agent import AgentState
-from nova.config import NovaSettings, get_settings
-from nova.tools.git import GitBranchManager
+from nova.config import NovaSettings, get_settings, load_yaml_config
+from nova.runner import TestRunner
 from nova.telemetry.logger import JSONLLogger
+from nova.tools.datetime_utils import now_utc, seconds_between
+from nova.tools.git import GitBranchManager
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 app = typer.Typer(
     name="nova",
@@ -354,8 +360,8 @@ def fix(
                 try:
                     from nova.github_integration import (
                         GitHubAPI,
-                        RunMetrics,
                         ReportGenerator,
+                        RunMetrics,
                     )
 
                     api = GitHubAPI(token)
@@ -495,10 +501,10 @@ def fix(
                 "\n[bold]⚠️ Running legacy LLM-based agent (deprecated)...[/bold]"
             )
             from nova.agent.llm_agent import LLMAgent
-            from nova.nodes.planner import planner_node
             from nova.nodes.actor import actor_node
-            from nova.nodes.critic import critic_node
             from nova.nodes.apply_patch import apply_patch as apply_patch_func
+            from nova.nodes.critic import critic_node
+            from nova.nodes.planner import planner_node
 
             # Initialize the legacy LLM agent
             llm_agent = LLMAgent(repo_path=repo_path, model=settings.default_llm_model)
@@ -648,8 +654,8 @@ def fix(
             try:
                 from nova.github_integration import (
                     GitHubAPI,
-                    RunMetrics,
                     ReportGenerator,
+                    RunMetrics,
                 )
 
                 elapsed = (datetime.now() - state.start_time).total_seconds()
@@ -806,8 +812,8 @@ def fix(
                 try:
                     from nova.github_integration import (
                         GitHubAPI,
-                        RunMetrics,
                         ReportGenerator,
+                        RunMetrics,
                     )
 
                     api = GitHubAPI(token)
@@ -946,10 +952,10 @@ def fix(
                 "\n[bold]⚠️ Running legacy LLM-based agent (deprecated)...[/bold]"
             )
             from nova.agent.llm_agent import LLMAgent
-            from nova.nodes.planner import planner_node
             from nova.nodes.actor import actor_node
-            from nova.nodes.critic import critic_node
             from nova.nodes.apply_patch import apply_patch as apply_patch_func
+            from nova.nodes.critic import critic_node
+            from nova.nodes.planner import planner_node
 
             # Initialize the legacy LLM agent
             llm_agent = LLMAgent(repo_path=repo_path, model=settings.default_llm_model)
@@ -1099,8 +1105,8 @@ def fix(
             try:
                 from nova.github_integration import (
                     GitHubAPI,
-                    RunMetrics,
                     ReportGenerator,
+                    RunMetrics,
                 )
 
                 elapsed = (datetime.now() - state.start_time).total_seconds()

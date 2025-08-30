@@ -3,23 +3,24 @@
 Nova CI-Rescue CLI interface.
 """
 
+import json
 import os
 import re
-import json
-import time
 import subprocess
 import tempfile
-import typer
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from datetime import datetime, timezone
-from nova.tools.datetime_utils import now_utc, delta_between, seconds_between
+
+import typer
 from rich.console import Console
 from rich.table import Table
 
-from nova.runner import TestRunner
 from nova.agent import AgentState
-from nova.config import NovaSettings, load_yaml_config, get_settings
+from nova.config import NovaSettings, get_settings, load_yaml_config
+from nova.runner import TestRunner
+from nova.tools.datetime_utils import delta_between, now_utc, seconds_between
 from nova.tools.git import GitBranchManager
 
 app = typer.Typer(
@@ -311,7 +312,9 @@ def fix(
                             pass
             if token and repo:
                 try:
-                    from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                    from nova.github_integration import (GitHubAPI,
+                                                         ReportGenerator,
+                                                         RunMetrics)
                     api = GitHubAPI(token)
                     metrics = RunMetrics(
                         runtime_seconds=0,
@@ -423,10 +426,10 @@ def fix(
             # === Legacy Agent Path (deprecated v1.0 approach) ===
             console.print("\n[bold]⚠️ Running legacy LLM-based agent (deprecated)...[/bold]")
                     from nova.agent.llm_agent import LLMAgent
-            from nova.nodes.planner import planner_node
             from nova.nodes.actor import actor_node
-            from nova.nodes.critic import critic_node
             from nova.nodes.apply_patch import apply_patch as apply_patch_func
+            from nova.nodes.critic import critic_node
+            from nova.nodes.planner import planner_node
 
             # Initialize the legacy LLM agent
             llm_agent = LLMAgent(repo_path=repo_path, model=settings.default_llm_model)
@@ -533,7 +536,9 @@ def fix(
                         pass
         if token and repo:
             try:
-                from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                from nova.github_integration import (GitHubAPI,
+                                                     ReportGenerator,
+                                                     RunMetrics)
                 elapsed = (datetime.now() - state.start_time).total_seconds()
                 # Count unique files changed across all applied patches
                 files_changed = set()
@@ -665,7 +670,9 @@ def fix(
                             pass
             if token and repo:
                 try:
-                    from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                    from nova.github_integration import (GitHubAPI,
+                                                         ReportGenerator,
+                                                         RunMetrics)
                     api = GitHubAPI(token)
                     metrics = RunMetrics(
                         runtime_seconds=0,
@@ -777,10 +784,10 @@ def fix(
             # === Legacy Agent Path (deprecated v1.0 approach) ===
             console.print("\n[bold]⚠️ Running legacy LLM-based agent (deprecated)...[/bold]")
             from nova.agent.llm_agent import LLMAgent
-            from nova.nodes.planner import planner_node
             from nova.nodes.actor import actor_node
-            from nova.nodes.critic import critic_node
             from nova.nodes.apply_patch import apply_patch as apply_patch_func
+            from nova.nodes.critic import critic_node
+            from nova.nodes.planner import planner_node
 
             # Initialize the legacy LLM agent
             llm_agent = LLMAgent(repo_path=repo_path, model=settings.default_llm_model)
@@ -887,7 +894,9 @@ def fix(
                         pass
         if token and repo:
             try:
-                from nova.github_integration import GitHubAPI, RunMetrics, ReportGenerator
+                from nova.github_integration import (GitHubAPI,
+                                                     ReportGenerator,
+                                                     RunMetrics)
                 elapsed = (datetime.now() - state.start_time).total_seconds()
                 # Count unique files changed across all applied patches
                 files_changed = set()

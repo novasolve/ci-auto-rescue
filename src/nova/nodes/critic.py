@@ -2,7 +2,8 @@
 Critic node for Nova CI-Rescue agent workflow.
 """
 
-from typing import Tuple, Optional, Any
+from typing import Any, Optional, Tuple
+
 from rich.console import Console
 from rich.theme import Theme
 

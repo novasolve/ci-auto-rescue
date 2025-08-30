@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import io
 import os
-import tempfile
 import subprocess
+import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+
 from rich.console import Console
 
 console = Console()
@@ -369,9 +370,9 @@ def apply_and_commit_patch(
         # Fix patch format issues (trailing artifacts, hunk count mismatches) before applying
         try:
             from nova.tools.patch_fixer import (
+                attempt_patch_reconstruction,
                 fix_patch_format,
                 validate_patch,
-                attempt_patch_reconstruction,
             )
 
             # Always apply formatting fixes to the patch text first
@@ -405,7 +406,6 @@ def apply_and_commit_patch(
             # patch_fixer not available, proceed without fixing
             if verbose:
                 print(f"Warning: patch_fixer module not available: {e}")
-            pass
 
         # Use git apply instead of custom patch application
         changed_files = apply_patch_with_git(

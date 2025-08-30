@@ -10,9 +10,9 @@ Improvements:
 
 from __future__ import annotations
 
+import json
 import os
 import re
-import json
 import shutil
 import signal
 import subprocess
@@ -23,7 +23,7 @@ import urllib.request
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
 from rich.console import Console
 
@@ -232,7 +232,6 @@ class GitBranchManager:
             console.print(f"[dim]Created branch: {self.branch_name}[/dim]")
 
         # Nested repos check removed for demo
-        pass
 
         return self.branch_name
 

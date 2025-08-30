@@ -3,7 +3,7 @@ Fixed version of llm_client.py that generates complete file replacements instead
 This is a temporary fix for earlier demos.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 def build_full_file_prompt(

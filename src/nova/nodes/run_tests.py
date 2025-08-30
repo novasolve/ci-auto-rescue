@@ -2,11 +2,12 @@
 Run Tests node for Nova CI-Rescue agent workflow.
 """
 
-from typing import Tuple, List, Optional
+from typing import List, Optional, Tuple
+
 from rich.console import Console
 
 from nova.agent.state import AgentState
-from nova.runner.test_runner import TestRunner, FailingTest
+from nova.runner.test_runner import FailingTest, TestRunner
 from nova.telemetry.logger import JSONLLogger
 
 console = Console()

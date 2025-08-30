@@ -3,6 +3,7 @@ Actor node for Nova CI-Rescue agent workflow.
 """
 
 from typing import Any, Optional
+
 from rich.console import Console
 
 from nova.agent.state import AgentState

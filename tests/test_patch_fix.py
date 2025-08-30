@@ -10,8 +10,9 @@ from pathlib import Path
 # Add the src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from nova.tools.fs import apply_unified_diff, apply_and_commit_patch
 from rich.console import Console
+
+from nova.tools.fs import apply_and_commit_patch, apply_unified_diff
 
 console = Console()
 

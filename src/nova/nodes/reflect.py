@@ -2,13 +2,14 @@
 Reflect node for Nova CI-Rescue agent workflow.
 """
 
-from typing import Dict, Any, Optional
 import time
-from nova.tools.datetime_utils import now_utc, seconds_between
+from typing import Any, Dict, Optional
+
 from rich.console import Console
 
 from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
+from nova.tools.datetime_utils import now_utc, seconds_between
 
 console = Console()
 

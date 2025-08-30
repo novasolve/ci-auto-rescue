@@ -2,13 +2,13 @@
 File locking utilities for preventing concurrent Nova runs.
 """
 
+import json
 import os
 import time
-import json
-from pathlib import Path
-from typing import Optional
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
 
 class NovaLock:
@@ -52,7 +52,7 @@ class NovaLock:
 
     def _is_lock_stale(self, lock_info: dict) -> bool:
         """Check if a lock is stale based on timeout."""
-        from nova.tools.datetime_utils import seconds_between, now_utc, to_datetime
+        from nova.tools.datetime_utils import now_utc, seconds_between, to_datetime
 
         try:
             lock_time = to_datetime(lock_info["timestamp"])

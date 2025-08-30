@@ -195,6 +195,154 @@ export default (app, { getRouter }) => {
 
       res.status(httpStatus).json(healthStatus);
     });
+    // Installation and end-to-end validation endpoint
+    router.get(/health/installation, async (req, res) => {
+      const startTime = Date.now();
+
+      let installationValidation = 'unchecked';
+      let installValidationError = null;
+      let oneClickPathTest = 'unchecked';
+      let oneClickPathError = null;
+      let endToEndTest = 'unchecked';
+      let endToEndError = null;
+      let installations = null;
+
+      try {
+        // Check if we have the required credentials
+        if (!process.env.APP_ID || !process.env.PRIVATE_KEY || !process.env.WEBHOOK_SECRET) {
+          installationValidation = 'missing_credentials';
+          installValidationError = 'Missing required environment variables';
+          throw new Error(installValidationError);
+        }
+
+        // Step 1: Test basic app authentication
+        const auth = await app.auth();
+        if (!auth) {
+          throw new Error('App authentication failed');
+        }
+
+        // Step 2: Test installation discovery
+        installations = await app.octokit.apps.listInstallations();
+
+        if (installations.data.length === 0) {
+          installationValidation = 'no_installations';
+          installValidationError = 'No installations found';
+          oneClickPathTest = 'no_installations';
+          endToEndTest = 'no_installations';
+        } else {
+          // Step 3: Validate first installation
+          const testInstall = installations.data[0];
+          const installOctokit = await app.auth(testInstall.id);
+
+          // Test installation permissions
+          const installDetails = await installOctokit.apps.getInstallation({ installation_id: testInstall.id });
+          const permissions = installDetails.data.permissions;
+
+          const requiredPerms = ['contents', 'pull_requests', 'issues'];
+          const hasRequiredPerms = requiredPerms.every(perm =>
+            permissions[perm] && permissions[perm] !== 'none');
+
+          if (hasRequiredPerms) {
+            installationValidation = 'validated';
+          } else {
+            installationValidation = 'insufficient_permissions';
+            installValidationError = 'Missing required permissions';
+          }
+
+          // Step 4: One-click path validation
+          try {
+            const repos = await installOctokit.apps.listInstallationReposForAuthenticatedUser({
+              installation_id: testInstall.id,
+              per_page: 1
+            });
+
+            if (repos.data.repositories && repos.data.repositories.length > 0) {
+              oneClickPathTest = 'validated';
+            } else {
+              oneClickPathTest = 'no_repositories';
+              oneClickPathError = 'No repositories accessible';
+            }
+          } catch (repoError) {
+            oneClickPathTest = 'repo_access_failed';
+            oneClickPathError = repoError.message;
+          }
+
+          // Step 5: End-to-end capability test
+          try {
+            if (app.webhooks && app.on && app.log) {
+              endToEndTest = 'application_ready';
+            } else {
+              endToEndTest = 'missing_components';
+              endToEndError = 'Missing required components';
+            }
+          } catch (e2eError) {
+            endToEndTest = 'capability_test_failed';
+            endToEndError = e2eError.message;
+          }
+        }
+
+      } catch (error) {
+        if (installationValidation === 'unchecked') {
+          installationValidation = 'validation_failed';
+          installValidationError = error.message;
+        }
+        if (oneClickPathTest === 'unchecked') {
+          oneClickPathTest = 'validation_failed';
+          oneClickPathError = error.message;
+        }
+        if (endToEndTest === 'unchecked') {
+          endToEndTest = 'validation_failed';
+          endToEndError = error.message;
+        }
+      }
+
+      // Determine overall health status
+      let overallStatus = 'healthy';
+      if (installationValidation !== 'validated' && installationValidation !== 'no_installations') {
+        overallStatus = 'unhealthy';
+      } else if (oneClickPathTest !== 'validated' && oneClickPathTest !== 'no_installations') {
+        overallStatus = 'degraded';
+      } else if (endToEndTest !== 'application_ready' && endToEndTest !== 'no_installations') {
+        overallStatus = 'degraded';
+      }
+
+      const validationResult = {
+        status: overallStatus,
+        service: 'nova-ci-rescue-installation-validation',
+        timestamp: new Date().toISOString(),
+        duration_ms: Date.now() - startTime,
+        installation: {
+          validation_status: installationValidation,
+          error: installValidationError,
+          installations_count: installations ? installations.data.length : 0
+        },
+        one_click_path: {
+          test_status: oneClickPathTest,
+          error: oneClickPathError
+        },
+        end_to_end: {
+          test_status: endToEndTest,
+          error: endToEndError,
+          capabilities: {
+            webhook_handling: app.webhooks ? 'configured' : 'not_configured',
+            event_processing: app.on ? 'configured' : 'not_configured',
+            logging: app.log ? 'configured' : 'not_configured'
+          }
+        },
+        environment: {
+          app_id: process.env.APP_ID ? 'configured' : 'missing',
+          private_key: process.env.PRIVATE_KEY ? 'configured' : 'missing',
+          webhook_secret: process.env.WEBHOOK_SECRET ? 'configured' : 'missing',
+          node_version: process.version,
+          platform: process.platform
+        }
+      };
+
+      const httpStatus = overallStatus === 'healthy' ? 200 :
+                        overallStatus === 'degraded' ? 200 : 503;
+
+      res.status(httpStatus).json(validationResult);
+    });
 
     // Root endpoint for basic checks
     router.get('/', (req, res) => {
@@ -237,6 +385,8 @@ export default (app, { getRouter }) => {
           <div class="links">
             <a href="/setup">Setup Guide</a> •
             <a href="/health">Health Status</a> •
+            <a href="/health/installation">Installation Validation</a> •            <a href="/health/installation">Installation Validation</a> •
+            <a href="/health/installation">Installation Validation</a> •
             <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
           </div>
         </body>
@@ -763,6 +913,7 @@ export default (app, { getRouter }) => {
           <div class="links">
             <a href="/setup">Setup Guide</a> •
             <a href="/health">Health Status</a> •
+            <a href="/health/installation">Installation Validation</a> •
             <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
           </div>
         </body>
@@ -1289,6 +1440,7 @@ export default (app, { getRouter }) => {
           <div class="links">
             <a href="/setup">Setup Guide</a> •
             <a href="/health">Health Status</a> •
+            <a href="/health/installation">Installation Validation</a> •
             <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
           </div>
         </body>
@@ -1815,6 +1967,7 @@ export default (app, { getRouter }) => {
           <div class="links">
             <a href="/setup">Setup Guide</a> •
             <a href="/health">Health Status</a> •
+            <a href="/health/installation">Installation Validation</a> •
             <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
           </div>
         </body>
@@ -2341,6 +2494,7 @@ export default (app, { getRouter }) => {
           <div class="links">
             <a href="/setup">Setup Guide</a> •
             <a href="/health">Health Status</a> •
+            <a href="/health/installation">Installation Validation</a> •
             <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
           </div>
         </body>
@@ -2867,6 +3021,7 @@ export default (app, { getRouter }) => {
           <div class="links">
             <a href="/setup">Setup Guide</a> •
             <a href="/health">Health Status</a> •
+            <a href="/health/installation">Installation Validation</a> •
             <a href="https://github.com/marketplace/nova-ci-rescue">Marketplace</a>
           </div>
         </body>

@@ -604,8 +604,9 @@ def fix(
             ):
                 # Reached max iterations without full success
                 state.final_status = "max_iters"
-                state.final_status = "max_iters"
-                console.print(f"\n[red bold]❌ FAILED - Reached max iterations ({state.max_iterations}) with tests still failing.[/red bold]")
+                console.print(
+                    f"\n[red bold]❌ FAILED - Reached max iterations ({state.max_iterations}) with tests still failing.[/red bold]"
+                )
             # Log completion status
             telemetry.log_event(
                 "completion",
@@ -1222,6 +1223,129 @@ def eval(
     # Implementation placeholder
     console.print("[yellow]Evaluation mode not fully implemented yet[/yellow]")
     raise typer.Exit(0)
+
+
+@app.command()
+def validate_installation():
+    """
+    Validate installation and test end-to-end functionality.
+    This command performs comprehensive validation of the Nova CI-Rescue installation.
+    """
+    from rich.console import Console
+
+    console = Console()
+
+    console.print("[green]🔍 Nova CI-Rescue Installation Validation[/green]")
+    console.print("=" * 50)
+
+    try:
+        # Get the health endpoint URL (assuming it's running locally for testing)
+        base_url = "http://localhost:3000"
+        health_url = f"{base_url}/health/installation"
+
+        console.print(f"[dim]Testing endpoint: {health_url}[/dim]")
+
+        # Make the request with a timeout
+        response = requests.get(health_url, timeout=30)
+
+        if response.status_code == 200:
+            result = response.json()
+
+            # Display overall status
+            status_emoji = {"healthy": "✅", "degraded": "⚠️", "unhealthy": "❌"}
+
+            console.print(
+                f"\n{status_emoji.get(result['status'], '❓')} Overall Status: {result['status'].upper()}"
+            )
+            console.print(
+                f"[dim]Validation completed in {result['duration_ms']}ms[/dim]"
+            )
+
+            # Display installation validation
+            console.print("\n[bold]📦 Installation Validation:[/bold]")
+            install_status = result["installation"]["validation_status"]
+            install_emoji = "✅" if install_status == "validated" else "❌"
+            console.print(f"  {install_emoji} Status: {install_status}")
+            if result["installation"]["error"]:
+                console.print(f"  [red]Error: {result['installation']['error']}[/red]")
+            console.print(
+                f"  📊 Installations found: {result['installation']['installations_count']}"
+            )
+
+            # Display one-click path validation
+            console.print("\n[bold]🚀 One-Click Path Validation:[/bold]")
+            path_status = result["one_click_path"]["test_status"]
+            path_emoji = "✅" if path_status == "validated" else "❌"
+            console.print(f"  {path_emoji} Status: {path_status}")
+            if result["one_click_path"]["error"]:
+                console.print(
+                    f"  [red]Error: {result['one_click_path']['error']}[/red]"
+                )
+
+            # Display end-to-end validation
+            console.print("\n[bold]🔄 End-to-End Validation:[/bold]")
+            e2e_status = result["end_to_end"]["test_status"]
+            e2e_emoji = "✅" if e2e_status == "application_ready" else "❌"
+            console.print(f"  {e2e_emoji} Status: {e2e_status}")
+            if result["end_to_end"]["error"]:
+                console.print(f"  [red]Error: {result['end_to_end']['error']}[/red]")
+
+            # Display capabilities
+            console.print("\n[bold]⚙️ Capabilities:[/bold]")
+            capabilities = result["end_to_end"]["capabilities"]
+            for capability, status in capabilities.items():
+                cap_emoji = "✅" if status == "configured" else "❌"
+                console.print(
+                    f"  {cap_emoji} {capability.replace('_', ' ').title()}: {status}"
+                )
+
+            # Display environment
+            console.print("\n[bold]🌍 Environment:[/bold]")
+            env = result["environment"]
+            for key, value in env.items():
+                env_emoji = "✅" if value == "configured" else "❌"
+                console.print(f"  {env_emoji} {key.replace('_', ' ').title()}: {value}")
+
+            # Final recommendations
+            console.print("\n[bold]📋 Recommendations:[/bold]")
+            if result["status"] == "healthy":
+                console.print(
+                    "  ✅ Installation is fully validated and ready for production!"
+                )
+                console.print("  🎉 One-click path is working correctly")
+                console.print("  🚀 End-to-end functionality is operational")
+            elif result["status"] == "degraded":
+                console.print(
+                    "  ⚠️ Installation has some issues but is mostly functional"
+                )
+                console.print(
+                    "  📝 Check the errors above for specific issues to resolve"
+                )
+            else:
+                console.print(
+                    "  ❌ Installation has critical issues that need attention"
+                )
+                console.print(
+                    "  🔧 Please check the errors above and fix configuration issues"
+                )
+
+        else:
+            console.print(
+                f"[red]❌ Health check failed with status code: {response.status_code}[/red]"
+            )
+            console.print(f"[dim]Response: {response.text}[/dim]")
+
+    except requests.exceptions.RequestException as e:
+        console.print("[red]❌ Could not connect to health endpoint[/red]")
+        console.print(f"[dim]Error: {e}[/dim]")
+        console.print("\n[yellow]💡 Make sure the GitHub App is running:[/yellow]")
+        console.print("  1. Start the app: npm start")
+        console.print("  2. Or use: npm run dev")
+        console.print("  3. Check that it's running on http://localhost:3000")
+
+    except Exception as e:
+        console.print("[red]❌ Unexpected error during validation[/red]")
+        console.print(f"[dim]Error: {e}[/dim]")
 
 
 @app.command()

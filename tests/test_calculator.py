@@ -70,7 +70,9 @@ class TestCalculator:
 
     def test_square_root_negative(self, calc):
         """Test square root of negative number raises error."""
-        with pytest.raises(ValueError, match="Cannot calculate square root of negative number"):
+        with pytest.raises(
+            ValueError, match="Cannot calculate square root of negative number"
+        ):
             calc.square_root(-4)
 
     def test_percentage(self, calc):

@@ -1,5 +1,5 @@
 """
-Unified LLM client for Nova CI-Rescue supporting OpenAI and Anthropic.
+Unified LLM client for Nova CI-Rescue supporting OpenAI, Grok, and Anthropic.
 """
 
 import json
@@ -18,13 +18,14 @@ try:
 except ImportError:
     anthropic = None
 
+# Grok uses OpenAI compatible API, so we'll use OpenAI client for Grok models
+
 from nova.config import get_settings
 from nova.logger import get_logger
-import time
 
 
 class LLMClient:
-    """Unified LLM client that supports OpenAI and Anthropic models."""
+    """Unified LLM client that supports OpenAI, Grok, and Anthropic models."""
 
     def __init__(self):
         self.settings = get_settings()
@@ -58,6 +59,20 @@ class LLMClient:
             self.client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
             self.provider = "anthropic"
             self.model = self._get_anthropic_model_name()
+        elif "grok" in model_name and self.settings.openai_api_key:
+            # Use Grok (via OpenAI compatible API)
+            if OpenAI is None:
+                raise ImportError(
+                    "openai package not installed. Run: pip install openai"
+                )
+            # For Grok, we'll use a different base URL or API key
+            grok_api_key = (
+                os.environ.get("GROK_API_KEY") or self.settings.openai_api_key
+            )
+            grok_base_url = os.environ.get("GROK_BASE_URL", "https://api.x.ai/v1")
+            self.client = OpenAI(api_key=grok_api_key, base_url=grok_base_url)
+            self.provider = "grok"
+            self.model = self._get_grok_model_name()
         elif self.settings.openai_api_key:
             # Use OpenAI
             if OpenAI is None:
@@ -69,7 +84,7 @@ class LLMClient:
             self.model = self._get_openai_model_name()
         else:
             raise ValueError(
-                "No valid API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY."
+                "No valid API key found. Please set OPENAI_API_KEY (for OpenAI/Grok) or ANTHROPIC_API_KEY (for Claude)."
             )
 
     def _get_openai_model_name(self) -> str:
@@ -117,6 +132,21 @@ class LLMClient:
         else:
             # Default to Claude 3.5 Sonnet
             return "claude-3-5-sonnet-20241022"
+
+    def _get_grok_model_name(self) -> str:
+        """Get the Grok model name to use."""
+        model = self.settings.default_llm_model.lower()
+
+        # Map to actual Grok models
+        if "grok-code-fast-1" in model:
+            return "grok-code-fast-1"
+        elif "grok-2" in model:
+            return "grok-2-1212"
+        elif "grok-1" in model:
+            return "grok-1"
+        else:
+            # Default to Grok Code Fast 1
+            return "grok-code-fast-1"
 
     def complete(
         self, system: str, user: str, temperature: float = 1.0, max_tokens: int = 40000
@@ -171,10 +201,18 @@ class LLMClient:
 
         # Daily usage tracking and alerts
         self._increment_daily_usage()
-        start = time.time()
         try:
             if self.provider == "openai":
                 # Force OpenAI params, respecting env MAX_TOKENS
+                try:
+                    max_tok = int(os.environ.get("MAX_TOKENS", "40000"))
+                except Exception:
+                    max_tok = 40000
+                return self._complete_openai(
+                    system, user, temperature=1.0, max_tokens=max_tok
+                )
+            elif self.provider == "grok":
+                # Grok uses OpenAI compatible API
                 try:
                     max_tok = int(os.environ.get("MAX_TOKENS", "40000"))
                 except Exception:
@@ -189,7 +227,6 @@ class LLMClient:
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
         finally:
-            elapsed = time.time() - start
             logger = get_logger()
             # if elapsed > self.settings.llm_call_timeout_sec:
             #     # logger.warning(f"LLM call exceeded {self.settings.llm_call_timeout_sec}s (took {int(elapsed)}s)")
@@ -554,6 +591,105 @@ def build_patch_prompt(
         for file_path, content in test_contents.items():
             prompt += f"\n=== {file_path} ===\n"
             prompt += content
+
+    # Include source file contents if provided
+    if source_contents:
+        prompt += "\n\nSOURCE CODE (FIX THESE FILES):\n"
+        for file_path, content in source_contents.items():
+            prompt += f"\n=== {file_path} ===\n"
+            prompt += content
+
+    prompt += "\n\n"
+    prompt += "Generate a unified diff patch that fixes these test failures.\n"
+    prompt += "The patch should:\n"
+    prompt += "1. Be in standard unified diff format (like 'git diff' output)\n"
+    prompt += "2. Include proper file paths (--- a/file and +++ b/file)\n"
+    prompt += "3. Include proper @@ hunk headers with line numbers\n"
+    prompt += "4. Fix the actual issues causing test failures\n"
+    prompt += "5. IMPORTANT: If a test expects an obviously wrong value (e.g., 2+2=5, sum([1,2,3,4,5])=20), \n"
+    prompt += "   fix the TEST's expectation, not the implementation\n"
+    prompt += "6. Be minimal and focused\n"
+    prompt += "7. DO NOT introduce arbitrary constants or magic numbers just to make tests pass\n"
+    prompt += (
+        "8. DO NOT add/remove spaces or characters unless they logically belong there\n"
+    )
+    prompt += "9. REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.) from the code\n"
+    prompt += "10. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
+    prompt += "\n"
+    prompt += (
+        "WARNING: Avoid quick hacks like hardcoding values. Focus on the root cause.\n"
+    )
+    prompt += "If the test's expected value is mathematically or logically wrong, fix the test.\n"
+    prompt += "\n"
+    prompt += "Return ONLY the unified diff, starting with --- and no other text."
+
+    return prompt
+
+    # Include source file contents if provided
+    if source_contents:
+        prompt += "\n\nSOURCE CODE (FIX THESE FILES):\n"
+        for file_path, content in source_contents.items():
+            prompt += f"\n=== {file_path} ===\n"
+            prompt += content
+
+    prompt += "\n\n"
+    prompt += "Generate a unified diff patch that fixes these test failures.\n"
+    prompt += "The patch should:\n"
+    prompt += "1. Be in standard unified diff format (like 'git diff' output)\n"
+    prompt += "2. Include proper file paths (--- a/file and +++ b/file)\n"
+    prompt += "3. Include proper @@ hunk headers with line numbers\n"
+    prompt += "4. Fix the actual issues causing test failures\n"
+    prompt += "5. IMPORTANT: If a test expects an obviously wrong value (e.g., 2+2=5, sum([1,2,3,4,5])=20), \n"
+    prompt += "   fix the TEST's expectation, not the implementation\n"
+    prompt += "6. Be minimal and focused\n"
+    prompt += "7. DO NOT introduce arbitrary constants or magic numbers just to make tests pass\n"
+    prompt += (
+        "8. DO NOT add/remove spaces or characters unless they logically belong there\n"
+    )
+    prompt += "9. REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.) from the code\n"
+    prompt += "10. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
+    prompt += "\n"
+    prompt += (
+        "WARNING: Avoid quick hacks like hardcoding values. Focus on the root cause.\n"
+    )
+    prompt += "If the test's expected value is mathematically or logically wrong, fix the test.\n"
+    prompt += "\n"
+    prompt += "Return ONLY the unified diff, starting with --- and no other text."
+
+    return prompt
+
+    # Include source file contents if provided
+    if source_contents:
+        prompt += "\n\nSOURCE CODE (FIX THESE FILES):\n"
+        for file_path, content in source_contents.items():
+            prompt += f"\n=== {file_path} ===\n"
+            prompt += content
+
+    prompt += "\n\n"
+    prompt += "Generate a unified diff patch that fixes these test failures.\n"
+    prompt += "The patch should:\n"
+    prompt += "1. Be in standard unified diff format (like 'git diff' output)\n"
+    prompt += "2. Include proper file paths (--- a/file and +++ b/file)\n"
+    prompt += "3. Include proper @@ hunk headers with line numbers\n"
+    prompt += "4. Fix the actual issues causing test failures\n"
+    prompt += "5. IMPORTANT: If a test expects an obviously wrong value (e.g., 2+2=5, sum([1,2,3,4,5])=20), \n"
+    prompt += "   fix the TEST's expectation, not the implementation\n"
+    prompt += "6. Be minimal and focused\n"
+    prompt += "7. DO NOT introduce arbitrary constants or magic numbers just to make tests pass\n"
+    prompt += (
+        "8. DO NOT add/remove spaces or characters unless they logically belong there\n"
+    )
+    prompt += "9. REMOVE any existing BUG comments (e.g., '# BUG:', '# BUG: ...', etc.) from the code\n"
+    prompt += "10. DO NOT add any new comments about bugs or fixes (no '# BUG:', '# FIX:', etc.)\n"
+    prompt += "\n"
+    prompt += (
+        "WARNING: Avoid quick hacks like hardcoding values. Focus on the root cause.\n"
+    )
+    prompt += "If the test's expected value is mathematically or logically wrong, fix the test.\n"
+    prompt += "\n"
+    prompt += "Return ONLY the unified diff, starting with --- and no other text."
+
+    return prompt
 
     # Include source file contents if provided
     if source_contents:

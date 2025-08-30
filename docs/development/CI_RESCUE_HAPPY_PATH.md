@@ -237,17 +237,17 @@ graph TD
 ```yaml
 # Proof Checklist — Nova CI-Rescue Happy Path
 
-⏱ Duration:  
-🔁 Iterations:  
-🧪 Tests Before → After: `X failed / Y passed` → `0 failed / Y+ passed`  
-🧩 Files changed / LOC:  
-📦 Artifacts path: `.nova/<run>/…`  
+⏱ Duration:
+🔁 Iterations:
+🧪 Tests Before → After: `X failed / Y passed` → `0 failed / Y+ passed`
+🧩 Files changed / LOC:
+📦 Artifacts path: `.nova/<run>/…`
 ✅ Status: **GREEN / FAIL**
 
 Links:
-- Action run: 
-- PR: 
-- Artifacts download: 
+- Action run:
+- PR:
+- Artifacts download:
 - Proof wall entry:
 ```
 

@@ -9,8 +9,8 @@ import subprocess
 import os
 import sys
 import shutil
-import tempfile
 from pathlib import Path
+
 
 def run(cmd, cwd=None, env=None, check=True):
     print(f"Running: {' '.join(cmd)}")
@@ -21,6 +21,7 @@ def run(cmd, cwd=None, env=None, check=True):
         raise RuntimeError(f"Command failed: {' '.join(cmd)}")
     return result
 
+
 def ensure_gh_cli():
     gh_path = shutil.which("gh")
     if not gh_path:
@@ -28,19 +29,26 @@ def ensure_gh_cli():
         sys.exit(1)
     return gh_path
 
+
 def get_repo_root():
-    result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
     if result.returncode != 0:
         print("Not in a git repository.")
         sys.exit(1)
     return Path(result.stdout.strip())
 
+
 def get_current_branch():
-    result = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True
+    )
     if result.returncode != 0:
         print("Failed to get current branch.")
         sys.exit(1)
     return result.stdout.strip()
+
 
 def main():
     gh_path = ensure_gh_cli()
@@ -52,7 +60,9 @@ def main():
     # Check for GitHub token (prioritize GH_TOKEN for CI/local compatibility)
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if not token:
-        print("Warning: GH_TOKEN or GITHUB_TOKEN not set. You may be prompted to authenticate with `gh`.")
+        print(
+            "Warning: GH_TOKEN or GITHUB_TOKEN not set. You may be prompted to authenticate with `gh`."
+        )
 
     # Clean up any previous test branch
     run(["git", "checkout", orig_branch], cwd=repo_root, check=False)
@@ -66,7 +76,10 @@ def main():
         f.write("This is a test file for PR creation flow.\n")
 
     run(["git", "add", str(test_file)], cwd=repo_root)
-    run(["git", "commit", "-m", "test: add dummy file for PR creation flow"], cwd=repo_root)
+    run(
+        ["git", "commit", "-m", "test: add dummy file for PR creation flow"],
+        cwd=repo_root,
+    )
 
     # Push the branch
     run(["git", "push", "-u", "origin", test_branch], cwd=repo_root)
@@ -89,25 +102,27 @@ def main():
         cwd=repo_root,
         env=gh_env,
         capture_output=True,
-        text=True
+        text=True,
     )
     if pr_list.returncode == 0 and '"number":' in pr_list.stdout:
         print(f"PR already exists for branch {test_branch}. Skipping creation.")
     else:
         pr_cmd = [
-            gh_path, "pr", "create",
-            "--title", pr_title,
-            "--body", pr_body,
-            "--base", orig_branch,
-            "--head", test_branch,
+            gh_path,
+            "pr",
+            "create",
+            "--title",
+            pr_title,
+            "--body",
+            pr_body,
+            "--base",
+            orig_branch,
+            "--head",
+            test_branch,
         ]
         print("\nAttempting to create PR using GitHub CLI...")
         result = subprocess.run(
-            pr_cmd,
-            cwd=repo_root,
-            env=gh_env,
-            capture_output=True,
-            text=True
+            pr_cmd, cwd=repo_root, env=gh_env, capture_output=True, text=True
         )
         print("stdout:", result.stdout)
         print("stderr:", result.stderr)
@@ -121,8 +136,11 @@ def main():
             sys.exit(1)
 
     print("\nDone. Please check your repository for the test PR.")
-    print(f"To clean up: git checkout {orig_branch} && git branch -D {test_branch} && git push origin --delete {test_branch}")
-    print(f"Also, close the test PR on GitHub.")
+    print(
+        f"To clean up: git checkout {orig_branch} && git branch -D {test_branch} && git push origin --delete {test_branch}"
+    )
+    print("Also, close the test PR on GitHub.")
+
 
 if __name__ == "__main__":
     main()

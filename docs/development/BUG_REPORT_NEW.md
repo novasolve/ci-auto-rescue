@@ -14,11 +14,11 @@
 **Expected**: Full patch content should be displayed, especially in verbose mode
 
 #### 2. Missing Test Detection - Only Shows 1 Test When Multiple Fail
-**Severity**: CRITICAL  
+**Severity**: CRITICAL
 **Impact**: Nova is not detecting all failing tests
 **Observed**:
 - demo_broken_project has 5 failing tests (test_add, test_subtract, test_multiply, test_divide_by_zero, test_power)
-- Nova only reports "Found 1 failing test(s)" 
+- Nova only reports "Found 1 failing test(s)"
 - Only TestCalculator.test_add is shown in the table
 **Expected**: All 5 failing tests should be detected and displayed
 
@@ -68,7 +68,7 @@
 **Observed**:
 ```
 Plan created:
-  Approach: 
+  Approach:
 ```
 **Expected**: Should show the actual approach and steps
 

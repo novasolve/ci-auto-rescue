@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -76,7 +76,7 @@ class AllowedHTTPClient:
                     timeout=timeout or self._timeout,
                 )
                 if resp.status_code in (429, 500, 502, 503, 504) and attempt < retries:
-                    delay = backoff_base * (2 ** attempt)
+                    delay = backoff_base * (2**attempt)
                     time.sleep(delay)
                     continue
                 return resp
@@ -84,7 +84,7 @@ class AllowedHTTPClient:
                 last_exc = e
                 if attempt >= retries:
                     raise
-                delay = backoff_base * (2 ** attempt)
+                delay = backoff_base * (2**attempt)
                 time.sleep(delay)
         # Should not reach here; raise last exception if present
         if last_exc:

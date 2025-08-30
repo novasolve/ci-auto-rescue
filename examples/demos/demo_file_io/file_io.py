@@ -110,7 +110,9 @@ def count_lines(filename: str) -> int:
     return count
 
 
-def write_json(filename: str, data: Any, *, indent: int = 2, sort_keys: bool = False) -> None:
+def write_json(
+    filename: str, data: Any, *, indent: int = 2, sort_keys: bool = False
+) -> None:
     """
     Write JSON data to 'filename' using pretty formatting.
 
@@ -218,11 +220,15 @@ def write_csv(
             writer.writeheader()
             for row in materialized_rows:
                 # Convert all values to strings for CSV
-                writer.writerow({k: "" if row.get(k) is None else str(row.get(k)) for k in fns})
+                writer.writerow(
+                    {k: "" if row.get(k) is None else str(row.get(k)) for k in fns}
+                )
     else:
         # Sequence rows: require explicit fieldnames
         if fieldnames is None:
-            raise ValueError("fieldnames must be provided when writing sequence rows to CSV")
+            raise ValueError(
+                "fieldnames must be provided when writing sequence rows to CSV"
+            )
         _ensure_parent_dir(filename)
         with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)

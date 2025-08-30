@@ -1,4 +1,5 @@
-app = "ci-auto-rescue"
+# Nova CI-Rescue GitHub App - Fly.io Configuration
+app = "nova-ci-rescue"
 primary_region = "sjc"
 
 [build]
@@ -7,11 +8,60 @@ primary_region = "sjc"
 [env]
   NODE_ENV = "production"
 
+# VM size - shared CPU is perfect for GitHub apps
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
 [http_service]
   internal_port = 8080
   force_https = true
   auto_start_machines = true
-  auto_stop_machines = true
-  min_machines_running = 0
+  auto_stop_machines = false  # Keep running for instant webhook handling
+  min_machines_running = 1    # Always have at least 1 machine ready
+  max_machines_running = 3    # Scale up to 3 if needed
 
+  # Health check for GitHub Marketplace requirements
+  [[http_service.checks]]
+    interval = "15s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    timeout = "5s"
 
+    [http_service.checks.headers]
+      Accept = "application/json"
+
+# Auto-restart on crashes
+[[restart]]
+  policy = "always"
+  retries = 3
+# Zero-downtime deployments
+[deploy]
+  strategy = "rolling"
+  max_unavailable = 0
+
+  auto_start_machines = true
+  auto_stop_machines = false  # Keep running for instant webhook handling
+  min_machines_running = 1    # Always have at least 1 machine ready
+  max_machines_running = 3    # Scale up to 3 if needed
+
+  # Health check for GitHub Marketplace requirements
+  [[http_service.checks]]
+    interval = "15s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    timeout = "5s"
+
+    [http_service.checks.headers]
+      Accept = "application/json"
+
+# Auto-restart on crashes
+[[restart]]
+  policy = "always"
+  retries = 3
+# Zero-downtime deployments
+# Zero-downtime deployments

@@ -1,0 +1,70 @@
+name: Nova CI-Rescue Auto-Fix
+
+# Enable/disable the workflow
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR to run Nova on (optional)"
+        required: false
+
+# Permissions needed for Nova CI-Rescue
+permissions:
+  contents: write # Needed for pushing fixes
+  pull-requests: write # For commenting or opening PRs
+  issues: write # For commenting on issues
+
+jobs:
+  test-and-auto-fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history for better diff generation
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests initially
+        id: initial-test
+        run: |
+          python -m pytest --tb=short --junitxml=test-results.xml || echo "Tests failed - Nova will attempt to fix"
+
+      - name: Install Nova CI-Rescue
+        run: |
+          # Install from GitHub release or your preferred method
+          pip install nova-ci-rescue
+
+      - name: Run Nova CI-Rescue
+        if: steps.initial-test.outcome == 'failure'
+        env:
+          # Add your Nova configuration here
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          nova fix \
+            --max-iters 3 \
+            --timeout 300 \
+            --auto-pr \
+            --verbose
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml

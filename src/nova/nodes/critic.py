@@ -10,80 +10,90 @@ from nova.agent.state import AgentState
 from nova.telemetry.logger import JSONLLogger
 
 # Define custom theme with softer colors
-nova_theme = Theme({
-    "error": "#CD5C5C",  # Indian Red - softer than pure red
-    "warning": "#DAA520",  # Goldenrod - softer yellow
-    "success": "#228B22",  # Forest Green - softer green
-    "info": "#4682B4",  # Steel Blue
-})
+nova_theme = Theme(
+    {
+        "error": "#CD5C5C",  # Indian Red - softer than pure red
+        "warning": "#DAA520",  # Goldenrod - softer yellow
+        "success": "#228B22",  # Forest Green - softer green
+        "info": "#4682B4",  # Steel Blue
+    }
+)
 
 console = Console(theme=nova_theme)
 
 
 class CriticNode:
     """Node responsible for reviewing and approving/rejecting patches."""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-    
+
     def execute(
         self,
         state: AgentState,
         patch_diff: str,
         llm_agent: Any,
-        telemetry: Optional[JSONLLogger] = None
+        telemetry: Optional[JSONLLogger] = None,
     ) -> Tuple[bool, str]:
         """
         Review a patch and decide whether to approve or reject it.
-        
+
         Args:
             state: Current agent state
             patch_diff: The patch diff to review
             llm_agent: LLM agent instance for reviewing
             telemetry: Optional telemetry logger
-            
+
         Returns:
             Tuple of (approved: bool, reason: str)
         """
         iteration = state.current_iteration
-        
+
         # Log critic start
         if telemetry:
-            telemetry.log_event("critic_start", {
-                "iteration": iteration,
-                "patch_size": len(patch_diff.split('\n'))
-            })
-        
+            telemetry.log_event(
+                "critic_start",
+                {"iteration": iteration, "patch_size": len(patch_diff.split("\n"))},
+            )
+
         if self.verbose:
-            console.print(f"[cyan]🔍 Reviewing patch with critic...[/cyan]")
-        
+            console.print("[cyan]🔍 Reviewing patch with critic...[/cyan]")
+
         # Use LLM to review patch
-        patch_approved, review_reason = llm_agent.review_patch(patch_diff, state.failing_tests)
-        
+        patch_approved, review_reason = llm_agent.review_patch(
+            patch_diff, state.failing_tests
+        )
+
         if self.verbose:
             console.print(f"[dim]Review result: {review_reason}[/dim]")
-        
+
         if not patch_approved:
             console.print(f"[error]❌ Patch rejected: {review_reason}[/error]")
             # Store critic feedback for next iteration
             state.critic_feedback = review_reason
             if telemetry:
-                telemetry.log_event("critic_rejected", {
-                    "iteration": iteration,
-                    "reason": review_reason,
-                    "patch_lines": len(patch_diff.split('\n'))
-                })
+                telemetry.log_event(
+                    "critic_rejected",
+                    {
+                        "iteration": iteration,
+                        "reason": review_reason,
+                        "patch_lines": len(patch_diff.split("\n")),
+                    },
+                )
         else:
             console.print("[green]✓ Patch approved by critic[/green]")
             # Clear critic feedback since patch was approved
             state.critic_feedback = None
             if telemetry:
-                telemetry.log_event("critic_approved", {
-                    "iteration": iteration,
-                    "reason": review_reason,
-                    "patch_lines": len(patch_diff.split('\n'))
-                })
-        
+                telemetry.log_event(
+                    "critic_approved",
+                    {
+                        "iteration": iteration,
+                        "reason": review_reason,
+                        "patch_lines": len(patch_diff.split("\n")),
+                    },
+                )
+
         return patch_approved, review_reason
 
 
@@ -92,18 +102,18 @@ def critic_node(
     patch_diff: str,
     llm_agent: Any,
     telemetry: Optional[JSONLLogger] = None,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> Tuple[bool, str]:
     """
     Convenience function to execute the critic node.
-    
+
     Args:
         state: Current agent state
         patch_diff: Patch to review
         llm_agent: LLM agent instance
         telemetry: Optional telemetry logger
         verbose: Enable verbose output
-        
+
     Returns:
         Tuple of (approved, reason)
     """

@@ -1,10 +1,10 @@
 #!/bin/bash
 #
 # Automated Nova CI-Rescue Demo Fixer
-# 
+#
 # This script runs Nova CI-Rescue on all demo projects in examples/demos/
 # sequentially, applying patches until all tests pass (or max iterations reached).
-# 
+#
 # Patches are saved in each demo's .nova directory for review.
 #
 # Usage: ./scripts/fix_all_demos.sh [--dry-run] [--no-auto-pr] [--merge]
@@ -112,10 +112,10 @@ for demo_dir in demo_*/; do
     if [[ -d "$demo_dir" ]]; then
         current_demo=$((current_demo + 1))
         demo_name="${demo_dir%/}"  # Remove trailing slash
-        
+
         echo -e "${BLUE}[$current_demo/$total_demos]${NC} Processing: ${YELLOW}$demo_name${NC}"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        
+
         # Check if tests exist in the demo directory
         if ! find "$demo_dir" -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
             echo -e "${YELLOW}⚠️  No test files found in $demo_name, skipping...${NC}"
@@ -123,7 +123,7 @@ for demo_dir in demo_*/; do
             echo ""
             continue
         fi
-        
+
         if [[ "$DRY_RUN" == "true" ]]; then
             echo "Would run: nova fix $DEMOS_DIR/$demo_dir --verbose --whole-file $AUTO_PR"
             successful_demos+=("$demo_name (dry-run)")
@@ -134,7 +134,7 @@ for demo_dir in demo_*/; do
                 git checkout "$ORIGINAL_BRANCH" --quiet
                 cd "$DEMOS_DIR"
             fi
-            
+
             # Log file to capture nova output for analysis
             LOG_FILE="/tmp/nova_fix_${demo_name}.log"
             # Run Nova CI-Rescue and capture output (force colors)
@@ -142,13 +142,13 @@ for demo_dir in demo_*/; do
             if FORCE_COLOR=1 nova fix "$DEMOS_DIR/$demo_dir" --verbose --whole-file $AUTO_PR 2>&1 | tee "$LOG_FILE"; then
                 echo -e "${GREEN}✅ Successfully fixed: $demo_name${NC}"
                 successful_demos+=("$demo_name")
-                
+
                 # Extract the branch name from the log if merging
                 if [[ "$MERGE_FIXES" == "true" ]]; then
                     BRANCH_NAME=$(grep -oE "nova-auto-fix/[0-9_]+" "$LOG_FILE" | tail -1)
                     if [[ -n "$BRANCH_NAME" ]]; then
                         fix_branches+=("$BRANCH_NAME:$demo_name")
-                        
+
                         # Merge the fix branch back to the original branch
                         cd "$REPO_ROOT"
                         echo -e "${BLUE}🔀 Merging $BRANCH_NAME back to $ORIGINAL_BRANCH...${NC}"
@@ -164,7 +164,7 @@ for demo_dir in demo_*/; do
                         cd "$DEMOS_DIR"
                     fi
                 fi
-                
+
                 # List saved patches if any exist
                 if [[ -d "$demo_dir/.nova" ]]; then
                     echo -e "${BLUE}📄 Saved patches:${NC}"
@@ -191,11 +191,11 @@ for demo_dir in demo_*/; do
                 fi
             fi
         fi
-        
+
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        
+
         # Small pause between runs to avoid overwhelming the system
         sleep 1
     fi
@@ -256,7 +256,7 @@ if [[ "$DRY_RUN" == "false" && ${#successful_demos[@]} -gt 0 ]]; then
     echo -e "${BLUE}🔍 To view a specific patch:${NC}"
     echo "   cat <patch_file>"
     echo ""
-    
+
     if [[ "$MERGE_FIXES" == "true" ]]; then
         # Show current status if merging
         echo -e "${BLUE}📊 Current Git Status:${NC}"

@@ -41,6 +41,7 @@ class GitBranchManager:
         self.branch_name: Optional[str] = None
         self._original_sigint_handler = None
         self._handling_interrupt = False
+        self._cleaned_up = False
 
     # ---------------------------
     # Low-level command helpers
@@ -89,7 +90,9 @@ class GitBranchManager:
         return output if success else None
 
     def _get_remote_url(self, remote: str = "origin") -> Optional[str]:
-        success, output = self._run_git_command("config", "--get", f"remote.{remote}.url")
+        success, output = self._run_git_command(
+            "config", "--get", f"remote.{remote}.url"
+        )
         return output if success and output else None
 
     def _parse_repo_slug(self, url: str) -> Optional[Tuple[str, str]]:
@@ -118,7 +121,24 @@ class GitBranchManager:
 
     def get_default_branch(self) -> str:
         """Get the default branch name (main, master, etc.)."""
-        success, output = self._run_git_command("symbolic-ref", "refs/remotes/origin/HEAD")
+        # Check for environment variable override first
+        env_base_branch = os.environ.get("NOVA_BASE_BRANCH")
+        if env_base_branch:
+            # Verify the branch exists
+            success, _ = self._run_git_command(
+                "rev-parse", "--verify", f"origin/{env_base_branch}"
+            )
+            if success:
+                return env_base_branch
+            else:
+                console.print(
+                    f"[yellow]Warning: NOVA_BASE_BRANCH '{env_base_branch}' not found on remote, falling back to auto-detection[/yellow]"
+                )
+
+        # Original auto-detection logic
+        success, output = self._run_git_command(
+            "symbolic-ref", "refs/remotes/origin/HEAD"
+        )
         if success and output:
             branch = output.replace("refs/remotes/origin/", "").strip()
             if branch:
@@ -180,7 +200,9 @@ class GitBranchManager:
 
         self.original_branch = self._get_current_branch()
         if self.original_branch == "HEAD":
-            success, output = self._run_git_command("branch", "--contains", self.original_head)
+            success, output = self._run_git_command(
+                "branch", "--contains", self.original_head
+            )
             if success and output:
                 branches = output.strip().split("\n")
                 for branch in branches:
@@ -193,7 +215,9 @@ class GitBranchManager:
                 if success:
                     self.original_branch = "main"
                 else:
-                    success, _ = self._run_git_command("rev-parse", "--verify", "master")
+                    success, _ = self._run_git_command(
+                        "rev-parse", "--verify", "master"
+                    )
                     if success:
                         self.original_branch = "master"
 
@@ -226,7 +250,16 @@ class GitBranchManager:
     ) -> bool:
         """Commit current changes with a step message."""
         if message is None:
-            message = f"nova: step {step_number}"
+            # Generate a more descriptive commit message
+            if changed_files:
+                # Create a summary of what was fixed
+                file_names = [f.name for f in changed_files[:3]]  # Show first 3 files
+                if len(changed_files) > 3:
+                    file_names.append(f"and {len(changed_files) - 3} more")
+                files_str = ", ".join(file_names)
+                message = f"🤖 Fix failing tests in {files_str}"
+            else:
+                message = "🤖 Apply automated fixes to resolve test failures"
 
         if changed_files is not None:
             BATCH_SIZE = 100
@@ -272,6 +305,63 @@ class GitBranchManager:
     # ---------------------------
     # PR creation
     # ---------------------------
+    def squash_commits(self, commit_message: Optional[str] = None) -> bool:
+        """Squash all commits on the current branch into a single commit.
+
+        Args:
+            commit_message: Custom commit message for the squashed commit.
+                          If not provided, will use a default message.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        if not self.branch_name or not self.original_head:
+            return False
+
+        # Get the number of commits since the original HEAD
+        success, commit_count = self._run_git_command(
+            "rev-list", "--count", f"{self.original_head}..HEAD"
+        )
+        if not success or not commit_count.isdigit() or int(commit_count) <= 1:
+            # No commits to squash or only one commit
+            return True
+
+        # If no custom message provided, create a summary
+        if not commit_message:
+            # Get list of changed files
+            success, changed_files = self._run_git_command(
+                "diff", "--name-only", f"{self.original_head}..HEAD"
+            )
+            if success and changed_files:
+                file_list = changed_files.strip().split("\n")
+                file_names = [Path(f).name for f in file_list[:5]]
+                if len(file_list) > 5:
+                    file_names.append(f"and {len(file_list) - 5} more files")
+                files_str = ", ".join(file_names)
+                commit_message = f"🤖 Fix failing tests in {files_str}"
+            else:
+                commit_message = "🤖 Apply automated fixes to resolve test failures"
+
+        # Perform the squash using soft reset and recommit
+        success, _ = self._run_git_command("reset", "--soft", self.original_head)
+        if not success:
+            return False
+
+        # Stage all changes
+        success, _ = self._run_git_command("add", "-A")
+        if not success:
+            return False
+
+        # Create the squashed commit
+        success, _ = self._run_git_command("commit", "-m", commit_message)
+        if not success:
+            return False
+
+        if self.verbose:
+            console.print(f"[green]✓ Squashed {commit_count} commits into one[/green]")
+
+        return True
+
     def create_or_update_pr(
         self,
         title: str,
@@ -282,9 +372,13 @@ class GitBranchManager:
         reviewers: Optional[List[str]] = None,
         assignees: Optional[List[str]] = None,
         prefer_gh_cli: bool = True,
+        squash_commits: bool = True,
     ) -> Tuple[bool, str]:
         """
         Create (or reuse) a PR for the current fix branch.
+
+        Args:
+            squash_commits: If True, squash all commits into a single commit before creating PR
 
         Returns:
             (True, url) on success; (False, error_message) on failure.
@@ -293,6 +387,11 @@ class GitBranchManager:
             return False, "No branch_name set on manager"
 
         base = base or self.get_default_branch()
+
+        # Squash commits if requested
+        if squash_commits:
+            if not self.squash_commits():
+                console.print("[yellow]Warning: Failed to squash commits[/yellow]")
 
         # 1) Ensure branch is pushed
         ok, out = self.push_branch()
@@ -308,7 +407,21 @@ class GitBranchManager:
         # 3) Prefer gh CLI if available and authenticated
         if prefer_gh_cli and self._gh_authenticated():
             # Check if an open PR already exists for this head/base
-            cmd = ["gh", "pr", "list", "--state", "open", "--head", branch, "--base", base, "--json", "url", "--jq", ".[0].url"]
+            cmd = [
+                "gh",
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--head",
+                branch,
+                "--base",
+                base,
+                "--json",
+                "url",
+                "--jq",
+                ".[0].url",
+            ]
             if repo_slug:
                 cmd[2:2] = ["-R", repo_slug]  # insert after "gh", "pr"
             ok, url = self._run_cli(cmd)
@@ -316,13 +429,25 @@ class GitBranchManager:
                 return True, url
 
             # Create PR
-            cmd = ["gh", "pr", "create", "--title", title, "--body", body, "--base", base, "--head", branch]
+            cmd = [
+                "gh",
+                "pr",
+                "create",
+                "--title",
+                title,
+                "--body",
+                body,
+                "--base",
+                base,
+                "--head",
+                branch,
+            ]
             if repo_slug:
                 cmd[2:2] = ["-R", repo_slug]
             if draft:
                 cmd.append("--draft")
-            for l in labels or []:
-                cmd += ["--label", l]
+            for label in labels or []:
+                cmd += ["--label", label]
             for r in reviewers or []:
                 cmd += ["--reviewer", r]
             for a in assignees or []:
@@ -349,7 +474,10 @@ class GitBranchManager:
                 "Run `gh auth login` or set GITHUB_TOKEN / GH_TOKEN."
             )
         if not repo_slug:
-            return False, f"Unable to parse repository slug from remote URL: {remote_url}"
+            return (
+                False,
+                f"Unable to parse repository slug from remote URL: {remote_url}",
+            )
 
         owner, repo = slug
         headers = {
@@ -382,7 +510,9 @@ class GitBranchManager:
                 "draft": draft,
             }
             data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(create_url, data=data, headers=headers, method="POST")
+            req = urllib.request.Request(
+                create_url, data=data, headers=headers, method="POST"
+            )
             with urllib.request.urlopen(req) as resp:
                 pr = json.loads(resp.read().decode("utf-8"))
             pr_url = pr.get("html_url") or pr.get("url") or ""
@@ -406,19 +536,36 @@ class GitBranchManager:
         if not self.original_head:
             return
 
+        # Check if we've already cleaned up
+        if hasattr(self, "_cleaned_up") and self._cleaned_up:
+            return
+        self._cleaned_up = True
+
         if success:
-            console.print(f"\n[green]✅ Success! Changes saved to branch: {self.branch_name}[/green]")
+            console.print(
+                f"\n[green]✅ Success! Changes saved to branch: {self.branch_name}[/green]"
+            )
         else:
-            console.print("\n[yellow]⚠️  Cleaning up... resetting to original state[/yellow]")
+            console.print(
+                "\n[yellow]⚠️  Cleaning up... resetting to original state[/yellow]"
+            )
             current_branch = self._get_current_branch()
             if current_branch and current_branch.startswith("nova-auto-fix/"):
                 if self.original_branch and self.original_branch != "HEAD":
-                    ok, output = self._run_git_command("checkout", "-f", self.original_branch)
+                    ok, output = self._run_git_command(
+                        "checkout", "-f", self.original_branch
+                    )
                     if not ok:
-                        console.print(f"[yellow]Warning: Failed to checkout {self.original_branch}, trying HEAD[/yellow]")
-                        ok, _ = self._run_git_command("checkout", "-f", self.original_head)
+                        console.print(
+                            f"[yellow]Warning: Failed to checkout {self.original_branch}, trying HEAD[/yellow]"
+                        )
+                        ok, _ = self._run_git_command(
+                            "checkout", "-f", self.original_head
+                        )
                         if not ok:
-                            console.print("[red]Warning: Failed to checkout original state[/red]")
+                            console.print(
+                                "[red]Warning: Failed to checkout original state[/red]"
+                            )
                 else:
                     self._run_git_command("checkout", "-f", self.original_head)
 
@@ -444,7 +591,9 @@ class GitBranchManager:
 
     def setup_signal_handler(self):
         if self._original_sigint_handler is None:
-            self._original_sigint_handler = signal.signal(signal.SIGINT, self._signal_handler)
+            self._original_sigint_handler = signal.signal(
+                signal.SIGINT, self._signal_handler
+            )
 
     def restore_signal_handler(self):
         if self._original_sigint_handler:
@@ -464,11 +613,10 @@ def managed_fix_branch(repo_path: Path, verbose: bool = False):
 
     try:
         if not manager._check_clean_working_tree():
-            console.print("[yellow]⚠️  Warning: Working tree is not clean. Uncommitted changes may be lost.[/yellow]")
-            response = input("Continue anyway? (y/N): ")
-            if response.lower() != "y":
-                console.print("[dim]Aborted.[/dim]")
-                sys.exit(1)
+            # Non-interactive behavior: warn and proceed. We allow commits even with a dirty tree.
+            console.print(
+                "[yellow]⚠️  Warning: Working tree is not clean. Proceeding anyway.[/yellow]"
+            )
 
         manager.setup_signal_handler()
         branch_name = manager.create_fix_branch()

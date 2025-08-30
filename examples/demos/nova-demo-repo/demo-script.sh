@@ -62,7 +62,7 @@ if [ $TEST_RESULT -ne 0 ]; then
     echo ""
     echo -e "${RED}❌ Tests are failing! The pipeline is broken!${NC}"
     echo ""
-    
+
     # Show which tests failed
     echo "Failed tests:"
     pytest -v 2>&1 | grep FAILED || true

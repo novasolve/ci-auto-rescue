@@ -27,7 +27,7 @@ class Calculator:
 
     def power(self, base: float, exponent: float) -> float:
         """Raise base to the power of exponent."""
-        return base ** exponent
+        return base**exponent
 
     def square_root(self, n: float) -> float:
         """Calculate square root of n."""
@@ -36,7 +36,13 @@ class Calculator:
         return math.sqrt(n)
 
     def percentage(self, value: float, percent: float) -> float:
-        """Calculate `percent` percent of `value`."""
+        """Calculate `percent` percent of `value`.
+
+        Raises:
+            ValueError: If `percent` is negative.
+        """
+        if percent < 0:
+            raise ValueError("percent must be non-negative")
         return (value * percent) / 100
 
     def average(self, numbers: Iterable[float]) -> float:

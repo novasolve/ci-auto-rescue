@@ -63,7 +63,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
       /if max_length <= 0:/d
       /raise ValueError/d
   }' src/string_utils.py
-  
+
   # Since there's no validation in the original, let's modify the method to not handle zero/negative length
   sed -i '' 's/if len(text) <= max_length:/# BUG: Missing validation for max_length/' src/string_utils.py
 else
@@ -71,7 +71,7 @@ else
       /if max_length <= 0:/d
       /raise ValueError/d
   }' src/string_utils.py
-  
+
   # Since there's no validation in the original, let's modify the method to not handle zero/negative length
   sed -i 's/if len(text) <= max_length:/# BUG: Missing validation for max_length/' src/string_utils.py
 fi

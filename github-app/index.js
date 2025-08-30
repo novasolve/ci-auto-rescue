@@ -76,7 +76,7 @@ export default (app, { getRouter }) => {
   if (getRouter) {
     const router = getRouter('/');
 
-    // Health endpoint for GitHub Marketplace and Fly.io health checks
+    // Enhanced health endpoint with installation and end-to-end validation
     router.get('/health', async (req, res) => {
       const memoryUsage = process.memoryUsage();
 
@@ -86,6 +86,16 @@ export default (app, { getRouter }) => {
       let installFlowTest = 'unchecked';
       let installFlowError = null;
       let appDetails = null;
+
+      // Installation validation
+      let installationValidation = 'unchecked';
+      let installValidationError = null;
+      let oneClickPathTest = 'unchecked';
+      let oneClickPathError = null;
+
+      // End-to-end testing capability
+      let endToEndTest = 'unchecked';
+      let endToEndError = null;
 
       try {
         // Check if we have the required credentials

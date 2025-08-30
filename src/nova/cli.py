@@ -59,7 +59,7 @@ def print_exit_summary(
 ) -> None:
     """
     Print a comprehensive summary when exiting the agent loop.
-    
+
     Args:
         state: The current agent state
         reason: The reason for exit (timeout, max_iters, success, etc.)
@@ -68,7 +68,7 @@ def print_exit_summary(
     console.print("\n" + "=" * 60)
     console.print("[bold]EXECUTION SUMMARY[/bold]")
     console.print("=" * 60)
-    
+
     # Exit reason with appropriate styling
     if reason == "success":
         console.print(
@@ -104,9 +104,9 @@ def print_exit_summary(
         )
     else:
         console.print(f"[bold yellow]Exit Reason: {reason.upper()}[/bold yellow]")
-    
+
     console.print()
-    
+
     # Statistics
     console.print("[bold]Statistics:[/bold]")
     console.print(
@@ -115,13 +115,13 @@ def print_exit_summary(
     console.print(f"  • Patches applied: {len(state.patches_applied)}")
     console.print(f"  • Initial failures: {state.initial_failures}")
     console.print(f"  • Remaining failures: {state.total_failures}")
-    
+
     if state.total_failures == 0:
         console.print("  • [green]All tests fixed successfully![/green]")
     elif state.failing_tests and state.total_failures < len(state.failing_tests):
         fixed = len(state.failing_tests) - state.total_failures
         console.print(f"  • Tests fixed: {fixed}/{len(state.failing_tests)}")
-    
+
     # Time elapsed
     if elapsed_seconds is not None:
         minutes, seconds = divmod(int(elapsed_seconds), 60)
@@ -134,7 +134,7 @@ def print_exit_summary(
             elapsed = seconds_between(now_utc(), state.start_time)
         minutes, seconds = divmod(int(elapsed), 60)
         console.print(f"  • Time elapsed: {minutes}m {seconds}s")
-    
+
     # List saved patches if telemetry is enabled
 
     settings = get_settings()
@@ -157,7 +157,7 @@ def print_exit_summary(
         except Exception as e:
             if state.verbose:
                 console.print(f"[dim]Could not list patches: {e}[/dim]")
-    
+
     console.print("=" * 60)
     console.print()
 
@@ -261,7 +261,7 @@ def fix(
     state = None
     telemetry = None
     success = False
-    
+
     # Check for concurrent runs
 
     try:
@@ -279,9 +279,9 @@ def fix(
         telemetry.log_event(
             "run_start",
             {
-            "repo": str(repo_path),
-            "model": settings.default_llm_model,
-            "max_iterations": final_max_iters,
+                "repo": str(repo_path),
+                "model": settings.default_llm_model,
+                "max_iterations": final_max_iters,
                 "timeout": final_timeout,
             },
         )
@@ -314,8 +314,8 @@ def fix(
         telemetry.log_event(
             "test_discovery",
             {
-            "total_failures": state.total_failures,
-            "failing_tests": state.failing_tests,
+                "total_failures": state.total_failures,
+                "failing_tests": state.failing_tests,
                 "initial_report_saved": initial_junit_xml is not None,
             },
         )
@@ -397,7 +397,7 @@ def fix(
                         )
             return
 
-        # Display failing tests summary table (up to first 10 failures)
+            # Display failing tests summary table (up to first 10 failures)
             console.print(
                 f"\n[bold red]Found {len(failing_tests)} failing test(s):[/bold red]"
             )
@@ -460,7 +460,8 @@ def fix(
                 safety_config=safety_conf,
             )
             console.print("[cyan]🤖 Running Deep Agent to fix failing tests...[/cyan]")
-            runner = TestRunner(repo_path, verbose=verbose)            failures_summary = runner.format_failures_table(failing_tests)
+            runner = TestRunner(repo_path, verbose=verbose)
+            failures_summary = runner.format_failures_table(failing_tests)
             error_details = "\n\n".join(
                 test.short_traceback for test in failing_tests[:3]
             )
@@ -509,10 +510,10 @@ def fix(
                 )
                 # Planner: generate a plan (stored in state.plan)
                 planner_node(
-                state=state,
+                    state=state,
                     llm_agent=llm_agent,
-                telemetry=telemetry,
-                verbose=verbose,
+                    telemetry=telemetry,
+                    verbose=verbose,
                 )
                 # Actor: generate a patch diff based on the plan (and any critic feedback)
                 patch_diff = actor_node(
@@ -602,18 +603,16 @@ def fix(
                 not in {"success", "patch_error", "patch_rejected", "no_patch"}
             ):
                 # Reached max iterations without full success
-                    state.final_status = "max_iters"
-                console.print(
-                    f"\n[red bold]❌ FAILED - Reached max iterations ({state.max_iterations}) with tests still failing.[/red bold]"
-                )
-
-        # Log completion status
+                state.final_status = "max_iters"
+                state.final_status = "max_iters"
+                console.print(f"\n[red bold]❌ FAILED - Reached max iterations ({state.max_iterations}) with tests still failing.[/red bold]")
+            # Log completion status
             telemetry.log_event(
                 "completion",
                 {
-                "status": state.final_status,
-                "iterations": state.current_iteration,
-                "total_patches": len(state.patches_applied),
+                    "status": state.final_status,
+                    "iterations": state.current_iteration,
+                    "total_patches": len(state.patches_applied),
                     "final_failures": state.total_failures,
                 },
             )
@@ -730,9 +729,9 @@ def fix(
         telemetry.log_event(
             "run_start",
             {
-            "repo": str(repo_path),
-            "model": settings.default_llm_model,
-            "max_iterations": final_max_iters,
+                "repo": str(repo_path),
+                "model": settings.default_llm_model,
+                "max_iterations": final_max_iters,
                 "timeout": final_timeout,
             },
         )
@@ -765,8 +764,8 @@ def fix(
         telemetry.log_event(
             "test_discovery",
             {
-            "total_failures": state.total_failures,
-            "failing_tests": state.failing_tests,
+                "total_failures": state.total_failures,
+                "failing_tests": state.failing_tests,
                 "initial_report_saved": initial_junit_xml is not None,
             },
         )
@@ -1062,9 +1061,9 @@ def fix(
         telemetry.log_event(
             "completion",
             {
-            "status": state.final_status,
-            "iterations": state.current_iteration,
-            "total_patches": len(state.patches_applied),
+                "status": state.final_status,
+                "iterations": state.current_iteration,
+                "total_patches": len(state.patches_applied),
                 "final_failures": state.total_failures,
             },
         )

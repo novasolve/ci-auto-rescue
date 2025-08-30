@@ -32,7 +32,6 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
 
     lines = patch_text.split("\n")
     fixed_lines = []
-    current_file = None
     i = 0
 
     # Check if patch appears truncated
@@ -71,7 +70,6 @@ def fix_patch_format(patch_text: str, verbose: bool = False) -> str:
                 if len(parts) >= 2:
                     filename = parts[1].lstrip("/")
                     line = f"+++ b/{filename}"
-                    current_file = filename
             fixed_lines.append(line)
             i += 1
 

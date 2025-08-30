@@ -49,7 +49,7 @@ def show_agent_loop():
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task("planning", total=None)
+            progress.add_task("planning", total=None)
             time.sleep(1)
         console.print("   [green]✓[/green] Generated fix plan for test failures")
 
@@ -60,7 +60,7 @@ def show_agent_loop():
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task("acting", total=None)
+            progress.add_task("acting", total=None)
             time.sleep(1)
         console.print("   [green]✓[/green] Created patch with 15 lines changed")
 
@@ -71,7 +71,7 @@ def show_agent_loop():
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task("reviewing", total=None)
+            progress.add_task("reviewing", total=None)
             time.sleep(1)
         console.print("   [green]✓[/green] Patch approved (safe, focused changes)")
 
@@ -82,7 +82,7 @@ def show_agent_loop():
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task("applying", total=None)
+            progress.add_task("applying", total=None)
             time.sleep(1)
         console.print(
             f"   [green]✓[/green] Committed as: [bold]nova: step {iteration}[/bold]"
@@ -95,7 +95,7 @@ def show_agent_loop():
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task("testing", total=None)
+            progress.add_task("testing", total=None)
             time.sleep(1)
 
         if iteration == 1:
@@ -110,7 +110,7 @@ def show_agent_loop():
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task("reflecting", total=None)
+            progress.add_task("reflecting", total=None)
             time.sleep(0.5)
 
         if iteration == 1:
